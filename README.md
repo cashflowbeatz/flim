@@ -4,6 +4,10 @@
 own windows, zoom and selection, while the song itself (knobs, plugins, channels, notes, playlist) is kept
 in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/), but for FL.
 
+> 🚧 **Still missing many features.** Some parts of a project don't sync yet, including mixer routing,
+> names and colors, new patterns, markers and automation clips. See [What's synced](#whats-synced) for
+> the full list.
+
 > ⚠️ **Unofficial and experimental.** flim is not made by, affiliated with or endorsed by Image-Line.
 > It works by running extra code inside FL Studio's process, and it only supports **one exact FL build**
 > (see [Requirements](#requirements)). It can crash FL, so save often. flim never overwrites your
