@@ -1,0 +1,22 @@
+#include <windows.h>
+#include "../common/flim_res.h"
+// flim.exe icon (original fruit design — not FL's logo). FL's own exe is untouched.
+IDI_FLIM ICON "flim.ico"
+1 ICON "flim.ico"
+
+IDD_SETUP DIALOGEX 0, 0, 300, 150
+STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "flim setup"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Where is FL Studio 2025 installed? (the folder that contains FL64.exe)", -1, 10, 10, 280, 10
+    EDITTEXT        IDC_FLDIR, 10, 23, 224, 14, ES_AUTOHSCROLL
+    PUSHBUTTON      "Browse...", IDC_BROWSE, 240, 23, 50, 14
+    LTEXT           "", IDC_FLINFO, 10, 40, 280, 10
+    LTEXT           "Your name (what other people in the session see):", -1, 10, 60, 280, 10
+    EDITTEXT        IDC_NAME, 10, 73, 140, 14, ES_AUTOHSCROLL
+    LTEXT           "Letters, digits, spaces, - _ .\nUp to 24 characters.", -1, 156, 72, 134, 20
+    LTEXT           "Run flim.exe --setup to change these later.", -1, 10, 104, 280, 10
+    DEFPUSHBUTTON   "Start flim", IDOK, 184, 126, 56, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 244, 126, 46, 16
+END

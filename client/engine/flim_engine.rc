@@ -1,0 +1,18 @@
+#include <windows.h>
+#include "../common/flim_res.h"
+
+IDD_CONNECT DIALOGEX 0, 0, 260, 136
+STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "flim - connect to a server"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Server URL (e.g. wss://my-flim.fly.dev, or localhost:8080):", -1, 10, 10, 240, 10
+    EDITTEXT        IDC_URL, 10, 22, 240, 14, ES_AUTOHSCROLL
+    LTEXT           "Password (leave empty if the server has none):", -1, 10, 42, 240, 10
+    EDITTEXT        IDC_PASSWORD, 10, 54, 160, 14, ES_AUTOHSCROLL | ES_PASSWORD
+    AUTOCHECKBOX    "Remember", IDC_REMEMBER, 178, 56, 72, 10
+    LTEXT           "Your name:", -1, 10, 76, 240, 10
+    EDITTEXT        IDC_CNAME, 10, 88, 120, 14, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "Connect", IDOK, 144, 114, 56, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 204, 114, 46, 16
+END

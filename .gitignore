@@ -1,0 +1,13 @@
+# build output
+client/out/
+*.obj
+*.res
+*.exe
+*.dll
+# server
+server/node_modules/
+server/dist/
+# logs / FL projects never belong here
+*.log
+*.flp
+*.fst
