@@ -32,6 +32,7 @@
 #include <shlobj.h>
 #include "../common/flim_config.h"
 #include "../common/flim_res.h"
+#include "../common/flim_version.h"
 #include <bcrypt.h>
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shell32.lib")
@@ -2105,6 +2106,12 @@ enum { NET_OFF, NET_CONNECTING, NET_ON, NET_ERR };
 #define METERS_W_REF    250        // what FL draws at the left of the "Splitter_1" panel
 static HWND     g_netBar = NULL, g_netRow = NULL;
 static int      g_btnHover = 0, g_btnDown = 0, g_btnW = BTN_W_REF;
+static int      g_btnX = 0;        // the button starts after the badge (bean + "flim v.YY.MM.DD")
+static HFONT    g_verFont = NULL;
+static int      g_verFontH = 0;
+static HICON    g_bean = NULL;
+#define BEAN_SZ(h) ((h) * 4 / 3)
+static int      g_beanSz = 0;
 static COLORREF g_toolbarBg = RGB(0x4b, 0x55, 0x5c);
 static HFONT    g_barFont = NULL;
 static int      g_barFontH = 0;
@@ -2157,16 +2164,36 @@ static void bar_paint(HWND h) {
         g_barFont = CreateFontW(-(H * 14 / BAR_H_REF), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                                 CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
     }
-    oldFont = SelectObject(mem, g_barFont);
+    if (!g_verFont || g_verFontH != H) {
+        if (g_verFont) DeleteObject(g_verFont);
+        g_verFontH = H;
+        g_verFont = CreateFontW(-(H * 12 / BAR_H_REF), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                                CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+    }
     SetBkMode(mem, TRANSPARENT);
+    {   // badge: the bean + "flim v.YY.MM.DD" in small gray text
+        RECT vr;
+        int S = BEAN_SZ(H);                 // the bean is wide: its square icon is drawn taller than the bar
+        if (!g_bean || g_beanSz != S) {
+            if (g_bean) DestroyIcon(g_bean);
+            g_beanSz = S;
+            g_bean = (HICON)LoadImageW(g_hinst, MAKEINTRESOURCEW(IDI_BEAN), IMAGE_ICON, S, S, 0);
+        }
+        if (g_bean) DrawIconEx(mem, 0, (H - S) / 2, g_bean, S, S, 0, NULL, DI_NORMAL);
+        oldFont = SelectObject(mem, g_verFont);
+        SetTextColor(mem, RGB(0x9a, 0xa3, 0xa9));
+        SetRect(&vr, S + H / 8, 0, g_btnX, H);
+        DrawTextW(mem, L"flim v." FLIM_VERSION_W, -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SelectObject(mem, g_barFont);
+    }
     {   // button
         int r = H / 4, on = (st == NET_ON || st == NET_CONNECTING);
         COLORREF face = g_btnDown ? RGB(0x2e, 0x34, 0x38) : g_btnHover ? RGB(0x6a, 0x76, 0x7e) : RGB(0x5a, 0x64, 0x6b);
         HBRUSH fb = CreateSolidBrush(face);
         HPEN pen = CreatePen(PS_SOLID, 1, RGB(0x37, 0x3e, 0x43));
         HGDIOBJ ob = SelectObject(mem, fb), op = SelectObject(mem, pen);
-        RECT br = { 0, 0, g_btnW, H };
-        RoundRect(mem, 0, 0, g_btnW, H, r, r);
+        RECT br = { g_btnX, 0, g_btnX + g_btnW, H };
+        RoundRect(mem, g_btnX, 0, g_btnX + g_btnW, H, r, r);
         SelectObject(mem, ob); SelectObject(mem, op); DeleteObject(fb); DeleteObject(pen);
         SetTextColor(mem, RGB(0xee, 0xf1, 0xf3));
         if (g_btnDown) OffsetRect(&br, 0, 1);
@@ -2175,7 +2202,7 @@ static void bar_paint(HWND h) {
     {   // status dot + text
         COLORREF dot = st == NET_ON ? RGB(0x5c, 0xd6, 0x6b) : st == NET_CONNECTING ? RGB(0xf2, 0xb7, 0x3a)
                      : st == NET_ERR ? RGB(0xf0, 0x6a, 0x5f) : RGB(0x8d, 0x97, 0x9e);
-        int d = H * 8 / BAR_H_REF, x = g_btnW + H / 2;
+        int d = H * 8 / BAR_H_REF, x = g_btnX + g_btnW + H / 2;
         HBRUSH db = CreateSolidBrush(dot);
         HGDIOBJ ob = SelectObject(mem, db), op = SelectObject(mem, GetStockObject(NULL_PEN));
         RECT tr;
@@ -2203,6 +2230,17 @@ static void bar_layout(void) {
     h = rowH * BAR_H_REF / 41; if (h < 18) h = 18;
     w = h * BAR_W_REF / BAR_H_REF;
     g_btnW = h * BTN_W_REF / BAR_H_REF;
+    {   // badge width = bean (h) + gap + version text + gap
+        HDC dc = GetDC(g_netBar);
+        HFONT f = CreateFontW(-(h * 12 / BAR_H_REF), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                              CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, L"Segoe UI");
+        HGDIOBJ of = SelectObject(dc, f);
+        SIZE sz = { 0, 0 };
+        GetTextExtentPoint32W(dc, L"flim v." FLIM_VERSION_W, (int)wcslen(L"flim v." FLIM_VERSION_W), &sz);
+        SelectObject(dc, of); DeleteObject(f); ReleaseDC(g_netBar, dc);
+        g_btnX = BEAN_SZ(h) + h / 8 + sz.cx + h * 2 / 3;
+    }
+    w += g_btnX;
     right = rr.right - 8; minX = rr.right / 2;
     spl = FindWindowExW(g_netRow, NULL, L"TQuickEditToolbarPanel", L"Splitter_1");
     if (spl && IsWindowVisible(spl)) {
@@ -2212,7 +2250,7 @@ static void bar_layout(void) {
         minX = sr.left + rowH * METERS_W_REF / 41 + 8;
     }
     if (right - w < minX) w = right - minX;
-    if (w < g_btnW) w = g_btnW;
+    if (w < g_btnX + g_btnW) w = g_btnX + g_btnW;
     x = right - w;
     GetWindowRect(g_netBar, &cur);
     MapWindowPoints(NULL, g_netRow, (POINT *)&cur, 2);
@@ -2305,23 +2343,23 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     case WM_TIMER: bar_layout(); return 0;
     case WM_SETCURSOR: {
         POINT p; GetCursorPos(&p); ScreenToClient(h, &p);
-        SetCursor(LoadCursor(NULL, p.x < g_btnW ? IDC_HAND : IDC_ARROW));
+        SetCursor(LoadCursor(NULL, p.x >= g_btnX && p.x < g_btnX + g_btnW ? IDC_HAND : IDC_ARROW));
         return TRUE;
     }
     case WM_MOUSEMOVE: {
-        int on = (short)LOWORD(lp) < g_btnW;
+        int x = (short)LOWORD(lp), on = x >= g_btnX && x < g_btnX + g_btnW;
         if (on != g_btnHover) { g_btnHover = on; InvalidateRect(h, NULL, FALSE); }
         if (on) { TRACKMOUSEEVENT t = { sizeof(t), TME_LEAVE, h, 0 }; TrackMouseEvent(&t); }
         return 0;
     }
     case WM_MOUSELEAVE: g_btnHover = 0; InvalidateRect(h, NULL, FALSE); return 0;
     case WM_LBUTTONDOWN:
-        if ((short)LOWORD(lp) < g_btnW) { g_btnDown = 1; SetCapture(h); InvalidateRect(h, NULL, FALSE); }
+        if ((short)LOWORD(lp) >= g_btnX && (short)LOWORD(lp) < g_btnX + g_btnW) { g_btnDown = 1; SetCapture(h); InvalidateRect(h, NULL, FALSE); }
         return 0;
     case WM_LBUTTONUP:
         if (g_btnDown) {
             RECT rc; POINT p = { (short)LOWORD(lp), (short)HIWORD(lp) };
-            GetClientRect(h, &rc); rc.right = g_btnW;
+            GetClientRect(h, &rc); rc.left = g_btnX; rc.right = g_btnX + g_btnW;
             g_btnDown = 0; g_btnHover = 0; ReleaseCapture(); InvalidateRect(h, NULL, FALSE);
             if (PtInRect(&rc, p)) bar_clicked(h);
         }
@@ -4723,11 +4761,79 @@ static void net_disconnect(void) {
     net_status(NET_OFF, "Not connected");
 }
 
+// ---------------- splash ----------------
+// FL draws its startup fruit from <FL>\Artwork\Skins\Default\Title.png (read with CreateFileW
+// right after TApplication is created). In this process only, that open is redirected to the
+// bean (IDR_SPLASH, written to %TEMP%\flim\<pid>\splash.png). The file on disk is untouched,
+// so FL started without flim keeps its own fruit. kernel32!CreateFileW is a "jmp [rip+x]" stub
+// into kernelbase: we swap the stub's pointer slot (data, not code). It must be in place
+// before FL's main thread runs, so it is installed from DllMain (the launcher resumes FL only
+// once LoadLibrary has returned).
+typedef HANDLE (WINAPI *createfilew_t)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+static createfilew_t g_realCreateFileW = NULL;
+static wchar_t g_splashPath[MAX_PATH];
+static volatile LONG g_splashState = 0;        // 0 not written yet, 1 ready, -1 failed
+
+static int splash_write(void) {
+    HRSRC r = FindResourceW(g_hinst, MAKEINTRESOURCEW(IDR_SPLASH), (LPCWSTR)RT_RCDATA);
+    HGLOBAL g = r ? LoadResource(g_hinst, r) : NULL;
+    const void *data = g ? LockResource(g) : NULL;
+    DWORD n = r ? SizeofResource(g_hinst, r) : 0, wrote = 0;
+    wchar_t dir[MAX_PATH];
+    HANDLE f;
+    if (!data || !n) return 0;
+    GetTempPathW(MAX_PATH, dir);
+    wcscat_s(dir, MAX_PATH, L"flim");
+    CreateDirectoryW(dir, NULL);
+    swprintf_s(dir + wcslen(dir), MAX_PATH - wcslen(dir), L"\\%lu", GetCurrentProcessId());
+    CreateDirectoryW(dir, NULL);
+    swprintf_s(g_splashPath, MAX_PATH, L"%s\\splash.png", dir);
+    f = g_realCreateFileW(g_splashPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+    if (f == INVALID_HANDLE_VALUE) return 0;
+    WriteFile(f, data, n, &wrote, NULL);
+    CloseHandle(f);
+    return wrote == n;
+}
+
+static int is_fl_title_png(LPCWSTR p) {
+    static const wchar_t tail[] = L"\\Artwork\\Skins\\Default\\Title.png";
+    size_t n, t = (sizeof(tail) / sizeof(wchar_t)) - 1;
+    if (!p) return 0;
+    n = wcslen(p);
+    return n >= t && _wcsicmp(p + n - t, tail) == 0;
+}
+
+static HANDLE WINAPI hook_CreateFileW(LPCWSTR name, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES sa,
+                                      DWORD disp, DWORD flags, HANDLE tmpl) {
+    if (g_splashState >= 0 && disp == OPEN_EXISTING && !(access & GENERIC_WRITE) && is_fl_title_png(name)) {
+        if (g_splashState == 0) InterlockedExchange(&g_splashState, splash_write() ? 1 : -1);
+        if (g_splashState == 1) {
+            HANDLE h = g_realCreateFileW(g_splashPath, access, share, sa, disp, flags, tmpl);
+            if (h != INVALID_HANDLE_VALUE) return h;
+        }
+    }
+    return g_realCreateFileW(name, access, share, sa, disp, flags, tmpl);
+}
+
+static void splash_hook_install(void) {
+    unsigned char *stub = (unsigned char *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "CreateFileW");
+    void **slot;
+    DWORD old;
+    if (!stub) return;
+    if (stub[0] == 0x48) stub++;                                  // optional REX.W
+    if (stub[0] != 0xFF || stub[1] != 0x25) return;               // not "jmp [rip+disp32]": keep FL's fruit
+    slot = (void **)(stub + 6 + *(int32_t *)(stub + 2));
+    if (!VirtualProtect(slot, sizeof(void *), PAGE_READWRITE, &old)) return;
+    g_realCreateFileW = (createfilew_t)*slot;
+    InterlockedExchangePointer(slot, (void *)hook_CreateFileW);
+    VirtualProtect(slot, sizeof(void *), old, &old);
+}
+
 // ---------------- boot ----------------
 static DWORD WINAPI engineMain(LPVOID p) {
     (void)p;
     srand(GetTickCount() ^ GetCurrentProcessId());
-    logmsg("=== flim engine v4.4 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples) loaded ===");
+    logmsg("=== flim v." FLIM_VERSION " - engine v4.4 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples) loaded ===");
 
     HMODULE fl = NULL;
     int tries;
@@ -4749,6 +4855,7 @@ static DWORD WINAPI engineMain(LPVOID p) {
     g_noteDel    = (notedel_t)(g_flBase + (NOTEDEL_VA - IMG_BASE));
     g_gridRefresh = (gridrefresh_t)(g_flBase + (GRIDREFRESH_VA - IMG_BASE));
     logmsg("FLEngine base=%p rec=%p setEnabled=%p", (void *)fl, (void *)g_rec, (void *)g_setEnabled);
+    logmsg("splash hook %s, splash %ld", g_realCreateFileW ? "on" : "OFF (kernel32 stub not recognised)", g_splashState);
 
     // per-process scratch dir for plugin state files
     GetTempPathA(MAX_PATH, g_tmpDir);
@@ -4837,6 +4944,7 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         g_hinst = h;
         DisableThreadLibraryCalls(h);
+        splash_hook_install();
         InitializeCriticalSection(&g_sendLock);
         InitializeCriticalSection(&g_slotLock);
         InitializeCriticalSection(&g_qLock);

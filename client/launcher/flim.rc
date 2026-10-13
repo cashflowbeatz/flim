@@ -1,6 +1,7 @@
 #include <windows.h>
 #include "../common/flim_res.h"
-// flim.exe icon (original fruit design — not FL's logo). FL's own exe is untouched.
+#include "../common/flim_version.h"
+// flim.exe icon (the bean, built by gen_icon.py). FL's own exe is untouched.
 IDI_FLIM ICON "flim.ico"
 1 ICON "flim.ico"
 
@@ -19,4 +20,26 @@ BEGIN
     LTEXT           "Run flim.exe --setup to change these later.", -1, 10, 104, 280, 10
     DEFPUSHBUTTON   "Start flim", IDOK, 184, 126, 56, 16
     PUSHBUTTON      "Cancel", IDCANCEL, 244, 126, 46, 16
+END
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     FLIM_VER_Y, FLIM_VER_M, FLIM_VER_D, 0
+PRODUCTVERSION  FLIM_VER_Y, FLIM_VER_M, FLIM_VER_D, 0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "ProductName",     "flim"
+            VALUE "FileDescription", "flim"
+            VALUE "FileVersion",     FLIM_VERSION
+            VALUE "ProductVersion",  FLIM_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
 END
