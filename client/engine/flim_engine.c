@@ -32,10 +32,13 @@
 #include <shlobj.h>
 #include "../common/flim_config.h"
 #include "../common/flim_res.h"
+#include <bcrypt.h>
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "advapi32.lib")
 
 #define FL_MODULE    L"FLEngine_x64.dll"
 #define IMG_BASE     0x400000      // Ghidra image base; runtime addr = module + (VA - IMG_BASE)
@@ -94,6 +97,17 @@ static void units_capture_all(void);
 static void hint_if_held(const char *key);
 static int  closing_now(void);
 static int b64val(char c);
+static int  plug_lock_send(int unit, int a, int b, char *key, int cap);
+static void plug_agreed_set(int unit, int a, int b, const unsigned char *d, size_t n);
+static void plug_agreed_reset(int channels, int fx);
+static void plug_revert_state(int unit, int a, int b);
+static void plug_undo(const char *key, int apply);
+static void meta_rebaseline(void);
+static wchar_t *dstr_keep(const wchar_t *s);
+static int int_after(const char *p, const char *end, const char *key, int *out);
+static void ws_send(const char *msg);
+static void ws_send_samples(char *msg, const unsigned char *blob, size_t n);
+static void samples_rewrite(unsigned char **d, size_t *n);
 
 typedef struct {
     uint32_t id;
@@ -102,6 +116,8 @@ typedef struct {
     int  lockedByMe;
     DWORD lastTouch;        // tick of our last local change
     int  lockedByPeer;
+    int  hasUndo;           // plugin param changed while its plugin lock was still requested:
+    uint32_t undo;          //   value to restore if the lock is denied
 } Slot;
 
 static Slot   g_slots[MAX_SLOTS];
@@ -225,7 +241,7 @@ static gridrefresh_t g_gridRefresh;
 // often needs the message loop to run between load and the next call).
 enum { T_PARAM, T_SNAP, T_LOAD, T_ADDCH, T_DELCH, T_STRUCT, T_FULL, T_ORDER, T_FXCLEAR, T_FXSYNC,
        T_NOTESNAP, T_NOTES, T_NOTESYNC, T_PROJLOAD, T_PROJDONE, T_PROJSNAP,
-       T_CLIPSNAP, T_CLIPS, T_UNITREVERT };
+       T_CLIPSNAP, T_CLIPS, T_UNITREVERT, T_HINT, T_METASNAP, T_META };
 enum { U_CH, U_FX };
 enum { SNAP_BASELINE, SNAP_IF_DIFF, SNAP_FORCE, SNAP_ADD, SNAP_COLLECT };
 #define QCAP 16384
@@ -374,8 +390,9 @@ static void b64enc(const unsigned char *in, int n, char *out) {
     out[o] = 0;
 }
 
-// One text message. WinHTTP allows one send at a time per socket: g_sendLock serializes.
-static void ws_send(const char *msg) {
+// One text message, now. WinHTTP allows one send at a time per socket: g_sendLock serializes.
+// Everything else calls ws_send (samples section), which keeps ops behind ones waiting for samples.
+static void ws_send_now(const char *msg) {
     DWORD e = 0;
     EnterCriticalSection(&g_sendLock);
     if (g_ws) e = WinHttpWebSocketSend(g_ws, WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, (PVOID)msg, (DWORD)strlen(msg));
@@ -694,13 +711,15 @@ static char *unit_json_fields(int unit, int a, int b, const unsigned char *data,
     return j;
 }
 
-static void send_unit(const char *kind, int unit, int a, int b, const unsigned char *data, size_t n) {
+// key: the plugin lock the op is sent under (NULL = none); the server drops it if a peer holds it.
+static void send_unit(const char *kind, int unit, int a, int b, const unsigned char *data, size_t n, const char *key) {
     char *f = unit_json_fields(unit, a, b, data, n);
-    size_t cap = strlen(f) + 96;
+    size_t cap = strlen(f) + 128;
     char *m = (char *)malloc(cap);
-    sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"%s\",%s}}", kind, f);
-    ws_send(m);
-    free(m); free(f);
+    if (key) sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"%s\",\"key\":\"%s\",%s}}", kind, key, f);
+    else sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"%s\",%s}}", kind, f);
+    ws_send_samples(m, data, n);         // lists (and uploads) the samples the state uses
+    free(f);
     logmsg("PLUG sent %s unit=%s %d/%d (%zu bytes)", kind, unit == U_CH ? "ch" : "fx", a, b, n);
 }
 
@@ -716,17 +735,29 @@ static void do_snap(const QItem *it) {
     // unit's baseline. Some plugins (Serum) never save byte-identical state twice;
     // without this gate that drift ping-pongs full reloads between the peers.
     int userSince = g_lastInput && (LONG)(g_lastInput - u->baseAt) > 0;
+    int send = 0;
+    char key[32];
     switch (it->mode) {
     case SNAP_IF_DIFF:
         if (u->hash && h != u->hash) {
-            if (userSince) send_unit("plug.state", it->unit, it->a, it->b, d, n);
+            if (userSince) send = 1;
             else logmsg("PLUG drift absorbed unit=%s %d/%d (no local input)", it->unit == U_CH ? "ch" : "fx", it->a, it->b);
         }
         break;
-    case SNAP_FORCE:   send_unit("plug.state", it->unit, it->a, it->b, d, n); break;   // identity changed: always
-    case SNAP_ADD:     send_unit("chan.add", it->unit, it->a, it->b, d, n); break;
+    case SNAP_FORCE:   send = 1; break;   // identity changed: always
+    case SNAP_ADD:     send_unit("chan.add", it->unit, it->a, it->b, d, n, NULL); break;
     default: break;
     }
+    if (send) {
+        if (!plug_lock_send(it->unit, it->a, it->b, key, sizeof(key))) {
+            // someone else is editing this plugin: put back the state everyone agreed on
+            free(d);
+            plug_revert_state(it->unit, it->a, it->b);
+            return;
+        }
+        send_unit("plug.state", it->unit, it->a, it->b, d, n, key);
+    }
+    plug_agreed_set(it->unit, it->a, it->b, d, n);
     u->hash = h;
     u->baseAt = now;
     free(d);
@@ -739,6 +770,7 @@ static void do_load(const QItem *it) {
     size_t n = 0;
     unsigned char *in = read_file(it->path, &n);
     uint64_t hin = in ? state_hash(in, n) : 0;
+    if (in) plug_agreed_set(it->unit, it->a, it->b, in, n);   // what a plugin-lock revert restores
     free(in);
     if (it->mode == 1) {                         // join: skip units that are already identical
         size_t m = 0;
@@ -786,6 +818,7 @@ static void units_shift_after_delete(int idx, int n) {
         g_chanPlugN[i] = 0;          // param ranges re-probed by rescan
         g_chU[i].hash = 0;           // saved state is index-dependent: re-baseline, don't send
     }
+    plug_agreed_reset(1, 0);
     InterlockedIncrement(&g_structGen);
 }
 
@@ -833,6 +866,7 @@ static void units_permute(const int *from, int n) {
             g_chanPlugN[i] = 0;
         }
     }
+    plug_agreed_reset(1, 0);
     InterlockedIncrement(&g_structGen);
 }
 
@@ -848,6 +882,7 @@ static void do_fxclear(const QItem *it) {
     __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("FX clear faulted %d/%d", it->a, it->b); }
     dstr_free(w);
     memset(u, 0, sizeof(Unit));
+    plug_agreed_set(U_FX, it->a, it->b, NULL, 0);
     u->inst = plugin_inst(obj);
     u->absorbUntil = GetTickCount() + ABSORB_MS;
     logmsg("PLUG cleared fx %d/%d (remote) ret=%d%s", it->a, it->b, r, u->inst ? " BUT SLOT STILL OCCUPIED" : "");
@@ -928,6 +963,7 @@ static void do_order(const QItem *it) {
     else {
         // out of step with the peer's order: keep our bookkeeping consistent with what FL has
         for (i = 0; i < nm; i++) { g_chU[i].hash = 0; g_chU[i].inst = plugin_inst(items[i]); g_chanPlugN[i] = 0; }
+        plug_agreed_reset(1, 0);
         InterlockedIncrement(&g_structGen);
     }
     known_from_list();
@@ -1032,6 +1068,7 @@ static void do_struct(void) {
                 sprintf_s(m, sizeof(m), "{\"t\":\"op\",\"op\":{\"kind\":\"fx.clear\",\"trk\":%d,\"slot\":%d}}", t, s);
                 ws_send(m);
                 u->identAt = 0; u->lastAct = 0; u->hash = 0;
+                plug_agreed_set(U_FX, t, s, NULL, 0);
                 logmsg("PLUG removed from fx %d/%d (sent fx.clear)", t, s);
             }
         }
@@ -1142,6 +1179,7 @@ static void notes_rebaseline(void) {
     int p;
     for (p = 1; p < MAX_PAT; p++) { g_patSeen[p] = g_patHash[p] = notes_hash(p); g_patChangedAt[p] = 0; }
     clips_rebaseline();          // audio clips reference channels: same structural events
+    meta_rebaseline();           // channel names/colors move with their channels
     units_capture_all();         // and it is the state a lock conflict reverts to
 }
 
@@ -1540,6 +1578,392 @@ static void on_clips_set(const char *m) {
     QItem it; memset(&it, 0, sizeof(it));
     it.type = T_CLIPS; it.a = arr; it.mode = (int)(n / CLIP_SIZE); it.order = (int *)recs;
     enqueue(&it);
+}
+
+// ---------------- names, colors, mixer routing ("meta") ----------------
+// Small per-entity state: mixer track name + color, mixer track routing (sends on/off +
+// level), channel name + color, pattern name + color + length, playlist track name + color
+// (every arrangement). Same scheme as notes: hashes from the poll thread, sent once settled,
+// applied on the main thread with FL's own setters (the ones its Python API calls). Joins and
+// project loads carry all of this in the .flp, so only live edits travel. No locks (renames
+// are rare); if both sides change the same thing at once, the leader's value wins.
+#define MIXNAME_VA    0x11b9ce0    // SetMixerTrackName(track, name, 1): also renames linked playlist tracks
+#define MIXCOLOR_VA   0x11bcd60    // SetMixerTrackColor(track record, color)
+#define UIUPDATE_VA   0xb69db0     // UIUpdate(what, 0); 0x18 = mixer (what FL calls after a mixer color)
+#define MIXOBJ_VA     0x1498208    // global -> var -> mixer object (routing calls take it)
+#define SETROUTE_VA   0x119e180    // SetRoute(mixer, src, dst, on, 1) -> int
+#define ROUTEUPD_VA   0x119d6d0    // RoutingChanged(mixer): after route / send level edits
+#define MIX_NAME      0x0c         // mixer track: UnicodeString name ('' = "Insert N")
+#define MIX_COLOR     0x04
+#define MIX_ROUTE     0x2e4        // + dst*8: int send level (12800 = 100%); +4: byte, 1 = routed
+#define MIX_ROUTE_MAX 502
+#define CH_NAME       0x50         // channel object: UnicodeString name
+#define CH_COLOR      0x78
+#define CH_SETNAME_VSLOT  (0x70 / 8)   // channel vmt: SetName(self, name)
+#define CH_SETCOLOR_VSLOT (0x78 / 8)   //              SetColor(self, color)
+#define PAT_NAME      0x00         // pattern record: UnicodeString name ('' = "Pattern N")
+#define PAT_COLOR     0x08
+#define PAT_LENGTH    0x10         // int, -1 = automatic
+#define PATNAME_VA    0x11cad70    // SetPatternName(pattern, name)
+#define PATCOLOR_VA   0x11cb260    // SetPatternColor(pattern, color): also sets the "custom color" flag
+#define PATREFRESH_VA 0xd9a9e0     // what FL calls on (playlist form +0xd00) after a pattern rename
+#define PLFORM_PATS   0xd00
+#define PL_TRK_STRIDE 0x114        // arrangement object: playlist track t (1..500) at + t*0x114
+#define PL_TRK_NAME   0x24
+#define PL_TRK_COLOR  0x2c
+#define PL_TRK_MAX    500
+#define PLTRACK_VA    0x11dec90    // SetPlaylistTrack(arrangement, track, name, color)
+#define META_ARR_MAX  8
+#define META_MAX      (META_ARR_MAX * 512)
+#define META_SCAN_MS  150
+#define META_SETTLE_MS 300         // some dialogs rename per keystroke: send once it stops
+#define META_BULK     24           // this many entities changing at once = project load / pattern insert
+#define META_CONFLICT_MS 1500      // leader: a remote change this soon after our own send of the same thing loses
+
+typedef void (*mixname_t)(int track, const wchar_t *name, uint8_t update);
+typedef void (*mixcolor_t)(void *rec, uint32_t color);
+typedef void (*uiupdate_t)(int what, uint64_t flag);
+typedef int  (*setroute_t)(void *mixer, int src, int dst, int on, int flag);
+typedef void (*mixerfn_t)(void *mixer);
+typedef void (*chsetname_t)(void *ch, const wchar_t *name);
+typedef void (*chsetcolor_t)(void *ch, uint32_t color);
+typedef void (*patname_t)(int pat, const wchar_t *name);
+typedef void (*patcolor_t)(int pat, uint32_t color);
+typedef void (*patrefresh_t)(void *obj, uint8_t a, uint8_t b);
+typedef void (*pltrack_t)(void *arr, int track, const wchar_t *name, uint32_t color);
+
+enum { M_MIX, M_ROUTE, M_CHAN, M_PAT, M_PLT, M_NTYPES };
+static const char *const M_TAG[M_NTYPES] = { "mx", "rt", "ch", "pt", "pl" };
+static uint64_t g_mHash[M_NTYPES][META_MAX];   // last state sent or applied
+static uint64_t g_mSeen[M_NTYPES][META_MAX];   // last state the scanner saw
+static DWORD    g_mAt[M_NTYPES][META_MAX];     // when g_mSeen last moved (0 = settled/handled)
+static DWORD    g_mSentAt[M_NTYPES][META_MAX];
+static volatile LONG g_metaReady = 0;
+
+static uint64_t fnv_add(uint64_t h, const void *p, size_t n) {
+    const unsigned char *b = (const unsigned char *)p;
+    size_t i;
+    for (i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ull; }
+    return h;
+}
+// Length of a Delphi UnicodeString (NULL = '').
+static int ustr_len(const wchar_t *s) {
+    int n = s ? *(const int32_t *)((const char *)s - 4) : 0;
+    return n < 0 || n > 4096 ? 0 : n;
+}
+static uint64_t fnv_ustr(uint64_t h, const wchar_t *s) {
+    int n = ustr_len(s);
+    h = fnv_add(h, &n, 4);
+    return n ? fnv_add(h, s, (size_t)n * 2) : h;
+}
+static int ustr_eq(const wchar_t *cur, const wchar_t *w) {
+    int n = ustr_len(cur);
+    return n == (int)wcslen(w) && (n == 0 || memcmp(cur, w, (size_t)n * 2) == 0);
+}
+
+static int meta_cap(int type) {
+    switch (type) {
+    case M_MIX: case M_ROUTE: return MAX_MIX;
+    case M_CHAN: return MAX_CH;
+    case M_PAT: return MAX_PAT;
+    default: return META_MAX;
+    }
+}
+static char *mix_rec(int t) { return *(char **)(g_flBase + (MIXARR_VA - IMG_BASE)) + (size_t)t * MIX_STRIDE; }
+static char *pat_rec(int p) { return *(char **)(g_flBase + (PATARR_VA - IMG_BASE)) + (size_t)p * PAT_STRIDE; }
+static int arr_count(void) {
+    __try {
+        char *arrs = *(char **)(g_flBase + (ARRS_VA - IMG_BASE));
+        int n = arrs ? (int)*(int64_t *)(arrs - 8) : 0;
+        return n < 0 ? 0 : (n > META_ARR_MAX ? META_ARR_MAX : n);
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+}
+static char *arr_obj(int arr) {
+    char *arrs = *(char **)(g_flBase + (ARRS_VA - IMG_BASE));
+    return *(char **)(arrs + (size_t)arr * 8);
+}
+// i = arrangement * 512 + track (1..500)
+static char *pl_track(int i) {
+    char *a = arr_obj(i / 512);
+    return a ? a + (size_t)(i % 512) * PL_TRK_STRIDE : NULL;
+}
+static int meta_valid(int type, int i) {
+    switch (type) {
+    case M_MIX: case M_ROUTE: return i >= 0 && i < mix_count();
+    case M_CHAN: return i >= 0 && i < g_nChKnown;
+    case M_PAT: return i >= 1 && i < MAX_PAT;
+    default: return i % 512 >= 1 && i % 512 <= PL_TRK_MAX && i / 512 < arr_count();
+    }
+}
+
+// Hash of one entity's synced fields (0 = absent). Any thread: SEH-guarded unlocked reads
+// (a torn read is just a change that settles).
+static uint64_t meta_hash(int type, int i) {
+    uint64_t h = 1469598103934665603ull;
+    if (!meta_valid(type, i)) return 0;
+    __try {
+        switch (type) {
+        case M_MIX: {
+            char *r = mix_rec(i);
+            h = fnv_add(h, r + MIX_COLOR, 4);
+            h = fnv_ustr(h, *(wchar_t **)(r + MIX_NAME));
+            break; }
+        case M_ROUTE: {
+            char *r = mix_rec(i);
+            int d, nm = mix_count();
+            for (d = 0; d < nm && d < MIX_ROUTE_MAX; d++) {
+                unsigned char on = (unsigned char)r[MIX_ROUTE + d * 8 + 4];
+                h = fnv_add(h, &on, 1);
+                if (on) h = fnv_add(h, r + MIX_ROUTE + d * 8, 4);
+            }
+            break; }
+        case M_CHAN: {
+            void **items;
+            int n = chan_list(&items);
+            if (!items || i >= n) return 0;
+            h = fnv_add(h, (char *)items[i] + CH_COLOR, 4);
+            h = fnv_ustr(h, *(wchar_t **)((char *)items[i] + CH_NAME));
+            break; }
+        case M_PAT: {
+            char *r = pat_rec(i);
+            h = fnv_add(h, r + PAT_COLOR, 4);
+            h = fnv_add(h, r + PAT_LENGTH, 4);
+            h = fnv_ustr(h, *(wchar_t **)(r + PAT_NAME));
+            break; }
+        default: {
+            char *r = pl_track(i);
+            if (!r) return 0;
+            h = fnv_add(h, r + PL_TRK_COLOR, 4);
+            h = fnv_ustr(h, *(wchar_t **)(r + PL_TRK_NAME));
+            break; }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 1; }
+    return h > 2 ? h : 3;
+}
+
+static void meta_rebaseline(void) {
+    int t, i;
+    for (t = 0; t < M_NTYPES; t++)
+        for (i = 0; i < meta_cap(t); i++) { g_mSeen[t][i] = g_mHash[t][i] = meta_hash(t, i); g_mAt[t][i] = 0; }
+}
+
+// After applying a remote change: FL's setters touch other entities too (a mixer rename
+// renames its linked playlist tracks). Take those as known, except where a local edit is pending.
+static void meta_absorb(void) {
+    int t, i;
+    for (t = 0; t < M_NTYPES; t++)
+        for (i = 0; i < meta_cap(t); i++) {
+            if (g_mAt[t][i] || g_mSeen[t][i] != g_mHash[t][i]) continue;
+            g_mSeen[t][i] = g_mHash[t][i] = meta_hash(t, i);
+        }
+}
+
+// {"t":"op","op":{"kind":"meta.set","e":"<tag>","i":N, ...fields}}; name = base64 UTF-16LE.
+// Main thread. NULL if the entity is gone.
+static char *meta_json(int t, int i) {
+    size_t cap = 32768;
+    char *m = (char *)malloc(cap);
+    int o = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"meta.set\",\"e\":\"%s\",\"i\":%d", M_TAG[t], i);
+    __try {
+        const wchar_t *name = NULL;
+        uint32_t color = 0;
+        char *r = NULL;
+        switch (t) {
+        case M_MIX: r = mix_rec(i); color = *(uint32_t *)(r + MIX_COLOR); name = *(wchar_t **)(r + MIX_NAME); break;
+        case M_CHAN: {
+            void **items;
+            int n = chan_list(&items);
+            if (!items || i >= n) { free(m); return NULL; }
+            r = (char *)items[i]; color = *(uint32_t *)(r + CH_COLOR); name = *(wchar_t **)(r + CH_NAME);
+            break; }
+        case M_PAT:
+            r = pat_rec(i); color = *(uint32_t *)(r + PAT_COLOR); name = *(wchar_t **)(r + PAT_NAME);
+            o += sprintf_s(m + o, cap - o, ",\"l\":%d", *(int32_t *)(r + PAT_LENGTH));
+            break;
+        case M_PLT:
+            r = pl_track(i);
+            if (!r) { free(m); return NULL; }
+            color = *(uint32_t *)(r + PL_TRK_COLOR); name = *(wchar_t **)(r + PL_TRK_NAME);
+            break;
+        case M_ROUTE: {
+            int d, k = 0, nm = mix_count();
+            r = mix_rec(i);
+            o += sprintf_s(m + o, cap - o, ",\"r\":[");
+            for (d = 0; d < nm && d < MIX_ROUTE_MAX; d++)
+                if (r[MIX_ROUTE + d * 8 + 4])
+                    o += sprintf_s(m + o, cap - o, "%s[%d,%d]", k++ ? "," : "", d, *(int32_t *)(r + MIX_ROUTE + d * 8));
+            o += sprintf_s(m + o, cap - o, "]");
+            break; }
+        }
+        if (t != M_ROUTE) {
+            int nl = ustr_len(name);
+            o += sprintf_s(m + o, cap - o, ",\"c\":%u,\"n\":\"", color);
+            b64enc(nl ? (const unsigned char *)name : (const unsigned char *)"", nl * 2, m + o);
+            o += (int)strlen(m + o);
+            m[o++] = '"'; m[o] = 0;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { free(m); return NULL; }
+    sprintf_s(m + o, cap - o, "}}");
+    return m;
+}
+
+static void do_metasnap(const QItem *it) {
+    int t = it->unit, i = it->a;
+    uint64_t h = meta_hash(t, i);
+    if (!h || h == g_mHash[t][i]) return;
+    char *m = meta_json(t, i);
+    if (!m) return;
+    ws_send(m);
+    free(m);
+    g_mHash[t][i] = h;
+    g_mSentAt[t][i] = GetTickCount();
+    logmsg("META sent %s %d", M_TAG[t], i);
+}
+
+// Poll thread: find entities that changed locally and settled.
+static void scan_meta(DWORD now) {
+    static DWORD last = 0;
+    static int pend[M_NTYPES * META_MAX];
+    int t, i, np = 0;
+    if (now - last < META_SCAN_MS) return;
+    last = now;
+    if (!g_metaReady) { meta_rebaseline(); g_metaReady = 1; return; }
+    for (t = 0; t < M_NTYPES; t++)
+        for (i = 0; i < meta_cap(t); i++) {
+            uint64_t h = meta_hash(t, i);
+            if (h != g_mSeen[t][i]) { g_mSeen[t][i] = h; g_mAt[t][i] = now; }
+            if (!g_mAt[t][i] || now - g_mAt[t][i] < META_SETTLE_MS) continue;
+            g_mAt[t][i] = 0;
+            if (g_mSeen[t][i] == g_mHash[t][i]) continue;
+            if (!g_mSeen[t][i] || !g_mHash[t][i] ||   // gone / just appeared: structural sync handles it
+                (t == M_CHAN && (g_chU[i].addAt || (LONG)(now - g_chU[i].absorbUntil) < 0))) {
+                g_mHash[t][i] = g_mSeen[t][i];        // new / remotely loaded channel: its name came with its state
+                continue;
+            }
+            pend[np++] = t * META_MAX + i;
+        }
+    if (np >= META_BULK) {
+        for (i = 0; i < np; i++) g_mHash[pend[i] / META_MAX][pend[i] % META_MAX] = g_mSeen[pend[i] / META_MAX][pend[i] % META_MAX];
+        logmsg("META bulk change in %d entities: not sent", np);
+        return;
+    }
+    for (i = 0; i < np; i++) enqueue_unit(T_METASNAP, pend[i] / META_MAX, pend[i] % META_MAX, 0, 0, NULL);
+}
+
+// Inbound meta.set: the whole message goes to the main thread.
+static void on_meta_set(const char *m) {
+    QItem q; memset(&q, 0, sizeof(q));
+    q.type = T_META; q.path = _strdup(m);
+    enqueue(&q);
+}
+
+static wchar_t *meta_name_arg(const wchar_t *w) { return w[0] ? dstr_keep(w) : NULL; }   // '' = nil string
+
+static void do_meta(const QItem *it) {
+    const char *m = it->path, *e = strstr(m, "\"e\":\""), *q;
+    int t, i = -1, len = 0, hasL, hasC = 0;
+    uint32_t color = 0;
+    wchar_t *name = NULL;
+    DWORD now = GetTickCount();
+    if (!e) return;
+    for (t = 0; t < M_NTYPES && strncmp(e + 5, M_TAG[t], 2) != 0; t++) {}
+    if (t == M_NTYPES || !int_after(m, NULL, "\"i\":", &i) || !meta_valid(t, i)) { logmsg("META %.2s %d: no such target here", e + 5, i); return; }
+    if (g_isLeader && g_mSentAt[t][i] && now - g_mSentAt[t][i] < META_CONFLICT_MS) {
+        // both changed it at once: the leader's value wins; send ours again so the peer converges
+        g_mHash[t][i] = 0;
+        enqueue_unit(T_METASNAP, t, i, 0, 0, NULL);
+        logmsg("META %s %d: changed here too, keeping ours", M_TAG[t], i);
+        return;
+    }
+    if ((q = strstr(m, "\"n\":\"")) != NULL) {
+        const char *qe = strchr(q + 5, '"');
+        if (qe) {
+            size_t bn;
+            unsigned char *b = b64dec(q + 5, (size_t)(qe - q - 5), &bn);
+            name = (wchar_t *)calloc(bn / 2 + 1, 2);
+            memcpy(name, b, bn / 2 * 2);
+            free(b);
+        }
+    }
+    if ((q = strstr(m, "\"c\":")) != NULL) { color = (uint32_t)strtoul(q + 4, NULL, 10); hasC = 1; }
+    hasL = int_after(m, NULL, "\"l\":", &len);
+    __try {
+        switch (t) {
+        case M_MIX: {
+            char *r = mix_rec(i);
+            if (name && !ustr_eq(*(wchar_t **)(r + MIX_NAME), name))
+                ((mixname_t)(g_flBase + (MIXNAME_VA - IMG_BASE)))(i, meta_name_arg(name), 1);
+            if (hasC && *(uint32_t *)(r + MIX_COLOR) != color) {
+                ((mixcolor_t)(g_flBase + (MIXCOLOR_VA - IMG_BASE)))(r, color);
+                ((uiupdate_t)(g_flBase + (UIUPDATE_VA - IMG_BASE)))(0x18, 0);
+            }
+            break; }
+        case M_ROUTE: {
+            static unsigned char on[MIX_ROUTE_MAX];
+            static int lvl[MIX_ROUTE_MAX];
+            char *r = mix_rec(i), *end;
+            void *mixer = **(void ***)(g_flBase + (MIXOBJ_VA - IMG_BASE));
+            int d, nm = mix_count(), changed = 0;
+            memset(on, 0, sizeof(on));
+            q = strstr(m, "\"r\":[");
+            if (!q || !mixer) break;
+            q += 5;
+            while (*q == '[') {
+                int l;
+                d = (int)strtol(q + 1, &end, 10);
+                if (*end != ',') break;
+                l = (int)strtol(end + 1, &end, 10);
+                if (*end != ']') break;
+                if (d >= 0 && d < MIX_ROUTE_MAX) { on[d] = 1; lvl[d] = l; }
+                q = end + 1;
+                if (*q == ',') q++;
+            }
+            for (d = 0; d < nm && d < MIX_ROUTE_MAX; d++) {
+                int cur = r[MIX_ROUTE + d * 8 + 4] != 0;
+                if (cur != on[d]) { ((setroute_t)(g_flBase + (SETROUTE_VA - IMG_BASE)))(mixer, i, d, on[d], 1); changed = 1; }
+                if (on[d] && *(int32_t *)(r + MIX_ROUTE + d * 8) != lvl[d]) { *(int32_t *)(r + MIX_ROUTE + d * 8) = lvl[d]; changed = 1; }
+            }
+            if (changed) {
+                ((mixerfn_t)(g_flBase + (ROUTEUPD_VA - IMG_BASE)))(mixer);
+                ((uiupdate_t)(g_flBase + (UIUPDATE_VA - IMG_BASE)))(0x18, 0);
+            }
+            break; }
+        case M_CHAN: {
+            char *o = (char *)chan_obj(i);
+            void **vmt;
+            if (!o) break;
+            vmt = *(void ***)o;
+            if (name && !ustr_eq(*(wchar_t **)(o + CH_NAME), name)) ((chsetname_t)vmt[CH_SETNAME_VSLOT])(o, meta_name_arg(name));
+            if (hasC && *(uint32_t *)(o + CH_COLOR) != color) ((chsetcolor_t)vmt[CH_SETCOLOR_VSLOT])(o, color);
+            break; }
+        case M_PAT: {
+            char *r = pat_rec(i);
+            int changed = 0;
+            if (name && !ustr_eq(*(wchar_t **)(r + PAT_NAME), name)) { ((patname_t)(g_flBase + (PATNAME_VA - IMG_BASE)))(i, meta_name_arg(name)); changed = 1; }
+            if (hasC && *(uint32_t *)(r + PAT_COLOR) != color) { ((patcolor_t)(g_flBase + (PATCOLOR_VA - IMG_BASE)))(i, color); changed = 1; }
+            if (hasL && *(int32_t *)(r + PAT_LENGTH) != len) { *(int32_t *)(r + PAT_LENGTH) = len; changed = 1; }
+            if (changed) {
+                char *form = **(char ***)(g_flBase + (PLFORM_VA - IMG_BASE));
+                void *pats = form ? *(void **)(form + PLFORM_PATS) : NULL;
+                if (pats) ((patrefresh_t)(g_flBase + (PATREFRESH_VA - IMG_BASE)))(pats, 1, 0);
+                playlist_refresh();
+            }
+            break; }
+        case M_PLT: {
+            char *r = pl_track(i);
+            if (!r) break;
+            if ((name && !ustr_eq(*(wchar_t **)(r + PL_TRK_NAME), name)) || (hasC && *(uint32_t *)(r + PL_TRK_COLOR) != color))
+                ((pltrack_t)(g_flBase + (PLTRACK_VA - IMG_BASE)))(arr_obj(i / 512), i % 512,
+                    name ? meta_name_arg(name) : *(wchar_t **)(r + PL_TRK_NAME),
+                    hasC ? color : *(uint32_t *)(r + PL_TRK_COLOR));
+            break; }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("META apply faulted %s %d", M_TAG[t], i); }
+    free(name);
+    g_mSeen[t][i] = g_mHash[t][i] = meta_hash(t, i);
+    g_mAt[t][i] = 0;
+    meta_absorb();
+    logmsg("META applied %s %d", M_TAG[t], i);
 }
 
 // ---------------- window guard ----------------
@@ -1977,8 +2401,12 @@ static void handle_msg(const char *m);
 
 static int closing_now(void) { return g_closingUntil && (LONG)(GetTickCount() - g_closingUntil) < 0; }
 
+static void fl_ustr(uint32_t va, wchar_t *out, int cap);
+static wchar_t g_projNameAtBegin[MAX_PATH];     // FL's project file when the project change began
+
 static void proj_begin(const char *why) {
     if (InterlockedExchange(&g_projBusy, 1) == 0) {
+        fl_ustr(PROJNAME_VA, g_projNameAtBegin, MAX_PATH);
         g_projSince = GetTickCount();
         InterlockedExchange(&g_projRemote, 0);
         InterlockedExchange(&g_projDoneQueued, 0);
@@ -2094,6 +2522,7 @@ static void proj_rebaseline(void) {
     known_from_list();
     memset(g_chU, 0, sizeof(g_chU));
     memset(g_fxU, 0, sizeof(g_fxU));
+    plug_agreed_reset(1, 1);
     memset(g_chanPlugN, 0, sizeof(g_chanPlugN));
     memset(g_fxN, 0, sizeof(g_fxN));
     for (i = 0; i < n; i++) g_chU[i].inst = plugin_inst(items[i]);
@@ -2129,8 +2558,7 @@ static void send_project(const unsigned char *d, size_t n, const wchar_t *name) 
     int len = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"project.load\",\"name\":\"%s\",\"data\":\"", esc);
     b64enc(d, (int)n, m + len);
     strcat_s(m, cap, "\"}}");
-    ws_send(m);
-    free(m);
+    ws_send_samples(m, d, n);
     logmsg("PROJECT sent %S (%zu bytes)", (name && *name) ? name : L"(untitled)", n);
 }
 
@@ -2195,10 +2623,14 @@ static void do_projdone(void) {
     int remote = g_projRemote, same = 0;
     {
         // a real load replaces every channel object; same objects = cancelled open (or a big
-        // preset change that tripped the bulk guard): nothing to send
+        // preset change that tripped the bulk guard): nothing to send. FL can reallocate the
+        // new channels at the old addresses, so a changed project file also counts as a load.
         void **items; int n = chan_list(&items), i;
+        wchar_t now[MAX_PATH];
         same = items && g_nChKnown > 0 && n == g_nChKnown;
         for (i = 0; same && i < n; i++) if (items[i] != g_chKnown[i]) same = 0;
+        fl_ustr(PROJNAME_VA, now, MAX_PATH);
+        if (_wcsicmp(now, g_projNameAtBegin) != 0) same = 0;
     }
     proj_rebaseline();
     if (same && !remote && !closing_now()) {
@@ -2272,6 +2704,7 @@ static void on_project_load(const char *m) {
     const char *e = strchr(dk, '"');
     if (!e) return;
     unsigned char *d = b64dec(dk, (size_t)(e - dk), &n);
+    samples_rewrite(&d, &n);
     if (name[0]) {
         DWORD k = GetEnvironmentVariableW(L"USERPROFILE", dir, MAX_PATH);
         if (!k || k >= MAX_PATH) wcscpy_s(dir, MAX_PATH, L"C:");
@@ -2351,6 +2784,7 @@ typedef struct {
     int   peer;              // someone else holds it
     DWORD lastLocal;         // our last change under it
     DWORD lastHint;
+    int   stateSent;         // plugin key: a plug.state went out under it before the grant
     char  owner[64];
 } ULock;
 static ULock g_ulocks[ULOCK_MAX];
@@ -2400,20 +2834,41 @@ static void fl_hint(const char *msg) {
     __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("hint faulted"); }
 }
 
+// "plug:ch:<i>" / "plug:fx:<track>:<slot>" -> unit. Returns 0 if key is no plugin key.
+static int plug_parse(const char *key, int *unit, int *a, int *b) {
+    *b = 0;
+    if (sscanf_s(key, "plug:ch:%d", a) == 1) { *unit = U_CH; return *a >= 0 && *a < MAX_CH; }
+    if (sscanf_s(key, "plug:fx:%d:%d", a, b) == 2) { *unit = U_FX; return *a >= 0 && *a < MAX_MIX && *b >= 0 && *b < MAX_FX_SLOTS; }
+    return 0;
+}
+
 static void unit_label(const char *key, char *out, int cap) {
+    int unit, a, b;
     if (strncmp(key, "pat:", 4) == 0) sprintf_s(out, cap, "Pattern %d", atoi(key + 4));
     else if (strncmp(key, "clips:", 6) == 0) strcpy_s(out, cap, "The playlist");
+    else if (plug_parse(key, &unit, &a, &b)) {
+        if (unit == U_FX) _snprintf_s(out, cap, _TRUNCATE, "Mixer insert %d slot %d", a, b + 1);
+        else {
+            char name[48] = "";
+            __try {
+                const wchar_t *w = *(const wchar_t **)((char *)chan_obj(a) + 0x50);   // CH_NAME
+                if (w && !WideCharToMultiByte(CP_UTF8, 0, w, -1, name, sizeof(name), NULL, NULL)) name[0] = 0;
+            } __except (EXCEPTION_EXECUTE_HANDLER) { name[0] = 0; }
+            if (name[0]) _snprintf_s(out, cap, _TRUNCATE, "Channel '%s'", name);
+            else _snprintf_s(out, cap, _TRUNCATE, "Channel %d", a + 1);
+        }
+    }
     else strcpy_s(out, cap, key);
 }
 
 static void hint_locked(ULock *l) {
-    char who[64], what[48], msg[160];
+    char who[64], what[96], msg[200];
     DWORD now = GetTickCount();
     if (now - l->lastHint < HINT_EVERY_MS) return;
     l->lastHint = now;
     peer_name(l->owner, who, sizeof(who));
     unit_label(l->key, what, sizeof(what));
-    sprintf_s(msg, sizeof(msg), "%s is being edited by %s", what, who);
+    _snprintf_s(msg, sizeof(msg), _TRUNCATE, "%s is being edited by %s", what, who);
     fl_hint(msg);
 }
 
@@ -2473,6 +2928,18 @@ static void unit_revert(const char *key) {
     unsigned char *d = NULL;
     unsigned n = 0;
     int known = 0, idx = -1, isPat = strncmp(key, "pat:", 4) == 0;
+    int unit, a, b;
+    if (plug_parse(key, &unit, &a, &b)) {
+        // params were snapped back already (plug_undo); a state we sent was dropped by the server
+        int sent = 0;
+        EnterCriticalSection(&g_ulockLock);
+        ULock *l = ulock_get(key, 0);
+        if (l) { sent = l->stateSent; l->stateSent = 0; }
+        LeaveCriticalSection(&g_ulockLock);
+        if (sent) plug_revert_state(unit, a, b);
+        logmsg("LOCK %s held by another user: local change reverted%s", key, sent ? " (state)" : "");
+        return;
+    }
     EnterCriticalSection(&g_ulockLock);
     if (isPat) {
         idx = atoi(key + 4);
@@ -2511,7 +2978,7 @@ static int on_unit_lock(const char *m) {
     int i = 0, granted, released = strstr(m, "\"t\":\"lock_released\"") != NULL;
     if (!k) return 0;
     k += 7;
-    if (strncmp(k, "pat:", 4) != 0 && strncmp(k, "clips:", 6) != 0) return 0;
+    if (strncmp(k, "pat:", 4) != 0 && strncmp(k, "clips:", 6) != 0 && strncmp(k, "plug:", 5) != 0) return 0;
     while (k[i] && k[i] != '"' && i < (int)sizeof(key) - 1) { key[i] = k[i]; i++; }
     key[i] = 0;
     granted = strstr(m, "\"granted\":true") != NULL;
@@ -2523,11 +2990,13 @@ static int on_unit_lock(const char *m) {
     ULock *l = ulock_get(key, 1);
     if (l) {
         if (released) l->peer = 0;
-        else if (strcmp(owner, g_myId) == 0) { if (granted) { l->mine = 1; l->granted = 1; l->peer = 0; unit_commit(key); } }
-        else {
+        else if (strcmp(owner, g_myId) == 0) {
+            if (granted) { l->mine = 1; l->granted = 1; l->peer = 0; l->stateSent = 0; unit_commit(key); plug_undo(key, 0); }
+        } else {
             int lost = !granted;                     // denials go only to the side that asked: our change lost
             l->peer = 1; l->mine = 0; l->granted = 0;
             strcpy_s(l->owner, sizeof(l->owner), owner);
+            if (lost) plug_undo(key, 1);             // plugin params we changed meanwhile: snap back
             if (lost) {
                 QItem q; memset(&q, 0, sizeof(q));
                 q.type = T_UNITREVERT; q.path = _strdup(key);
@@ -2545,6 +3014,147 @@ static void hint_if_held(const char *key) {
     EnterCriticalSection(&g_ulockLock);
     ULock *l = ulock_get(key, 0);
     if (l && l->peer) { hint_locked(l); logmsg("LOCK %s: our unsent edit was replaced by the lock holder's", key); }
+    LeaveCriticalSection(&g_ulockLock);
+}
+
+// ---- plugin lock ----
+// One lock per plugin (channel generator or mixer effect slot): "plug:ch:<i>" / "plug:fx:<t>:<s>".
+// Any local change of the plugin takes it (a param tweak or a state change); param.set and
+// plug.state ops carry it, so the server drops them while a peer holds it. While a peer holds
+// it, local param tweaks snap back and a local state change is undone by reloading the last
+// agreed state. A denied request (race) snaps back the params changed while it was pending.
+static UState g_plugLastCh[MAX_CH];
+static UState g_plugLastFx[MAX_MIX][MAX_FX_SLOTS];
+static volatile DWORD g_hintQueuedAt = 0;
+
+static void plug_key(int unit, int a, int b, char *key, int cap) {
+    if (unit == U_CH) sprintf_s(key, cap, "plug:ch:%d", a);
+    else sprintf_s(key, cap, "plug:fx:%d:%d", a, b);
+}
+static UState *plug_last(int unit, int a, int b) {
+    if (unit == U_CH) return (a >= 0 && a < MAX_CH) ? &g_plugLastCh[a] : NULL;
+    return (a >= 0 && a < MAX_MIX && b >= 0 && b < MAX_FX_SLOTS) ? &g_plugLastFx[a][b] : NULL;
+}
+// Plugin param id -> its unit. 0 for channel/mixer basics (vol, pan, route...): those keep per-param locks.
+static int plug_param_unit(uint32_t id, int *unit, int *a, int *b) {
+    return !IS_MUTE_ID(id) && (id & 0xFFFF) >= REC_PLUG_FIRST && unit_of_id(id, unit, a, b);
+}
+
+// Last agreed state of a plugin (.fst bytes): set on baseline, send and remote apply. NULL clears.
+static void plug_agreed_set(int unit, int a, int b, const unsigned char *d, size_t n) {
+    EnterCriticalSection(&g_ulockLock);
+    UState *s = plug_last(unit, a, b);
+    if (s) {
+        if (d && n) ustate_set(s, d, (unsigned)n, 1);
+        else { free(s->d); memset(s, 0, sizeof(*s)); }
+    }
+    LeaveCriticalSection(&g_ulockLock);
+}
+// Channel indices moved / project replaced: stored states no longer belong to their index.
+static void plug_agreed_reset(int channels, int fx) {
+    int i, j;
+    EnterCriticalSection(&g_ulockLock);
+    if (channels) for (i = 0; i < MAX_CH; i++) { free(g_plugLastCh[i].d); memset(&g_plugLastCh[i], 0, sizeof(UState)); }
+    if (fx)
+        for (i = 0; i < MAX_MIX; i++)
+            for (j = 0; j < MAX_FX_SLOTS; j++) { free(g_plugLastFx[i][j].d); memset(&g_plugLastFx[i][j], 0, sizeof(UState)); }
+    LeaveCriticalSection(&g_ulockLock);
+}
+
+static int load_queued(int unit, int a, int b) {
+    int i, r = 0;
+    EnterCriticalSection(&g_qLock);
+    for (i = g_qh; i != g_qt && !r; i = (i + 1) % QCAP)
+        r = g_q[i].type == T_LOAD && g_q[i].unit == unit && g_q[i].a == a && g_q[i].b == b;
+    LeaveCriticalSection(&g_qLock);
+    return r;
+}
+
+// Main thread: reload the plugin's last agreed state (our state change lost to the lock holder).
+static void plug_revert_state(int unit, int a, int b) {
+    unsigned char *d = NULL;
+    unsigned n = 0;
+    if (load_queued(unit, a, b)) return;         // the holder's newer state is about to replace ours anyway
+    EnterCriticalSection(&g_ulockLock);
+    UState *s = plug_last(unit, a, b);
+    if (s && s->known && s->n) { d = (unsigned char *)malloc(s->n); memcpy(d, s->d, s->n); n = s->n; }
+    LeaveCriticalSection(&g_ulockLock);
+    if (!d) { logmsg("PLUG %s %d/%d: no agreed state to revert to", unit == U_CH ? "ch" : "fx", a, b); return; }
+    char *path = tmp_path("rv");
+    FILE *f = NULL;
+    if (fopen_s(&f, path, "wb") == 0 && f) {
+        fwrite(d, 1, n, f); fclose(f);
+        enqueue_unit(T_LOAD, unit, a, b, 0, path);
+        logmsg("PLUG %s %d/%d: reverting to the agreed state (%u bytes)", unit == U_CH ? "ch" : "fx", a, b, n);
+    } else free(path);
+    free(d);
+}
+
+// Main thread, before sending a plug.state: 1 = go ahead under *key, 0 = a peer holds the plugin.
+static int plug_lock_send(int unit, int a, int b, char *key, int cap) {
+    int already;
+    plug_key(unit, a, b, key, cap);
+    if (!ulock_local(key, &already)) return 0;
+    if (!already) {
+        EnterCriticalSection(&g_ulockLock);
+        ULock *l = ulock_get(key, 0);
+        if (l) l->stateSent = 1;
+        LeaveCriticalSection(&g_ulockLock);
+    }
+    return 1;
+}
+
+// Poll thread, a local plugin param change: 1 = send it under *key, 0 = a peer holds the
+// plugin (the caller snaps the param back). Changes made before the grant remember their
+// previous value in case the request is denied.
+static int plug_lock_param(int unit, int a, int b, Slot *s, uint32_t prev, char *key, int cap) {
+    int r = 1;
+    char m[96];
+    plug_key(unit, a, b, key, cap);
+    EnterCriticalSection(&g_ulockLock);
+    ULock *l = ulock_get(key, 1);
+    if (l && l->peer) r = 0;
+    else if (l) {
+        if (!l->mine) {
+            l->mine = 1;
+            sprintf_s(m, sizeof(m), "{\"t\":\"lock_acquire\",\"key\":\"%s\"}", key);
+            ws_send(m);
+        }
+        if (!l->granted && !s->hasUndo) { s->undo = prev; s->hasUndo = 1; }
+        l->lastLocal = GetTickCount();
+    }
+    LeaveCriticalSection(&g_ulockLock);
+    return r;
+}
+
+// Lock answer for a plugin key: granted -> forget the undo values; denied -> apply them.
+static void plug_undo(const char *key, int apply) {
+    int unit, a, b, k, n = 0;
+    if (!plug_parse(key, &unit, &a, &b)) return;
+    for (k = 0; k < g_nslot; k++) {
+        Slot *s = &g_slots[k];
+        int u2, a2, b2;
+        if (!s->hasUndo || !plug_param_unit(s->id, &u2, &a2, &b2) || u2 != unit || a2 != a || b2 != b) continue;
+        if (apply) { enqueue_apply(s->id, s->undo); n++; }
+        s->hasUndo = 0;
+    }
+    if (n) logmsg("LOCK %s denied: %d params snapped back", key, n);
+}
+
+// Poll thread: show the hint for a held plugin (throttled; FL calls happen on the main thread).
+static void enqueue_hint(const char *key) {
+    DWORD now = GetTickCount();
+    if (now - g_hintQueuedAt < HINT_EVERY_MS) return;
+    g_hintQueuedAt = now;
+    QItem q; memset(&q, 0, sizeof(q));
+    q.type = T_HINT; q.path = _strdup(key);
+    enqueue(&q);
+}
+
+static void do_hint(const QItem *it) {
+    EnterCriticalSection(&g_ulockLock);
+    ULock *l = ulock_get(it->path, 0);
+    if (l && l->peer) hint_locked(l);
     LeaveCriticalSection(&g_ulockLock);
 }
 
@@ -2621,6 +3231,9 @@ static void run_task_inner(const QItem *it) {
     case T_CLIPSNAP: do_clipsnap(it); break;
     case T_CLIPS:  do_clips(it); free(it->order); break;
     case T_UNITREVERT: do_unitrevert(it); free(it->path); break;
+    case T_HINT:   do_hint(it); free(it->path); break;
+    case T_METASNAP: do_metasnap(it); break;
+    case T_META:   do_meta(it); free(it->path); break;
     }
 }
 
@@ -2640,7 +3253,7 @@ static void drain_queue_mainthread(void) {
 
         if (g_projBusy && it.type != T_PROJLOAD && it.type != T_PROJDONE && it.type != T_PROJSNAP) {
             if (it.type == T_LOAD || it.type == T_ADDCH) { if (it.path) { DeleteFileA(it.path); free(it.path); } }
-            else if (it.type == T_UNITREVERT || it.type == T_PROJLOAD) free(it.path);
+            else if (it.type == T_UNITREVERT || it.type == T_PROJLOAD || it.type == T_HINT || it.type == T_META) free(it.path);
             else if (it.type == T_ORDER || it.type == T_FXSYNC || it.type == T_NOTES || it.type == T_NOTESYNC || it.type == T_CLIPS) free(it.order);
             continue;
         }
@@ -2858,6 +3471,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
         if (now - lastScan > RESCAN_MS) { rescan(); retry_pending(); lastScan = now; }
         scan_notes(now);
         scan_clips(now);
+        scan_meta(now);
         n = g_nslot;
         for (i = 0; i < n; i++) {
             Slot *s = &g_slots[i];
@@ -2915,17 +3529,30 @@ static DWORD WINAPI pollThread(LPVOID p) {
 
         for (i = 0; i < nc; i++) {
             Slot *s = g_changes[i].s;
-            if (s->lockedByPeer) {
-                // someone else holds this knob: snap our local edit back
-                enqueue_apply(s->id, g_changes[i].prev);
-                continue;
+            char key[32];
+            int unit, a, b;
+            if (plug_param_unit(s->id, &unit, &a, &b)) {
+                // plugin params go under their plugin's lock
+                if (!plug_lock_param(unit, a, b, s, g_changes[i].prev, key, sizeof(key))) {
+                    logmsg("LOCK %s held by another user: param 0x%08x snapped back", key, s->id);
+                    enqueue_apply(s->id, g_changes[i].prev);
+                    enqueue_hint(key);
+                    continue;
+                }
+            } else {
+                if (s->lockedByPeer) {
+                    // someone else holds this knob: snap our local edit back
+                    enqueue_apply(s->id, g_changes[i].prev);
+                    continue;
+                }
+                if (!s->lockedByMe) { send_lock("lock_acquire", s->id); s->lockedByMe = 1; }
+                s->lastTouch = now;
+                sprintf_s(key, sizeof(key), "param:%u", s->id);
             }
-            if (!s->lockedByMe) { send_lock("lock_acquire", s->id); s->lockedByMe = 1; }
-            s->lastTouch = now;
             char op[160];
             sprintf_s(op, sizeof(op),
-                "{\"t\":\"op\",\"op\":{\"kind\":\"param.set\",\"key\":\"param:%u\",\"id\":%u,\"v\":%u}}",
-                s->id, s->id, g_changes[i].v);
+                "{\"t\":\"op\",\"op\":{\"kind\":\"param.set\",\"key\":\"%s\",\"id\":%u,\"v\":%u}}",
+                key, s->id, g_changes[i].v);
             ws_send(op);
             logmsg("DETECT id=0x%08x %u -> %u (sent)", s->id, g_changes[i].prev, g_changes[i].v);
         }
@@ -3045,6 +3672,7 @@ static char *b64_to_tmpfile(const char *s, size_t n) {
         acc = (acc << 6) | v; bits += 6;
         if (bits >= 8) { bits -= 8; out[o++] = (unsigned char)((acc >> bits) & 0xff); }
     }
+    samples_rewrite(&out, &o);
     char *path = tmp_path("in");
     FILE *f = NULL;
     if (fopen_s(&f, path, "wb") != 0 || !f) { free(out); free(path); return NULL; }
@@ -3126,6 +3754,8 @@ static void handle_msg(const char *m) {
         parse_notes_item(strstr(m, "\"kind\":\"notes.set\""), NULL);
     } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"clips.set\"")) {
         on_clips_set(m);
+    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"meta.set\"")) {
+        on_meta_set(m);
     } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"notes.full\"")) {
         if (!g_isLeader) {
             unsigned char *keep = (unsigned char *)calloc(MAX_PAT, 1);
@@ -3163,7 +3793,7 @@ static void handle_msg(const char *m) {
         net_show_connected(m);
         if (!g_isLeader) ws_send("{\"t\":\"op\",\"op\":{\"kind\":\"state.req\"}}");
     } else if (strstr(m, "\"t\":\"op\"")) {
-        if (strstr(m, "\"kind\":\"param.set\"") && jget_paramkey(m, &id) && jget_u32(m, "v", &v)) {
+        if (strstr(m, "\"kind\":\"param.set\"") && jget_u32(m, "id", &id) && jget_u32(m, "v", &v)) {
             route_inbound(id, v, 0);
         }
     } else if ((strstr(m, "\"t\":\"lock\"") || strstr(m, "\"t\":\"lock_released\"")) && on_unit_lock(m)) {
@@ -3191,6 +3821,772 @@ static void handle_msg(const char *m) {
         logmsg("server: %.300s", m);
         strcpy_s(g_netErr, sizeof(g_netErr), "The session leader left: session ended");
     }
+}
+
+// ---------------- samples ----------------
+// Sample files travel with the data that uses them. FLP event 196 (a channel's sample path,
+// UTF-16) appears in .flp files and in saved channel states alike, so the same code covers
+// project loads (project.load) and live channel changes (plug.state / chan.add).
+// Sender (outbox thread): the op lists the samples its data references,
+//   "samples":[{"p":<base64 UTF-16 path as written in the data>,"h":<sha256 hex>,"s":<bytes>}],
+// after uploading the files the server doesn't have yet to its blob store (HTTP next to the
+// WebSocket: /blobs/missing, /blob/<sha256>; see server/src/blobs.ts). More than
+// SAMPLE_ASK_BYTES to upload at once -> Yes/No dialog first; "No" leaves those samples out
+// (and they are not asked about again this session). Every op queued behind waits, so the
+// order of ops is kept.
+// Receiver (inbox thread): before an op that lists samples is handled, each sample is found
+// locally (same path with the same content, or any file known to have that content) or
+// downloaded into Documents\flim\samples\<hash>\; the paths in the op's data are then rewritten
+// to the local files. Later ops wait behind it, again to keep the order.
+// Samples inside plugin states (Slicex, FPC, DirectWave...) are not covered.
+#define EV_SAMPLE_PATH   196
+#define SAMPLE_ASK_BYTES (50ull * 1024 * 1024)
+#define SAMPLE_MAX_BYTES (2000ull * 1024 * 1024)
+#define SAMPLE_PATH_MAX  1024
+#define BLOB_CHUNK       (256 * 1024)
+
+typedef struct { wchar_t *path; uint64_t size; FILETIME mt; char hex[65]; } HashEnt;
+typedef struct { wchar_t *from, *to; } PathMap;
+typedef struct OutItem { char *msg; unsigned char *blob; size_t blobn; struct OutItem *next; } OutItem;
+typedef struct InItem { char *msg; struct InItem *next; } InItem;
+
+static HashEnt *g_hashes;  static int g_nhash, g_caphash;    // content hash per local file (path+size+mtime)
+static PathMap *g_pmap;    static int g_npmap, g_cappmap;    // receiver: path in peer data -> local file
+static char (*g_declined)[65]; static int g_ndeclined, g_capdeclined;   // "No" in the upload dialog
+static CRITICAL_SECTION g_sampleLock, g_outLock, g_inLock;                        // all of the above + the blob server address
+static NetUrl  g_blobUrl;
+static char    g_blobKey[65];                                // sha256 hex of the server password
+static volatile LONG g_blobOn = 0;
+static int     g_noLocal = 0;                                // FLIM_SAMPLE_NOLOCAL=1 (tests): ignore local copies
+static OutItem *g_outHead, *g_outTail;
+static int     g_outBusy;
+static InItem  *g_inHead, *g_inTail;
+static int     g_inBusy;
+static HANDLE  g_outEvt, g_inEvt;
+static volatile uint64_t g_xferDone, g_xferTotal;
+static const char *g_xferWhat = "";
+static DWORD   g_xferShown;
+
+typedef struct { BCRYPT_ALG_HANDLE alg; BCRYPT_HASH_HANDLE h; } Sha;
+static int sha_begin(Sha *s) {
+    memset(s, 0, sizeof(*s));
+    if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&s->alg, BCRYPT_SHA256_ALGORITHM, NULL, 0))) return 0;
+    if (!BCRYPT_SUCCESS(BCryptCreateHash(s->alg, &s->h, NULL, 0, NULL, 0, 0))) { BCryptCloseAlgorithmProvider(s->alg, 0); return 0; }
+    return 1;
+}
+static void sha_add(Sha *s, const void *p, size_t n) { BCryptHashData(s->h, (PUCHAR)p, (ULONG)n, 0); }
+static void sha_end(Sha *s, char hex[65]) {
+    UCHAR d[32];
+    int i;
+    BCryptFinishHash(s->h, d, 32, 0);
+    BCryptDestroyHash(s->h);
+    BCryptCloseAlgorithmProvider(s->alg, 0);
+    for (i = 0; i < 32; i++) sprintf_s(hex + i * 2, 3, "%02x", d[i]);
+}
+static void sha_hex(const void *p, size_t n, char hex[65]) {
+    Sha s;
+    hex[0] = 0;
+    if (!sha_begin(&s)) return;
+    sha_add(&s, p, n);
+    sha_end(&s, hex);
+}
+static int is_hex64(const char *h) {
+    int i;
+    for (i = 0; i < 64; i++) if (!((h[i] >= '0' && h[i] <= '9') || (h[i] >= 'a' && h[i] <= 'f'))) return 0;
+    return 1;
+}
+
+// Transfer progress in the toolbar status.
+static void xfer_show(int force) {
+    DWORD now = GetTickCount();
+    if (!force && now - g_xferShown < 1000) return;
+    g_xferShown = now;
+    net_status(NET_ON, "%s samples: %.1f / %.1f MB", g_xferWhat, g_xferDone / 1048576.0, g_xferTotal / 1048576.0);
+}
+static void xfer_end(void) { if (g_peersJson[0]) net_show_connected(g_peersJson); }
+
+static int file_info(const wchar_t *p, uint64_t *size, FILETIME *mt) {
+    WIN32_FILE_ATTRIBUTE_DATA a;
+    if (!GetFileAttributesExW(p, GetFileExInfoStandard, &a) || (a.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) return 0;
+    *size = ((uint64_t)a.nFileSizeHigh << 32) | a.nFileSizeLow;
+    if (mt) *mt = a.ftLastWriteTime;
+    return 1;
+}
+static int is_abs_path(const wchar_t *p) {
+    return (iswalpha(p[0]) && p[1] == L':' && (p[2] == L'\\' || p[2] == L'/')) || (p[0] == L'\\' && p[1] == L'\\');
+}
+
+static int hash_file(const wchar_t *p, char hex[65]) {
+    HANDLE f = CreateFileW(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                           OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+    unsigned char *buf;
+    DWORD got;
+    Sha s;
+    int ok = 1;
+    if (f == INVALID_HANDLE_VALUE) return 0;
+    if (!sha_begin(&s)) { CloseHandle(f); return 0; }
+    buf = (unsigned char *)malloc(BLOB_CHUNK * 4);
+    for (;;) {
+        if (!ReadFile(f, buf, BLOB_CHUNK * 4, &got, NULL)) { ok = 0; break; }
+        if (!got) break;
+        sha_add(&s, buf, got);
+    }
+    sha_end(&s, hex);
+    free(buf);
+    CloseHandle(f);
+    return ok;
+}
+
+static void hash_put(const wchar_t *p, uint64_t size, FILETIME mt, const char *hex) {
+    int i;
+    EnterCriticalSection(&g_sampleLock);
+    for (i = 0; i < g_nhash && _wcsicmp(g_hashes[i].path, p) != 0; i++) {}
+    if (i == g_nhash) {
+        if (g_nhash == g_caphash) { g_caphash = g_caphash ? g_caphash * 2 : 256; g_hashes = (HashEnt *)realloc(g_hashes, sizeof(HashEnt) * g_caphash); }
+        g_hashes[g_nhash].path = _wcsdup(p);
+        g_nhash++;
+    }
+    g_hashes[i].size = size; g_hashes[i].mt = mt;
+    strcpy_s(g_hashes[i].hex, sizeof(g_hashes[i].hex), hex);
+    LeaveCriticalSection(&g_sampleLock);
+}
+
+// Content hash of a local file (cached while path, size and mtime stay the same).
+static int sample_hash(const wchar_t *p, char hex[65], uint64_t *size) {
+    FILETIME mt;
+    uint64_t sz;
+    int i, hit = 0;
+    if (!file_info(p, &sz, &mt) || sz > SAMPLE_MAX_BYTES) return 0;
+    EnterCriticalSection(&g_sampleLock);
+    for (i = 0; i < g_nhash; i++)
+        if (_wcsicmp(g_hashes[i].path, p) == 0 && g_hashes[i].size == sz && CompareFileTime(&g_hashes[i].mt, &mt) == 0) {
+            strcpy_s(hex, 65, g_hashes[i].hex); hit = 1; break;
+        }
+    LeaveCriticalSection(&g_sampleLock);
+    if (!hit) {
+        if (!hash_file(p, hex)) return 0;
+        hash_put(p, sz, mt, hex);
+    }
+    *size = sz;
+    return 1;
+}
+
+// Any local file known to have this content (and unchanged since it was hashed).
+static int find_by_hash(const char *hex, wchar_t *out, int cap) {
+    int i, found = 0;
+    EnterCriticalSection(&g_sampleLock);
+    for (i = 0; i < g_nhash && !found; i++) {
+        uint64_t sz;
+        FILETIME mt;
+        if (strcmp(g_hashes[i].hex, hex) != 0) continue;
+        if (!file_info(g_hashes[i].path, &sz, &mt) || sz != g_hashes[i].size || CompareFileTime(&g_hashes[i].mt, &mt) != 0) continue;
+        wcsncpy_s(out, cap, g_hashes[i].path, _TRUNCATE);
+        found = 1;
+    }
+    LeaveCriticalSection(&g_sampleLock);
+    return found;
+}
+
+static void map_set(const wchar_t *from, const wchar_t *to) {
+    int i;
+    EnterCriticalSection(&g_sampleLock);
+    for (i = 0; i < g_npmap && wcscmp(g_pmap[i].from, from) != 0; i++) {}
+    if (!to) {
+        if (i < g_npmap) { free(g_pmap[i].from); free(g_pmap[i].to); g_pmap[i] = g_pmap[--g_npmap]; }
+    } else {
+        if (i == g_npmap) {
+            if (g_npmap == g_cappmap) { g_cappmap = g_cappmap ? g_cappmap * 2 : 64; g_pmap = (PathMap *)realloc(g_pmap, sizeof(PathMap) * g_cappmap); }
+            g_pmap[g_npmap].from = _wcsdup(from);
+            g_pmap[g_npmap].to = NULL;
+            g_npmap++;
+        }
+        free(g_pmap[i].to);
+        g_pmap[i].to = _wcsdup(to);
+    }
+    LeaveCriticalSection(&g_sampleLock);
+}
+
+static int declined(const char *hex) {
+    int i, r = 0;
+    EnterCriticalSection(&g_sampleLock);
+    for (i = 0; i < g_ndeclined && !r; i++) r = strcmp(g_declined[i], hex) == 0;
+    LeaveCriticalSection(&g_sampleLock);
+    return r;
+}
+static void decline(const char *hex) {
+    EnterCriticalSection(&g_sampleLock);
+    if (g_ndeclined == g_capdeclined) { g_capdeclined = g_capdeclined ? g_capdeclined * 2 : 64; g_declined = (char (*)[65])realloc(g_declined, 65 * (size_t)g_capdeclined); }
+    strcpy_s(g_declined[g_ndeclined++], 65, hex);
+    LeaveCriticalSection(&g_sampleLock);
+}
+
+// %FLStudioUserData% = <"Shared data" from FL's registry paths>\FL Studio
+static void fl_user_data(wchar_t *out, int cap) {
+    DWORD n = (DWORD)cap * 2;
+    size_t l;
+    out[0] = 0;
+    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Image-Line\\Shared\\Paths", L"Shared data", RRF_RT_REG_SZ, NULL, out, &n) != ERROR_SUCCESS || !out[0]) {
+        DWORD k = GetEnvironmentVariableW(L"USERPROFILE", out, cap);
+        if (!k || k >= (DWORD)cap) out[0] = 0;
+        wcscat_s(out, cap, L"\\Documents\\Image-Line\\");
+    }
+    l = wcslen(out);
+    if (l && out[l - 1] != L'\\') wcscat_s(out, cap, L"\\");
+    wcscat_s(out, cap, L"FL Studio");
+}
+// A sample path as FL writes it -> a local file path. 0 = not a transferable file
+// (factory data and other FL placeholders: every install has those).
+static int expand_path(const wchar_t *p, wchar_t *out, int cap) {
+    static const wchar_t UD[] = L"%FLStudioUserData%";
+    size_t ul = wcslen(UD);
+    if (p[0] != L'%') { if (wcslen(p) >= (size_t)cap) return 0; wcscpy_s(out, cap, p); return is_abs_path(out); }
+    if (_wcsnicmp(p, UD, ul) != 0) return 0;
+    fl_user_data(out, cap);
+    if (wcslen(out) + wcslen(p + ul) >= (size_t)cap) return 0;
+    wcscat_s(out, cap, p + ul);
+    return 1;
+}
+
+// ---- FLP / .fst images ----
+typedef int (*flpev_t)(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end);
+// Walk the events of an FLP image ("FLhd" header chunk, then one "FLdt" chunk). cb gets each
+// event: id, payload, and the event's byte range [at, end). Returns 0 if d is no FLP image.
+static int flp_walk(const unsigned char *d, size_t n, flpev_t cb, void *ctx) {
+    size_t o, hl;
+    if (!d || n < 22 || memcmp(d, "FLhd", 4) != 0) return 0;
+    hl = *(const uint32_t *)(d + 4);
+    o = 8 + hl;
+    if (o + 8 > n || memcmp(d + o, "FLdt", 4) != 0) return 0;
+    o += 8;
+    while (o < n) {
+        size_t at = o, len = 0;
+        int id = d[o++];
+        if (id < 64) len = 1;
+        else if (id < 128) len = 2;
+        else if (id < 192) len = 4;
+        else {
+            int s = 0;
+            for (;;) {
+                unsigned char b;
+                if (o >= n || s > 28) return 0;
+                b = d[o++];
+                len |= (size_t)(b & 0x7f) << s;
+                s += 7;
+                if (!(b & 0x80)) break;
+            }
+        }
+        if (o + len > n) return 0;
+        if (cb && !cb(ctx, id, d + o, len, at, o + len)) break;
+        o += len;
+    }
+    return 1;
+}
+
+static void ev_wstr(const unsigned char *p, size_t n, wchar_t *out, int cap) {
+    size_t k = n / 2;
+    if (k >= (size_t)cap) k = (size_t)cap - 1;
+    memcpy(out, p, k * 2);
+    out[k] = 0;
+}
+
+typedef struct { wchar_t **paths; int n, cap; } PathList;
+static int collect_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
+    PathList *L = (PathList *)ctx;
+    wchar_t w[SAMPLE_PATH_MAX];
+    int i;
+    (void)at; (void)end;
+    if (id != EV_SAMPLE_PATH || n < 4) return 1;
+    ev_wstr(p, n, w, SAMPLE_PATH_MAX);
+    if (!w[0]) return 1;
+    for (i = 0; i < L->n; i++) if (wcscmp(L->paths[i], w) == 0) return 1;
+    if (L->n == L->cap) { L->cap = L->cap ? L->cap * 2 : 16; L->paths = (wchar_t **)realloc(L->paths, sizeof(wchar_t *) * L->cap); }
+    L->paths[L->n++] = _wcsdup(w);
+    return 1;
+}
+static void pathlist_free(PathList *L) {
+    int i;
+    for (i = 0; i < L->n; i++) free(L->paths[i]);
+    free(L->paths);
+    memset(L, 0, sizeof(*L));
+}
+
+typedef struct { unsigned char *o; size_t n, cap; int changed; const unsigned char *d; } RewriteCtx;
+static void rw_put(RewriteCtx *c, const void *p, size_t n) {
+    if (c->n + n > c->cap) { c->cap = (c->n + n) * 2 + 1024; c->o = (unsigned char *)realloc(c->o, c->cap); }
+    memcpy(c->o + c->n, p, n);
+    c->n += n;
+}
+// Caller holds g_sampleLock.
+static int rewrite_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
+    RewriteCtx *c = (RewriteCtx *)ctx;
+    wchar_t w[SAMPLE_PATH_MAX];
+    int i;
+    if (id == EV_SAMPLE_PATH && n >= 4) {
+        ev_wstr(p, n, w, SAMPLE_PATH_MAX);
+        for (i = 0; i < g_npmap; i++) {
+            if (wcscmp(g_pmap[i].from, w) != 0) continue;
+            {
+                size_t len = (wcslen(g_pmap[i].to) + 1) * 2, v = len;
+                unsigned char b = (unsigned char)id;
+                rw_put(c, &b, 1);
+                do { b = (unsigned char)(v & 0x7f); v >>= 7; if (v) b |= 0x80; rw_put(c, &b, 1); } while (v);
+                rw_put(c, g_pmap[i].to, len);        // UTF-16LE + terminating NUL
+                c->changed = 1;
+            }
+            return 1;
+        }
+    }
+    rw_put(c, c->d + at, end - at);
+    return 1;
+}
+
+// Receiver: point the sample paths in an inbound .flp / .fst image at the local files.
+static void samples_rewrite(unsigned char **d, size_t *n) {
+    RewriteCtx c;
+    size_t start;
+    int ok;
+    if (!g_npmap || !*d || *n < 22 || memcmp(*d, "FLhd", 4) != 0) return;
+    start = 8 + *(const uint32_t *)(*d + 4) + 8;
+    if (start > *n) return;
+    memset(&c, 0, sizeof(c));
+    c.d = *d;
+    rw_put(&c, *d, start);
+    EnterCriticalSection(&g_sampleLock);
+    ok = flp_walk(*d, *n, rewrite_cb, &c);
+    LeaveCriticalSection(&g_sampleLock);
+    if (!ok || !c.changed) { free(c.o); return; }
+    *(uint32_t *)(c.o + start - 4) = (uint32_t)(c.n - start);        // FLdt chunk length
+    logmsg("SAMPLES paths rewritten to local files (%zu -> %zu bytes)", *n, c.n);
+    free(*d);
+    *d = c.o;
+    *n = c.n;
+}
+
+// ---- blob store (HTTP) ----
+// One request to the server's blob store. Returns the HTTP status (0 = failed).
+//   up/upSize: PUT body streamed from this file; body/bodyN: small in-memory body;
+//   down: response body written to this file (downHex = its sha256); resp: small text response.
+static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up, uint64_t upSize,
+                       const char *body, DWORD bodyN, const wchar_t *down, char *downHex, char *resp, int respCap) {
+    NetUrl u;
+    char key[65];
+    wchar_t path[700], wwhat[200], hdr[128];
+    HINTERNET ses = NULL, con = NULL, req = NULL;
+    DWORD status = 0, sl = sizeof(status), err = 0;
+    unsigned char *buf = NULL;
+    HANDLE f = INVALID_HANDLE_VALUE;
+    size_t pl;
+    EnterCriticalSection(&g_sampleLock);
+    if (!g_blobOn) { LeaveCriticalSection(&g_sampleLock); return 0; }
+    u = g_blobUrl;
+    strcpy_s(key, sizeof(key), g_blobKey);
+    LeaveCriticalSection(&g_sampleLock);
+    wcscpy_s(path, 700, u.path);
+    pl = wcslen(path);
+    while (pl && path[pl - 1] == L'/') path[--pl] = 0;
+    MultiByteToWideChar(CP_UTF8, 0, what, -1, wwhat, 200);
+    wcscat_s(path, 700, wwhat);
+    swprintf_s(hdr, 128, L"x-flim-key: %S\r\n", key);
+    ses = WinHttpOpen(L"flim/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!ses) ses = WinHttpOpen(L"flim/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!ses) goto out;
+    WinHttpSetTimeouts(ses, 0, 15000, 120000, 120000);
+    con = WinHttpConnect(ses, u.host, u.port, 0);
+    if (!con) goto out;
+    req = WinHttpOpenRequest(con, verb, path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, u.secure ? WINHTTP_FLAG_SECURE : 0);
+    if (!req) goto out;
+    buf = (unsigned char *)malloc(BLOB_CHUNK);
+    if (up) {
+        uint64_t left = upSize;
+        f = CreateFileW(up, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+        if (f == INVALID_HANDLE_VALUE) goto out;
+        if (!WinHttpSendRequest(req, hdr, (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, (DWORD)upSize, 0)) goto out;
+        while (left) {
+            DWORD want = left > BLOB_CHUNK ? BLOB_CHUNK : (DWORD)left, got = 0, wr = 0;
+            if (!ReadFile(f, buf, want, &got, NULL) || !got) goto out;
+            if (!WinHttpWriteData(req, buf, got, &wr)) goto out;
+            left -= got;
+            g_xferDone += got;
+            xfer_show(0);
+        }
+        CloseHandle(f);
+        f = INVALID_HANDLE_VALUE;
+    } else if (!WinHttpSendRequest(req, hdr, (DWORD)-1L, (LPVOID)body, bodyN, bodyN, 0)) goto out;
+    if (!WinHttpReceiveResponse(req, NULL)) goto out;
+    WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX,
+                        &status, &sl, WINHTTP_NO_HEADER_INDEX);
+    if (status == 200 && down) {
+        Sha s;
+        f = CreateFileW(down, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+        if (f == INVALID_HANDLE_VALUE || !sha_begin(&s)) { err = GetLastError(); status = 0; goto out; }
+        for (;;) {
+            DWORD got = 0, wr = 0;
+            if (!WinHttpReadData(req, buf, BLOB_CHUNK, &got)) { err = GetLastError(); status = 0; break; }
+            if (!got) break;
+            sha_add(&s, buf, got);
+            if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { err = GetLastError(); status = 0; break; }
+            g_xferDone += got;
+            xfer_show(0);
+        }
+        sha_end(&s, downHex);
+    } else if (resp && respCap > 0) {
+        int o = 0;
+        for (;;) {
+            DWORD got = 0;
+            if (o >= respCap - 1 || !WinHttpReadData(req, resp + o, (DWORD)(respCap - 1 - o), &got) || !got) break;
+            o += (int)got;
+        }
+        resp[o] = 0;
+    }
+out:
+    if (!status) logmsg("SAMPLES %S %s failed (%lu)", verb, what, err ? err : GetLastError());
+    if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+    free(buf);
+    if (req) WinHttpCloseHandle(req);
+    if (con) WinHttpCloseHandle(con);
+    if (ses) WinHttpCloseHandle(ses);
+    return status;
+}
+
+// ---- sender ----
+typedef struct { const wchar_t *p; wchar_t *full; char hex[65]; uint64_t size; int upload, skip; } SEnt;
+
+static void group_digits(uint64_t v, wchar_t *out, int cap) {
+    wchar_t t[32];
+    int n, i, o = 0;
+    swprintf_s(t, 32, L"%llu", (unsigned long long)v);
+    n = (int)wcslen(t);
+    for (i = 0; i < n && o < cap - 2; i++) {
+        if (i && (n - i) % 3 == 0) out[o++] = L',';
+        out[o++] = t[i];
+    }
+    out[o] = 0;
+}
+
+// Outbox thread: list (and upload) the samples an outgoing project / channel state uses.
+// Returns the message with "samples":[...] spliced in, or NULL to send it unchanged.
+static char *samples_attach(const char *msg, const unsigned char *blob, size_t n) {
+    PathList L;
+    SEnt *E = NULL;
+    int i, j, ne = 0, nup = 0;
+    uint64_t upBytes = 0;
+    char *out = NULL;
+    memset(&L, 0, sizeof(L));
+    flp_walk(blob, n, collect_cb, &L);
+    if (!L.n || !g_blobOn) goto done;
+    E = (SEnt *)calloc((size_t)L.n, sizeof(SEnt));
+    for (i = 0; i < L.n; i++) {
+        wchar_t full[SAMPLE_PATH_MAX];
+        if (!expand_path(L.paths[i], full, SAMPLE_PATH_MAX)) continue;
+        if (!sample_hash(full, E[ne].hex, &E[ne].size)) { logmsg("SAMPLES %S: no such file here (or too big), not sent", full); continue; }
+        E[ne].p = L.paths[i];
+        E[ne].full = _wcsdup(full);
+        ne++;
+    }
+    if (!ne) goto done;
+    {   // which ones does the server lack?
+        char *body = (char *)malloc((size_t)ne * 65 + 1), *resp = (char *)malloc((size_t)ne * 65 + 16), *line, *ctx = NULL;
+        int o = 0;
+        DWORD st;
+        for (i = 0; i < ne; i++) o += sprintf_s(body + o, (size_t)ne * 65 + 1 - o, "%s\n", E[i].hex);
+        st = blob_http(L"POST", "/blobs/missing", NULL, 0, body, (DWORD)o, NULL, NULL, resp, ne * 65 + 16);
+        if (st != 200) { logmsg("SAMPLES the server's sample store doesn't answer (HTTP %lu): sent without samples", st); free(body); free(resp); goto done; }
+        for (line = strtok_s(resp, "\r\n", &ctx); line; line = strtok_s(NULL, "\r\n", &ctx))
+            for (i = 0; i < ne; i++) if (strcmp(E[i].hex, line) == 0) E[i].upload = 1;
+        free(body); free(resp);
+    }
+    for (i = 0; i < ne; i++) {
+        if (!E[i].upload) continue;
+        if (declined(E[i].hex)) { E[i].upload = 0; E[i].skip = 1; continue; }
+        for (j = 0; j < i && !(E[j].upload && strcmp(E[j].hex, E[i].hex) == 0); j++) {}
+        if (j < i) { E[i].upload = 0; continue; }        // same content listed twice: one upload
+        upBytes += E[i].size;
+        nup++;
+    }
+    if (upBytes > SAMPLE_ASK_BYTES) {
+        wchar_t q[900], grouped[40];
+        group_digits(upBytes, grouped, 40);
+        swprintf_s(q, 900,
+            L"The other people in this session don't have %d of the samples used here.\n\n"
+            L"Sending them uploads %.1f MB (%s bytes).\n\n"
+            L"Send them now?\n\n"
+            L"Yes: upload them (flim sends your other changes after the upload).\n"
+            L"No: don't send these samples. They will be missing for the others.",
+            nup, upBytes / 1048576.0, grouped);
+        logmsg("SAMPLES asking before uploading %llu bytes (%d files)", (unsigned long long)upBytes, nup);
+        // Owned by FL's main window: an ownerless box from this background thread can't come to
+        // the front and may open behind other windows. Flash FL's taskbar button in case FL isn't in front.
+        if (g_mainForm) {
+            FLASHWINFO fw = { sizeof(fw), g_mainForm, FLASHW_TRAY | FLASHW_TIMERNOFG, 0, 0 };
+            FlashWindowEx(&fw);
+        }
+        if (MessageBoxW(g_mainForm, q, L"flim: send samples?", MB_YESNO | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND) != IDYES) {
+            for (i = 0; i < ne; i++) {
+                if (!E[i].upload) continue;
+                decline(E[i].hex);
+                for (j = 0; j < ne; j++) if (strcmp(E[j].hex, E[i].hex) == 0) E[j].skip = 1;
+                E[i].upload = 0;
+            }
+            logmsg("SAMPLES upload declined: %d files left out", nup);
+            upBytes = 0; nup = 0;
+        }
+    }
+    if (nup) {
+        char what[80];
+        g_xferWhat = "Uploading"; g_xferDone = 0; g_xferTotal = upBytes;
+        xfer_show(1);
+        for (i = 0; i < ne; i++) {
+            DWORD st;
+            if (!E[i].upload) continue;
+            sprintf_s(what, sizeof(what), "/blob/%s", E[i].hex);
+            st = blob_http(L"PUT", what, E[i].full, E[i].size, NULL, 0, NULL, NULL, NULL, 0);
+            if (st == 200 || st == 201) logmsg("SAMPLES uploaded %S (%llu bytes)", E[i].full, (unsigned long long)E[i].size);
+            else {
+                logmsg("SAMPLES upload of %S failed (HTTP %lu): left out", E[i].full, st);
+                for (j = 0; j < ne; j++) if (strcmp(E[j].hex, E[i].hex) == 0) E[j].skip = 1;
+            }
+        }
+        xfer_end();
+    }
+    {   // splice "samples":[...] in front of the op's fields
+        const char *op = strstr(msg, "\"op\":{");
+        size_t cap = strlen(msg) + 64, len;
+        int k = 0;
+        if (!op) goto done;
+        for (i = 0; i < ne; i++) cap += wcslen(E[i].p) * 3 + 120;
+        out = (char *)malloc(cap);
+        len = (size_t)(op + 6 - msg);
+        memcpy(out, msg, len);
+        len += sprintf_s(out + len, cap - len, "\"samples\":[");
+        for (i = 0; i < ne; i++) {
+            if (E[i].skip) continue;
+            len += sprintf_s(out + len, cap - len, "%s{\"p\":\"", k++ ? "," : "");
+            b64enc((const unsigned char *)E[i].p, (int)(wcslen(E[i].p) * 2), out + len);
+            len += strlen(out + len);
+            len += sprintf_s(out + len, cap - len, "\",\"h\":\"%s\",\"s\":%llu}", E[i].hex, (unsigned long long)E[i].size);
+        }
+        len += sprintf_s(out + len, cap - len, "],");
+        strcpy_s(out + len, cap - len, op + 6);
+        logmsg("SAMPLES op lists %d samples (%d uploaded)", k, nup);
+    }
+done:
+    if (E) { for (i = 0; i < ne; i++) free(E[i].full); free(E); }
+    pathlist_free(&L);
+    return out;
+}
+
+static void out_push(char *msg, unsigned char *blob, size_t n) {   // caller holds g_outLock
+    OutItem *it = (OutItem *)calloc(1, sizeof(OutItem));
+    it->msg = msg; it->blob = blob; it->blobn = n;
+    if (g_outTail) g_outTail->next = it; else g_outHead = it;
+    g_outTail = it;
+}
+
+// Every op goes through here: straight out, unless something is queued in the outbox
+// (an op waiting for its samples) -- then behind it, to keep the order.
+static void ws_send(const char *msg) {
+    EnterCriticalSection(&g_outLock);
+    if (g_outBusy || g_outHead) out_push(_strdup(msg), NULL, 0);
+    else ws_send_now(msg);
+    LeaveCriticalSection(&g_outLock);
+}
+
+// An op whose data (an .flp / .fst image) may reference samples. Takes ownership of msg.
+static void ws_send_samples(char *msg, const unsigned char *blob, size_t n) {
+    unsigned char *copy;
+    if (!g_ws) { free(msg); return; }
+    copy = (unsigned char *)malloc(n ? n : 1);
+    if (n) memcpy(copy, blob, n);
+    EnterCriticalSection(&g_outLock);
+    out_push(msg, copy, n);
+    LeaveCriticalSection(&g_outLock);
+    SetEvent(g_outEvt);
+}
+
+static DWORD WINAPI outThread(LPVOID p) {
+    (void)p;
+    for (;;) {
+        WaitForSingleObject(g_outEvt, INFINITE);
+        for (;;) {
+            OutItem *it;
+            EnterCriticalSection(&g_outLock);
+            it = g_outHead;
+            if (!it) { g_outBusy = 0; LeaveCriticalSection(&g_outLock); break; }
+            g_outHead = it->next;
+            if (!g_outHead) g_outTail = NULL;
+            g_outBusy = 1;
+            LeaveCriticalSection(&g_outLock);
+            if (it->blob) {
+                char *m2 = samples_attach(it->msg, it->blob, it->blobn);
+                if (m2) { free(it->msg); it->msg = m2; }
+            }
+            EnterCriticalSection(&g_outLock);        // direct senders wait: nothing overtakes this one
+            ws_send_now(it->msg);
+            LeaveCriticalSection(&g_outLock);
+            free(it->msg); free(it->blob); free(it);
+        }
+    }
+}
+
+// ---- receiver ----
+static void samples_dir(wchar_t *out, int cap) {
+    DWORD k = GetEnvironmentVariableW(L"USERPROFILE", out, cap);
+    if (!k || k >= (DWORD)cap) wcscpy_s(out, cap, L"C:");
+    wcscat_s(out, cap, L"\\Documents\\flim\\samples");
+}
+
+// Where a downloaded sample is kept: samples\<first 16 hex>\<its file name>.
+static void cache_path(const char *hex, const wchar_t *p, wchar_t *out, int cap) {
+    wchar_t dir[MAX_PATH], name[MAX_PATH];
+    const wchar_t *b = p + wcslen(p);
+    int i;
+    while (b > p && b[-1] != L'\\' && b[-1] != L'/') b--;
+    wcsncpy_s(name, MAX_PATH, *b ? b : L"sample.wav", _TRUNCATE);
+    for (i = 0; name[i]; i++) if (wcschr(L"\\/:*?\"<>|", name[i]) || name[i] < 32) name[i] = L'_';
+    samples_dir(dir, MAX_PATH);
+    swprintf_s(out, cap, L"%s\\%.16S\\%s", dir, hex, name);
+}
+
+typedef struct { wchar_t *p; char hex[65]; uint64_t size; wchar_t cache[MAX_PATH * 2]; int need; } REnt;
+
+// Inbox thread: make the samples an inbound op lists available here and record the path
+// rewrites for its data.
+static void samples_resolve(const char *m) {
+    const char *q = strstr(m, "\"samples\":[");
+    REnt *R = NULL;
+    int nr = 0, cap = 0, i, nneed = 0, nfail = 0;
+    uint64_t total = 0;
+    if (!q) return;
+    q += 11;
+    while (*q == '{') {
+        const char *e = strchr(q, '}'), *pp = strstr(q, "\"p\":\""), *hh = strstr(q, "\"h\":\""), *ss = strstr(q, "\"s\":");
+        if (!e) break;
+        if (pp && pp < e && hh && hh < e && ss && ss < e) {
+            const char *pe = strchr(pp + 5, '"');
+            size_t bn;
+            unsigned char *b;
+            if (pe && pe < e && is_hex64(hh + 5)) {
+                if (nr == cap) { cap = cap ? cap * 2 : 16; R = (REnt *)realloc(R, sizeof(REnt) * cap); }
+                memset(&R[nr], 0, sizeof(REnt));
+                b = b64dec(pp + 5, (size_t)(pe - pp - 5), &bn);
+                R[nr].p = (wchar_t *)calloc(bn / 2 + 1, 2);
+                memcpy(R[nr].p, b, bn / 2 * 2);
+                free(b);
+                memcpy(R[nr].hex, hh + 5, 64);
+                R[nr].size = _strtoui64(ss + 4, NULL, 10);
+                if (R[nr].p[0]) nr++; else free(R[nr].p);
+            }
+        }
+        q = e + 1;
+        if (*q == ',') q++;
+    }
+    for (i = 0; i < nr; i++) {
+        wchar_t full[SAMPLE_PATH_MAX], found[SAMPLE_PATH_MAX];
+        char hx[65];
+        uint64_t sz;
+        if (!g_noLocal && expand_path(R[i].p, full, SAMPLE_PATH_MAX) && sample_hash(full, hx, &sz) && strcmp(hx, R[i].hex) == 0) {
+            map_set(R[i].p, NULL);                      // the same file is right where the peer has it
+            continue;
+        }
+        if (!g_noLocal && find_by_hash(R[i].hex, found, SAMPLE_PATH_MAX)) { map_set(R[i].p, found); continue; }
+        cache_path(R[i].hex, R[i].p, R[i].cache, MAX_PATH * 2);
+        if (sample_hash(R[i].cache, hx, &sz) && strcmp(hx, R[i].hex) == 0) { map_set(R[i].p, R[i].cache); continue; }
+        R[i].need = 1;
+        total += R[i].size;
+        nneed++;
+    }
+    if (nneed) {
+        g_xferWhat = "Downloading"; g_xferDone = 0; g_xferTotal = total;
+        xfer_show(1);
+        for (i = 0; i < nr; i++) {
+            wchar_t part[MAX_PATH * 2 + 8], dir[MAX_PATH * 2];
+            char what[80], got[65] = "", hx[65];
+            uint64_t sz;
+            DWORD st;
+            wchar_t *slash;
+            if (!R[i].need) continue;
+            if (sample_hash(R[i].cache, hx, &sz) && strcmp(hx, R[i].hex) == 0) { map_set(R[i].p, R[i].cache); continue; }   // same content twice
+            wcscpy_s(dir, MAX_PATH * 2, R[i].cache);
+            slash = wcsrchr(dir, L'\\');
+            if (slash) { *slash = 0; SHCreateDirectoryExW(NULL, dir, NULL); }
+            swprintf_s(part, MAX_PATH * 2 + 8, L"%s.part", R[i].cache);
+            sprintf_s(what, sizeof(what), "/blob/%s", R[i].hex);
+            st = blob_http(L"GET", what, NULL, 0, NULL, 0, part, got, NULL, 0);
+            if (st == 200 && strcmp(got, R[i].hex) == 0 && MoveFileExW(part, R[i].cache, MOVEFILE_REPLACE_EXISTING)) {
+                FILETIME mt;
+                if (file_info(R[i].cache, &sz, &mt)) hash_put(R[i].cache, sz, mt, R[i].hex);
+                map_set(R[i].p, R[i].cache);
+                logmsg("SAMPLES downloaded %S (%llu bytes)", R[i].cache, (unsigned long long)R[i].size);
+            } else {
+                DeleteFileW(part);
+                nfail++;
+                logmsg("SAMPLES could not get %S (HTTP %lu%s): it will be missing", R[i].p, st, st == 200 ? ", content mismatch" : "");
+            }
+        }
+        xfer_end();
+    }
+    logmsg("SAMPLES op lists %d samples: %d downloaded, %d missing", nr, nneed - nfail, nfail);
+    for (i = 0; i < nr; i++) free(R[i].p);
+    free(R);
+}
+
+// Every inbound message comes through here (receive thread).
+static void inbox_msg(const char *m) {
+    int queue;
+    EnterCriticalSection(&g_inLock);
+    queue = g_inBusy || g_inHead || strstr(m, "\"samples\":[") != NULL;
+    if (queue) {
+        InItem *it = (InItem *)calloc(1, sizeof(InItem));
+        it->msg = _strdup(m);
+        if (g_inTail) g_inTail->next = it; else g_inHead = it;
+        g_inTail = it;
+    }
+    LeaveCriticalSection(&g_inLock);
+    if (queue) SetEvent(g_inEvt);
+    else handle_msg(m);
+}
+
+static DWORD WINAPI inThread(LPVOID p) {
+    (void)p;
+    for (;;) {
+        WaitForSingleObject(g_inEvt, INFINITE);
+        for (;;) {
+            InItem *it;
+            EnterCriticalSection(&g_inLock);
+            it = g_inHead;
+            if (!it) { g_inBusy = 0; LeaveCriticalSection(&g_inLock); break; }
+            g_inHead = it->next;
+            if (!g_inHead) g_inTail = NULL;
+            g_inBusy = 1;
+            LeaveCriticalSection(&g_inLock);
+            if (strstr(it->msg, "\"samples\":[")) samples_resolve(it->msg);
+            handle_msg(it->msg);
+            free(it->msg); free(it);
+        }
+    }
+}
+
+// Connected: where the blob store is (same server, same password).
+static void samples_connected(const NetUrl *u, const char *pw) {
+    EnterCriticalSection(&g_sampleLock);
+    g_blobUrl = *u;
+    sha_hex(pw, strlen(pw), g_blobKey);
+    InterlockedExchange(&g_blobOn, 1);
+    LeaveCriticalSection(&g_sampleLock);
+}
+// Disconnected: drop what was waiting to go out or to be applied.
+static void samples_disconnected(void) {
+    EnterCriticalSection(&g_sampleLock);
+    InterlockedExchange(&g_blobOn, 0);
+    LeaveCriticalSection(&g_sampleLock);
+    EnterCriticalSection(&g_outLock);
+    while (g_outHead) { OutItem *n = g_outHead->next; free(g_outHead->msg); free(g_outHead->blob); free(g_outHead); g_outHead = n; }
+    g_outTail = NULL;
+    LeaveCriticalSection(&g_outLock);
+    EnterCriticalSection(&g_inLock);
+    while (g_inHead) { InItem *n = g_inHead->next; free(g_inHead->msg); free(g_inHead); g_inHead = n; }
+    g_inTail = NULL;
+    LeaveCriticalSection(&g_inLock);
 }
 
 // ---------------- connection (one net thread per connect) ----------------
@@ -3251,6 +4647,7 @@ static DWORD WINAPI netThread(LPVOID p) {
     strcpy_s(g_netShown, sizeof(g_netShown), u.shown);
     g_netErr[0] = 0;
     LeaveCriticalSection(&g_sendLock);
+    samples_connected(&u, r->pw);
     net_status(NET_CONNECTING, "Joining %s...", u.shown);
 
     json_esc(g_myName, name, sizeof(name));
@@ -3278,13 +4675,14 @@ static DWORD WINAPI netThread(LPVOID p) {
         len += got;
         if (type == WINHTTP_WEB_SOCKET_UTF8_FRAGMENT_BUFFER_TYPE || type == WINHTTP_WEB_SOCKET_BINARY_FRAGMENT_BUFFER_TYPE)
             continue;                               // more of the same message follows
-        if (type == WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE) { buf[len] = 0; handle_msg((char *)buf); }
+        if (type == WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE) { buf[len] = 0; inbox_msg((char *)buf); }
         len = 0;
     }
 
     EnterCriticalSection(&g_sendLock);
     if (g_ws == c.ws) g_ws = NULL;
     LeaveCriticalSection(&g_sendLock);
+    samples_disconnected();
     if (r->gen == g_netGen) {
         net_reset();
         if (g_netErr[0]) net_status(NET_ERR, "%s", g_netErr);
@@ -3329,7 +4727,7 @@ static void net_disconnect(void) {
 static DWORD WINAPI engineMain(LPVOID p) {
     (void)p;
     srand(GetTickCount() ^ GetCurrentProcessId());
-    logmsg("=== flim engine v4.3 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks) loaded ===");
+    logmsg("=== flim engine v4.4 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples) loaded ===");
 
     HMODULE fl = NULL;
     int tries;
@@ -3445,6 +4843,17 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved) {
         InitializeCriticalSection(&g_heldLock);
         InitializeCriticalSection(&g_ulockLock);
         InitializeCriticalSection(&g_netTextLock);
+        InitializeCriticalSection(&g_sampleLock);
+        InitializeCriticalSection(&g_outLock);
+        InitializeCriticalSection(&g_inLock);
+        g_outEvt = CreateEventW(NULL, FALSE, FALSE, NULL);
+        g_inEvt = CreateEventW(NULL, FALSE, FALSE, NULL);
+        {
+            char v[8];
+            g_noLocal = GetEnvironmentVariableA("FLIM_SAMPLE_NOLOCAL", v, sizeof(v)) && v[0] == '1';
+        }
+        CreateThread(NULL, 0, outThread, NULL, 0, NULL);
+        CreateThread(NULL, 0, inThread, NULL, 0, NULL);
         CreateThread(NULL, 0, engineMain, NULL, 0, NULL);
     }
     return TRUE;

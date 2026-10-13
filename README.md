@@ -1,12 +1,11 @@
 # flim
 
 **Real-time multiplayer for FL Studio 2025.** Two or more people each run their own FL Studio, with their
-own windows, zoom and selection, while the song itself (knobs, plugins, channels, notes, playlist) is kept
-in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/), but for FL.
+own windows, zoom and selection, while the song itself (knobs, plugins, channels, notes, playlist, mixer,
+samples) is kept in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/), but for FL.
 
-> 🚧 **Still missing many features.** Some parts of a project don't sync yet, including mixer routing,
-> names and colors, new patterns, markers and automation clips. See [What's synced](#whats-synced) for
-> the full list.
+> 🚧 **Still missing features.** Some parts of a project don't sync yet, including markers, automation
+> clips and inserting patterns. See [What's synced](#whats-synced) for the full list.
 
 > ⚠️ **Unofficial and experimental.** flim is not made by, affiliated with or endorsed by Image-Line.
 > It works by running extra code inside FL Studio's process, and it only supports **one exact FL build**
@@ -40,20 +39,25 @@ in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/)
 ### What's synced
 | Synced | Not yet |
 |---|---|
-| Channel volume / pan / on-off / mixer routing | Mixer track routing, names and colors |
-| Every plugin parameter (generators and effects) | Channel / pattern / playlist track names and colors |
-| Full plugin state (presets, wavetables, ...) | Creating new patterns, pattern length |
-| Mixer volume / pan / stereo separation / mute | Markers, time signature |
-| Adding, deleting and reordering channels | Automation clips |
-| Adding, replacing and removing mixer effects | Showing other people's selection or cursor |
-| Notes in every pattern | |
-| Playlist clips | |
+| Channel volume / pan / on-off / mixer routing | Markers, time signature |
+| Every plugin parameter (generators and effects) | Automation clips |
+| Full plugin state (presets, wavetables, ...) | Inserting a pattern in the middle (shifts all later patterns) |
+| Mixer volume / pan / stereo separation / mute | Samples stored inside plugins (FPC, Slicex, DirectWave, Kontakt, ...) |
+| Mixer track names, colors and routing (sends on/off and send levels) | Showing other people's selection or cursor |
+| Adding, deleting and reordering channels; channel names and colors | |
+| Adding, replacing and removing mixer effects | |
+| Notes in every pattern; pattern names, colors and length (so new patterns too) | |
+| Playlist clips; playlist track names and colors | |
+| Sample files used by channels and audio clips (see [Samples](#samples)) | |
 | Opening or loading a project (the leader's project is sent to everyone) | |
 
-**Locks:** while you tweak a knob, edit a pattern's notes or edit the playlist, that part is yours. If
-someone else touches it at the same time, their change is undone and FL's hint bar shows
-*"Pattern 3 is being edited by Alex"*. Locks are released shortly after you stop: about 0.6 s for a knob,
-2 s for a pattern or the playlist.
+**Locks:** while you tweak a mixer knob, change a plugin, edit a pattern's notes or edit the playlist,
+that part is yours. If someone else touches it at the same time, their change is undone and FL's hint bar
+shows *"Pattern 3 is being edited by Alex"* or *"Channel 'Serum 2' is being edited by Alex"*. A plugin is
+locked as a whole: any knob or preset change on it takes the lock. Locks are released shortly after you
+stop: about 0.6 s for a channel or mixer knob, 2 s for a plugin, a pattern or the playlist.
+Names, colors and routing have no locks; if two people change the same one at the same moment, the
+leader's change wins.
 
 ---
 
@@ -111,6 +115,19 @@ The server listens on port **8080**. Give your friends your address and the pass
   saved over: flim always works on `*_flim_MMDD_hhmm.flp` copies.
 - If the leader leaves, the session ends. The members keep their copy of the project.
 
+### Samples
+The samples your channels and audio clips use are sent along automatically, both when the leader's
+project is sent and when someone loads a new sample into a channel during the session.
+- Each file is uploaded to the server **once**; the others download only the files they don't already
+  have, into `Documents\flim\samples\`, and their copy of the project points at those files.
+- While that happens, the toolbar status shows *"Uploading samples: 12.3 / 40.0 MB"* (or *Downloading*).
+  Your other edits wait until the upload is done, so they arrive in the right order.
+- **If more than 50 MB would have to be uploaded at once, flim asks first** and shows the exact amount,
+  e.g. *"Sending them uploads 60.6 MB (63,504,132 bytes). Send them now?"*. **No** leaves those samples
+  out (they will be missing for the others) and flim won't ask about them again until FL restarts.
+- Samples in FL's factory content are never sent: every FL installation has them.
+- Not covered yet: samples stored inside plugins (FPC, Slicex, DirectWave, Kontakt, ...).
+
 ### Server addresses
 | You type | Means |
 |---|---|
@@ -130,6 +147,7 @@ Connect dialog.
 | Settings (FL folder, name, last address, password if "Remember" is ticked) | `%APPDATA%\flim\flim.ini`. The password is encrypted for your Windows user (DPAPI). |
 | Log (attach it to bug reports) | `%TEMP%\flim_engine.log` |
 | Project copies received from the leader | `Documents\flim\` |
+| Samples received from others (safe to delete when no session is running) | `Documents\flim\samples\` |
 
 ---
 
@@ -142,6 +160,12 @@ See [`server/README.md`](server/README.md) for the protocol and options.
 - **Port:** 8080 by default; set `PORT` to change it.
 - **Encryption:** the server speaks plain `ws://`. For `wss://`, put it behind any reverse proxy that
   handles HTTPS and WebSockets (Caddy, nginx, a cloud load balancer, ...) and forward to port 8080.
+  The proxy must pass plain HTTP requests too (sample files use `/blob/...` on the same port) and allow
+  large request bodies.
+- **Sample store:** sample files are kept on the server's disk under their SHA-256, in `FLIM_BLOB_DIR`
+  (default: the system temp folder). `FLIM_BLOB_STORE_MAX` caps the total (default 4 GB; the least
+  recently used files go first) and `FLIM_BLOB_FILE_MAX` a single file (default 2000 MB). It's only a
+  cache: anything missing is uploaded again by the next session that needs it.
 - **Docker:** a `Dockerfile` is included:
   ```bash
   docker build -t flim-server server
@@ -171,6 +195,7 @@ These environment variables are read by the engine and skip the Connect dialog:
 | `FLIM_AUTOCONNECT=<url>` | connect at startup (with `FLIM_PASSWORD=<pw>`) |
 | `FLIM_NAME=<name>` | override the name from `flim.ini` (e.g. to run two FLs on one PC) |
 | `FLIM_ROOM=<room>` | use another session name on the same server (default `FLIM`) |
+| `FLIM_SAMPLE_NOLOCAL=1` | never use a local copy of a received sample, always download it (to test sample transfer on one PC) |
 
 `client\restart_test.ps1 [-Url localhost:8080] [-Password ...]` closes all FL instances, rebuilds, and
 starts two of them ("A" as leader, "B" as member) connected to a server, which is handy for testing sync
@@ -182,12 +207,13 @@ on one machine.
 ```
 client/                 the FL side (C, Win32)
   launcher/flim.c       flim.exe: setup window, starts FL, loads the engine into it
-  engine/flim_engine.c  the engine: edit detection, applying edits, locks, networking, toolbar UI
+  engine/flim_engine.c  the engine: edit detection, applying edits, locks, sample transfer, networking, toolbar UI
   common/               settings (flim.ini) and resource IDs shared by both
   build.bat             build script (MSVC)
   restart_test.ps1      dev loop: rebuild and start two connected FLs
-server/                 flim-server (Node.js + TypeScript, WebSocket)
-  src/                  server.ts (connections, password), session.ts (ordering, locks), protocol.ts
+server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
+  src/                  server.ts (connections, password), session.ts (ordering, locks), protocol.ts,
+                        blobs.ts (sample file store)
   Dockerfile            container image
 ```
 

@@ -5,10 +5,31 @@ WebSocket relay for [flim](../README.md). It doesn't understand FL Studio. It:
 - gives out per-unit **locks** (a knob, a pattern, the playlist) so two people can't edit the
   same thing at once; locks expire after 30 s if a client stops releasing them,
 - tracks who's in the session (the first to join is the leader; if the leader leaves, the session ends),
-- checks the shared **password** (`FLIM_PASSWORD`).
+- checks the shared **password** (`FLIM_PASSWORD`),
+- stores **sample files** so each one is uploaded once and the others fetch only what they're
+  missing (`src/blobs.ts`, plain HTTP on the same port).
 
-Everything is kept in memory only. When the machine stops, the session is gone; the next leader
-starts a new one from their project.
+Sessions are kept in memory only. When the machine stops, the session is gone; the next leader
+starts a new one from their project. Sample files are a disk cache: anything missing is uploaded
+again by the next session that needs it.
+
+## Sample store
+Content-addressed by SHA-256. Auth: header `x-flim-key` = SHA-256 hex of the password.
+| Request | Does |
+|---|---|
+| `POST /blobs/missing` | body: one hash per line → the ones not stored, one per line |
+| `HEAD /blob/<sha256>` | 200 + `content-length`, or 404 |
+| `GET /blob/<sha256>` | the file |
+| `PUT /blob/<sha256>` | store it (streamed to disk; rejected unless the content hashes to `<sha256>`) |
+
+| Variable | Default |
+|---|---|
+| `FLIM_BLOB_DIR` | `<system temp>/flim-blobs` |
+| `FLIM_BLOB_STORE_MAX` | 4 GB in total; least recently used files are deleted above it |
+| `FLIM_BLOB_FILE_MAX` | 2000 MB per file |
+
+On fly.io the disk is reset when the machine stops, which is fine for a cache. Sample downloads
+count towards fly.io's outbound data transfer.
 
 ## Run locally
 Requires Node.js 20+.
@@ -41,5 +62,6 @@ Clients connect to `wss://<your-unique-app-name>.fly.dev`.
 JSON over WebSocket; see `src/protocol.ts`. A client sends
 `{"t":"join_room","room":"FLIM","password":"…","user":{"id":"…","name":"…"}}` and gets `welcome`
 (its role plus the peer list), then exchanges `op`, `lock_acquire` / `lock_release` (→ `lock`,
-`lock_released`), and receives `presence` updates. A wrong password gets
+`lock_released`), and receives `presence` updates. Ops that carry a project or a plugin state may
+list the samples it uses (`"samples":[{"p":…,"h":<sha256>,"s":<bytes>}]`), fetched from `/blob/<h>`. A wrong password gets
 `{"t":"error","code":"bad_password"}` and the connection is closed with code 4001.

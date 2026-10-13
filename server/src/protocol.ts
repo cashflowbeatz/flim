@@ -25,6 +25,8 @@ export type UnitKey = string;
 
 // An op is opaque to the server: it only orders and relays it. The FL client
 // defines/interprets the payload. `key` (optional) ties the op to a lock unit.
+// `samples` (optional, project.load / plug.state / chan.add) lists the sample files the op's
+// data uses: [{p: base64 UTF-16 path, h: sha256 hex, s: bytes}], fetched from /blob/<h> (blobs.ts).
 export interface Op {
   kind: string;
   key?: UnitKey;

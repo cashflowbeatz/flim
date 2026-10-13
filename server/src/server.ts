@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { handleBlob } from "./blobs";
 import { ClientMsg, PING_INTERVAL_MS, Role, UserInfo } from "./protocol";
 import { Client, Session, send } from "./session";
 
@@ -26,8 +27,10 @@ function makeCode(): string {
   return code;
 }
 
-// Health check for the Fly proxy (TCP connect here also wakes a stopped machine).
+// Health check for the Fly proxy (TCP connect here also wakes a stopped machine), and the
+// sample file store (blobs.ts).
 const httpServer = http.createServer((req, res) => {
+  if (handleBlob(req, res, PASSWORD)) return;
   if (req.url === "/health" || req.url === "/") {
     res.writeHead(200, { "content-type": "text/plain" });
     res.end("flim-server ok\n");

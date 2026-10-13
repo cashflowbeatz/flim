@@ -15,7 +15,7 @@ If the Build Tools are installed somewhere else, change `VCVARS` at the top of `
 | File | What |
 |---|---|
 | `launcher/flim.c`, `flim.rc`, `flim.ico` | the launcher: first-run setup window (FL folder + name, validated), starts FL suspended, loads the engine, resumes |
-| `engine/flim_engine.c`, `flim_engine.rc` | the engine: polls FL's state, sends and applies edits on FL's main thread, locks, WinHTTP WebSocket client, Connect button and dialog |
+| `engine/flim_engine.c`, `flim_engine.rc` | the engine: polls FL's state, sends and applies edits on FL's main thread, locks, sample transfer (WinHTTP, SHA-256 via BCrypt), WinHTTP WebSocket client, Connect button and dialog |
 | `common/flim_config.h` | `%APPDATA%\flim\flim.ini` read/write, name sanitizing, DPAPI-encrypted password |
 | `common/flim_res.h` | dialog resource IDs |
 | `restart_test.ps1` | dev loop: close FL, rebuild, start leader "A" and member "B" connected to a server |
