@@ -21,6 +21,8 @@
 // Config: user name from flim.ini (set by flim.exe). Env overrides for dev/tests:
 //         FLIM_NAME, FLIM_ROOM (default FLIM), FLIM_AUTOCONNECT=<url> (+ FLIM_PASSWORD) connects
 //         at startup; legacy FLIM_SERVER=host:port means FLIM_AUTOCONNECT=ws://host:port.
+//         Tests only: FLIM_SAMPLE_NOLOCAL=1 (always download samples), FLIM_CURSOR_NOCOVER=1 (show
+//         other people's arrows even where another window covers FL).
 // Logs to %TEMP%\flim_engine.log.
 
 #include <windows.h>
@@ -1636,6 +1638,12 @@ static void on_clips_set(const char *m) {
 #define DYNSETLEN_VA  0x417fc0     // Delphi DynArraySetLength(&arr, typeinfo, 1, newLength)
 #define MARKREFRESH_VA 0xd4bc60    // MarkersChanged(playlist form): sort, redraw, time signature from markers
 #define PL_MARKSEL    0xd58        // playlist form: index of the marker being edited (-1 = none)
+// pattern markers (piano roll): same records, one list per pattern; a pattern's own time signature
+// (pattern menu > Time signature) is an action-8 marker at 0 in this list
+#define PAT_MARKERS   0x30         // pattern record: dynamic array of marker records
+#define MARKSORT_VA   0xf692d0     // MarkerListSort(&list): sort + number them (builds the pattern's +0x38 table)
+#define PATLENUPD_VA  0x11cb550    // UpdatePatternLength(pattern, 0): bar length from the pattern's time signature
+#define PATMARKS_VA   0x11ca910    // PatternMarkersChanged(pattern record): redraws the editors showing them
 #define SONGLOCK_VA   0x1499b38    // global: CRITICAL_SECTION* FL holds while editing markers / time signature
 #define MODIFIED_VA   0x10c7570    // SetModified(1): project changed
 #define TSNUM_VA      0x14997d0    // global -> int: project time signature numerator
@@ -1663,9 +1671,10 @@ typedef void (*pltrack_t)(void *arr, int track, const wchar_t *name, uint32_t co
 typedef void (*markadd_t)(void *list, int pos, const wchar_t *name, int action, uint8_t num, uint8_t den);
 typedef void (*dynsetlen_t)(void *arr, void *typeinfo, int64_t dims, int64_t len);
 typedef void (*setmod_t)(int on);
+typedef void (*patlenupd_t)(int pat, int flag);
 
-enum { M_MIX, M_ROUTE, M_CHAN, M_PAT, M_PLT, M_MARK, M_TSIG, M_NTYPES };
-static const char *const M_TAG[M_NTYPES] = { "mx", "rt", "ch", "pt", "pl", "mk", "ts" };
+enum { M_MIX, M_ROUTE, M_CHAN, M_PAT, M_PLT, M_MARK, M_TSIG, M_PMARK, M_NTYPES };
+static const char *const M_TAG[M_NTYPES] = { "mx", "rt", "ch", "pt", "pl", "mk", "ts", "pm" };
 static uint64_t g_mHash[M_NTYPES][META_MAX];   // last state sent or applied
 static uint64_t g_mSeen[M_NTYPES][META_MAX];   // last state the scanner saw
 static DWORD    g_mAt[M_NTYPES][META_MAX];     // when g_mSeen last moved (0 = settled/handled)
@@ -1697,7 +1706,7 @@ static int meta_cap(int type) {
     switch (type) {
     case M_MIX: case M_ROUTE: return MAX_MIX;
     case M_CHAN: return MAX_CH;
-    case M_PAT: return MAX_PAT;
+    case M_PAT: case M_PMARK: return MAX_PAT;
     case M_MARK: return META_ARR_MAX;
     case M_TSIG: return 1;
     default: return META_MAX;
@@ -1718,6 +1727,8 @@ static char *arr_obj(int arr) {
 }
 // Marker array of an arrangement (Delphi dynamic array: length as int64 at -8).
 static char **mark_list(int arr) { return (char **)(arr_obj(arr) + ARR_MARKERS); }
+// M_MARK: arrangement i's markers; M_PMARK: pattern i's
+static char **marks_of(int type, int i) { return type == M_MARK ? mark_list(i) : (char **)(pat_rec(i) + PAT_MARKERS); }
 static int mark_count(const char *a) {
     int64_t n = a ? *(const int64_t *)(a - 8) : 0;
     return n < 0 || n > MARK_MAX ? 0 : (int)n;
@@ -1735,7 +1746,7 @@ static int meta_valid(int type, int i) {
     switch (type) {
     case M_MIX: case M_ROUTE: return i >= 0 && i < mix_count();
     case M_CHAN: return i >= 0 && i < g_nChKnown;
-    case M_PAT: return i >= 1 && i < MAX_PAT;
+    case M_PAT: case M_PMARK: return i >= 1 && i < MAX_PAT;
     case M_MARK: return i >= 0 && i < arr_count();
     case M_TSIG: return i == 0;
     default: return i % 512 >= 1 && i % 512 <= PL_TRK_MAX && i / 512 < arr_count();
@@ -1776,8 +1787,8 @@ static uint64_t meta_hash(int type, int i) {
             h = fnv_add(h, r + PAT_LENGTH, 4);
             h = fnv_ustr(h, *(wchar_t **)(r + PAT_NAME));
             break; }
-        case M_MARK: {
-            const char *a = *mark_list(i);
+        case M_MARK: case M_PMARK: {
+            const char *a = *marks_of(type, i);
             int k, n = mark_count(a);
             h = fnv_add(h, &n, 4);
             for (k = 0; k < n; k++) {
@@ -1824,8 +1835,8 @@ static void meta_absorb(void) {
 static char *meta_json(int t, int i) {
     size_t cap = 32768;
     char *m;
-    if (t == M_MARK) {
-        __try { cap += (size_t)mark_count(*mark_list(i)) * (64 + 2 * ((MARK_SIZE - MARK_TAIL + 2) / 3 * 4) + 4 * 256); }
+    if (t == M_MARK || t == M_PMARK) {
+        __try { cap += (size_t)mark_count(*marks_of(t, i)) * (64 + 2 * ((MARK_SIZE - MARK_TAIL + 2) / 3 * 4) + 4 * 256); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return NULL; }
     }
     m = (char *)malloc(cap);
@@ -1860,9 +1871,9 @@ static char *meta_json(int t, int i) {
                     o += sprintf_s(m + o, cap - o, "%s[%d,%d]", k++ ? "," : "", d, *(int32_t *)(r + MIX_ROUTE + d * 8));
             o += sprintf_s(m + o, cap - o, "]");
             break; }
-        case M_MARK: {
+        case M_MARK: case M_PMARK: {
             // "mk":[[pos,action,"<tail b64>","<name b64>"],...]
-            const char *a = *mark_list(i);
+            const char *a = *marks_of(t, i);
             int k, n = mark_count(a);
             o += sprintf_s(m + o, cap - o, ",\"mk\":[");
             for (k = 0; k < n; k++) {
@@ -1884,7 +1895,7 @@ static char *meta_json(int t, int i) {
             o += sprintf_s(m + o, cap - o, ",\"nu\":%d,\"de\":%d", *ts_num(), *ts_den());
             break;
         }
-        if (t != M_ROUTE && t != M_MARK && t != M_TSIG) {
+        if (t != M_ROUTE && t != M_MARK && t != M_TSIG && t != M_PMARK) {
             int nl = ustr_len(name);
             o += sprintf_s(m + o, cap - o, ",\"c\":%u,\"n\":\"", color);
             b64enc(nl ? (const unsigned char *)name : (const unsigned char *)"", nl * 2, m + o);
@@ -1948,11 +1959,12 @@ static void on_meta_set(const char *m) {
 
 static wchar_t *meta_name_arg(const wchar_t *w) { return w[0] ? dstr_keep(w) : NULL; }   // '' = nil string
 
-// Replace an arrangement's markers with the ones in "mk":[...] (main thread, inside do_meta's SEH):
-// empty the array the way FL's own delete shrinks it, re-add each with FL's adder, then FL's refresh.
-static void marks_apply(int arr, const char *m) {
+// Replace a marker list (arrangement or pattern) with the ones in "mk":[...] (main thread, inside
+// do_meta's SEH): empty the array the way FL's own delete shrinks it, re-add each with FL's adder,
+// then FL's refresh for that kind of list.
+static void marks_apply(int t, int i, const char *m) {
     const char *q = strstr(m, "\"mk\":["), *e;
-    char **list = mark_list(arr);
+    char **list = marks_of(t, i);
     void *ti = *(void **)(g_flBase + (MARKTYPE_VA - IMG_BASE));
     markadd_t add = (markadd_t)(g_flBase + (MARKADD_VA - IMG_BASE));
     int n = 0;
@@ -1987,7 +1999,13 @@ static void marks_apply(int arr, const char *m) {
         if (*q == ',') q++;
     }
     } __finally { LeaveCriticalSection(song_lock()); }
-    if (arr == cur_arr()) {
+    if (t == M_PMARK) {
+        // what the piano roll's MarkersChanged does for its pattern, for any pattern
+        ((formfn_t)(g_flBase + (MARKSORT_VA - IMG_BASE)))(list);
+        ((patlenupd_t)(g_flBase + (PATLENUPD_VA - IMG_BASE)))(i, 0);
+        ((formfn_t)(g_flBase + (PATMARKS_VA - IMG_BASE)))(pat_rec(i));
+        playlist_refresh();                                          // pattern clips change length
+    } else if (i == cur_arr()) {
         char *form = **(char ***)(g_flBase + (PLFORM_VA - IMG_BASE));
         if (form) {
             *(int32_t *)(form + PL_MARKSEL) = -1;
@@ -2108,8 +2126,8 @@ static void do_meta(const QItem *it) {
                     name ? meta_name_arg(name) : *(wchar_t **)(r + PL_TRK_NAME),
                     hasC ? color : *(uint32_t *)(r + PL_TRK_COLOR));
             break; }
-        case M_MARK:
-            marks_apply(i, m);
+        case M_MARK: case M_PMARK:
+            marks_apply(t, i, m);
             break;
         case M_TSIG: {
             int nu = 0, de = 0;
@@ -2283,6 +2301,9 @@ static void net_disconnect(void);
 static void focus_summary(char *out, int cap, const char *sep);
 static void json_esc(const char *in, char *out, int cap);
 static void fl_hint(const char *msg);
+static void cursor_update(void);
+#define CUR_TIMER     2            // net bar timer: other people's mouse arrows
+#define CUR_TIMER_MS  40
 
 // Any thread: set the status text (UTF-8) and repaint the bar.
 static void net_status(int state, const char *fmt, ...) {
@@ -2502,7 +2523,7 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     case WM_PAINT: bar_paint(h); return 0;
     case WM_ERASEBKGND: return 1;
     case WM_FLIM_STATUS: InvalidateRect(h, NULL, FALSE); return 0;
-    case WM_TIMER: bar_layout(); return 0;
+    case WM_TIMER: if (wp == CUR_TIMER) cursor_update(); else bar_layout(); return 0;
     case WM_SETCURSOR: {
         POINT p; GetCursorPos(&p); ScreenToClient(h, &p);
         SetCursor(LoadCursor(NULL, p.x >= g_btnX && p.x < g_btnX + g_btnW ? IDC_HAND : IDC_ARROW));
@@ -2575,6 +2596,7 @@ static void ui_create(void) {
     if (!g_netBar) { logmsg("UI: CreateWindow failed %lu", GetLastError()); return; }
     bar_layout();
     SetTimer(g_netBar, 1, 1000, NULL);       // follow FL's window resizes
+    SetTimer(g_netBar, CUR_TIMER, CUR_TIMER_MS, NULL);   // other people's arrows follow our scroll / zoom
     {
         RECT b; GetWindowRect(g_netBar, &b);
         logmsg("UI net bar %p in toolbar row %p at %ld,%ld %ldx%ld (bg %06lx)", (void *)g_netBar, (void *)row,
@@ -3009,13 +3031,14 @@ static int msgbox_detour(void *text, uint32_t flags, void *cb) {
     return ((msgcore_t)(g_flBase + (MSGBOX_CORE_VA - IMG_BASE)))(text, flags, 3, cb);
 }
 
-// Everything a pattern op can renumber: notes, names, colors, lengths.
+// Everything a pattern op can renumber: notes, names, colors, lengths, markers.
 static uint64_t pat_sig(void) {
     uint64_t h = 1469598103934665603ull, x;
     int p;
     for (p = 1; p < MAX_PAT; p++) {
         x = notes_hash(p); h = fnv_add(h, &x, 8);
         x = meta_hash(M_PAT, p); h = fnv_add(h, &x, 8);
+        x = meta_hash(M_PMARK, p); h = fnv_add(h, &x, 8);
     }
     return h;
 }
@@ -3638,6 +3661,266 @@ static void focus_summary(char *out, int cap, const char *sep) {
     LeaveCriticalSection(&g_netTextLock);
 }
 
+// ---- where everyone is pointing ----
+// While the mouse is over the piano roll's note grid or the playlist, its position goes out in
+// song terms (tick + key, or tick + track), so it lands on the same note / bar for everyone
+// whatever their zoom, scroll or window size. Each peer is shown as a small arrow with their name
+// on top of our editor when it shows the same pattern / arrangement: click-through windows owned
+// by FL's main form, hidden when something else covers that point of the editor.
+#define PRFORM_VA     0x1498380    // global -> var -> piano roll form (NULL until first opened)
+#define CURPAT_VA     0x1499de0    // global -> int: current pattern (what the piano roll edits)
+#define ED_HWND       0x45c        // editor form: window handle
+#define ED_TICKSPERPX 0xaec        //   double: ticks per pixel (horizontal zoom)
+#define ED_HSCROLL    0xafc        //   int: horizontal scroll, pixels
+#define PR_GRID       0xc40        // piano roll form: TEventPanel_PR (note grid)
+#define PL_GRID       0xcf8        // playlist form: TEventPanel_AU (clip grid)
+#define CTL_BOUNDS    0x90         // control: Left, Top, Width, Height in its form's client area
+#define GRID_VSCROLL  0x3fc        // grid panel: vertical scroll, pixels
+#define PR_TOPKEY     0x418        // piano roll grid: y = (topkey - key) * keyh - vscroll
+#define PR_KEYH       0x520
+#define TRK_TOP       0xb4         // playlist track (arrangement + t * 0x114): top y and height, pixels
+#define TRK_H         0xb8
+#define CUR_SEND_MS   80
+#define CUR_STALE_MS  30000        // nothing from them for this long: hide (they walked away)
+#define CUR_KEY       RGB(255, 0, 254)   // transparent colour of the arrow windows
+
+typedef struct { HWND h; int L, T, W, H, hs, vs, topkey, keyh; double tpp; char *arr; } EdGeom;
+typedef struct { char id[64]; char w[4]; int p, x, y, why; DWORD at; HWND ov; char name[64]; } PeerCursor;
+static PeerCursor g_cur[FOCUS_MAX];
+static int g_curNoCover = 0;               // FLIM_CURSOR_NOCOVER=1 (tests): show arrows even where FL is covered
+static int g_ncur = 0;                     // guarded by g_netTextLock
+
+// Where an editor's grid is and how it maps (any thread; FL's own fields, SEH-guarded).
+// pl: 0 = piano roll, 1 = playlist. 0 = not there / not visible.
+static int ed_geom(int pl, EdGeom *g) {
+    __try {
+        char *form = **(char ***)(g_flBase + ((pl ? PLFORM_VA : PRFORM_VA) - IMG_BASE)), *grid;
+        if (!form) return 0;
+        grid = *(char **)(form + (pl ? PL_GRID : PR_GRID));
+        if (!grid) return 0;
+        g->h = (HWND)(uintptr_t)*(uint32_t *)(form + ED_HWND);
+        g->L = *(int *)(grid + CTL_BOUNDS); g->T = *(int *)(grid + CTL_BOUNDS + 4);
+        g->W = *(int *)(grid + CTL_BOUNDS + 8); g->H = *(int *)(grid + CTL_BOUNDS + 12);
+        g->tpp = *(double *)(form + ED_TICKSPERPX);
+        g->hs = *(int *)(form + ED_HSCROLL);
+        g->vs = *(int *)(grid + GRID_VSCROLL);
+        g->topkey = *(int *)(grid + PR_TOPKEY);
+        g->keyh = *(int *)(grid + PR_KEYH);
+        g->arr = pl ? arr_obj(cur_arr()) : NULL;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    if (!g->h || !IsWindowVisible(g->h) || g->W <= 0 || g->H <= 0 || !(g->tpp > 0) || (!pl && g->keyh <= 0) || (pl && !g->arr)) return 0;
+    return 1;
+}
+static int cur_pat(void) {
+    __try { return **(int **)(g_flBase + (CURPAT_VA - IMG_BASE)); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { return -1; }
+}
+// Playlist track t: top y and height in the grid (before scrolling).
+static int trk_rows(char *arr, int t, int *top, int *h) {
+    __try {
+        *top = *(int *)(arr + (size_t)t * PL_TRK_STRIDE + TRK_TOP);
+        *h = *(int *)(arr + (size_t)t * PL_TRK_STRIDE + TRK_H);
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    return 1;
+}
+
+// Screen point -> song position on editor pl: x = tick, y = key * 100 (piano roll) or
+// track * 100 + percent into the track (playlist). 0 = not over that grid.
+static int cur_from_screen(int pl, POINT s, int *ctx, int *x, int *y) {
+    EdGeom g;
+    HWND hw = WindowFromPoint(s);
+    int t, top, h, yy;
+    if (!ed_geom(pl, &g) || (hw != g.h && !IsChild(g.h, hw))) return 0;
+    ScreenToClient(g.h, &s);
+    s.x -= g.L; s.y -= g.T;
+    if (s.x < 0 || s.y < 0 || s.x >= g.W || s.y >= g.H) return 0;
+    *x = (int)((s.x + g.hs) * g.tpp);
+    if (!pl) {
+        *y = (int)(((double)g.topkey - (double)(s.y + g.vs) / g.keyh) * 100.0);
+        *ctx = cur_pat();
+        return *ctx >= 1;
+    }
+    yy = s.y + g.vs;
+    for (t = 1; t <= PL_TRK_MAX && trk_rows(g.arr, t, &top, &h); t++)
+        if (h > 0 && yy >= top && yy < top + h) { *y = t * 100 + (yy - top) * 100 / h; *ctx = cur_arr(); return 1; }
+    return 0;
+}
+
+// Song position -> screen point on our editor pl. 1 = there, 0 = editor closed / scrolled away,
+// -1 = covered by another window.
+static int cur_to_screen(int pl, int x, int y, POINT *s) {
+    EdGeom g;
+    HWND hw;
+    if (!ed_geom(pl, &g)) return 0;
+    s->x = g.L + (int)(x / g.tpp) - g.hs;
+    if (!pl) s->y = g.T + (int)(((double)g.topkey - y / 100.0) * g.keyh) - g.vs;
+    else {
+        int t = y / 100, top, h;
+        if (t < 1 || t > PL_TRK_MAX || !trk_rows(g.arr, t, &top, &h)) return 0;
+        s->y = g.T + top - g.vs + h * (y % 100) / 100;
+    }
+    if (s->x < g.L || s->y < g.T || s->x >= g.L + g.W || s->y >= g.T + g.H) return 0;
+    ClientToScreen(g.h, s);
+    hw = WindowFromPoint(*s);          // a plugin or another app on top? (our arrows let the point through)
+    return g_curNoCover || hw == g.h || IsChild(g.h, hw) || wnd_class_is(hw, "FlimCursor") ? 1 : -1;
+}
+
+// Poll thread: tell the others where our mouse is (only while it is over a grid and moving).
+static void cursor_poll(DWORD now) {
+    static DWORD last = 0;
+    static char sent[96] = "";
+    char cur[96], m[192];
+    POINT s;
+    int pl, ctx = 0, x = 0, y = 0, on = 0;
+    if (now - last < CUR_SEND_MS || !g_ws) return;
+    last = now;
+    if (GetCursorPos(&s))
+        for (pl = 0; pl < 2 && !on; pl++)
+            if (cur_from_screen(pl, s, &ctx, &x, &y)) {
+                on = 1;
+                sprintf_s(cur, sizeof(cur), "\"w\":\"%s\",\"p\":%d,\"x\":%d,\"y\":%d", pl ? "pl" : "pr", ctx, x, y);
+            }
+    if (!on) strcpy_s(cur, sizeof(cur), "\"w\":\"\"");
+    if (strcmp(cur, sent) == 0) return;
+    strcpy_s(sent, sizeof(sent), cur);
+    sprintf_s(m, sizeof(m), "{\"t\":\"op\",\"op\":{\"kind\":\"cur\",%s}}", cur);
+    ws_send(m);
+}
+
+// Inbound cur op (recv thread): {"t":"op",..,"from":"<id>","op":{"kind":"cur","w":"pr","p":3,"x":..,"y":..}}
+static void on_cursor(const char *m) {
+    const char *f = strstr(m, "\"from\":\""), *w = strstr(m, "\"w\":\"");
+    char id[64];
+    int i, p = 0, x = 0, y = 0;
+    if (!f || !w) return;
+    for (f += 8, i = 0; f[i] && f[i] != '"' && i < (int)sizeof(id) - 1; i++) id[i] = f[i];
+    id[i] = 0;
+    int_after(m, NULL, "\"p\":", &p);
+    int_after(m, NULL, "\"x\":", &x);
+    int_after(m, NULL, "\"y\":", &y);
+    EnterCriticalSection(&g_netTextLock);
+    for (i = 0; i < g_ncur && strcmp(g_cur[i].id, id) != 0; i++) {}
+    if (i == g_ncur && g_ncur < FOCUS_MAX) { memset(&g_cur[i], 0, sizeof(g_cur[i])); g_cur[i].why = -1; strcpy_s(g_cur[g_ncur++].id, sizeof(g_cur[0].id), id); }
+    if (i < g_ncur) {
+        PeerCursor *c = &g_cur[i];
+        int on = w[5] == 'p' && (w[6] == 'r' || w[6] == 'l');
+        c->w[0] = on ? 'p' : 0; c->w[1] = on ? w[6] : 0; c->w[2] = 0;
+        c->p = p; c->x = x; c->y = y; c->at = GetTickCount();
+    }
+    LeaveCriticalSection(&g_netTextLock);
+}
+
+static COLORREF cursor_color(const char *id) {
+    static const COLORREF pal[] = { RGB(0xff, 0x8a, 0x3d), RGB(0x3d, 0xc8, 0xff), RGB(0xb4, 0x6c, 0xff), RGB(0x5c, 0xe0, 0x7a),
+                                    RGB(0xff, 0x5c, 0x8a), RGB(0xff, 0xd2, 0x3d), RGB(0x3d, 0xff, 0xd8), RGB(0xff, 0x6c, 0xff) };
+    uint64_t h = fnv_add(1469598103934665603ull, id, strlen(id));
+    return pal[h % (sizeof(pal) / sizeof(pal[0]))];
+}
+static HFONT cursor_font(int sc) {
+    return CreateFontW(-13 * sc / 100, 0, 0, 0, FW_SEMIBOLD, 0, 0, 0, DEFAULT_CHARSET, 0, 0, NONANTIALIASED_QUALITY, 0, L"Segoe UI");
+}
+
+// Arrow + name label; everything in CUR_KEY is see-through. GWLP_USERDATA = colour, "sc" = scale %.
+static LRESULT CALLBACK cursor_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
+    if (m == WM_NCHITTEST) return HTTRANSPARENT;
+    if (m == WM_PAINT) {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(h, &ps);
+        RECT rc, lb;
+        SIZE ts;
+        wchar_t name[64];
+        int sc = (int)(intptr_t)GetPropW(h, L"sc"), n, k;
+        HBRUSH bk = CreateSolidBrush(CUR_KEY), br = CreateSolidBrush((COLORREF)GetWindowLongPtrW(h, GWLP_USERDATA));
+        HPEN pen = CreatePen(PS_SOLID, 1, RGB(0x20, 0x20, 0x20));
+        HFONT f = cursor_font(sc);
+        POINT arrow[7] = { {0, 0}, {0, 16}, {4, 12}, {7, 19}, {10, 18}, {7, 11}, {12, 11} };
+        HGDIOBJ of, op, ob;
+        GetClientRect(h, &rc);
+        FillRect(dc, &rc, bk);
+        for (k = 0; k < 7; k++) { arrow[k].x = arrow[k].x * sc / 100; arrow[k].y = arrow[k].y * sc / 100; }
+        op = SelectObject(dc, pen); ob = SelectObject(dc, br); of = SelectObject(dc, f);
+        Polygon(dc, arrow, 7);
+        n = GetWindowTextW(h, name, 64);
+        GetTextExtentPoint32W(dc, name, n, &ts);
+        lb.left = 12 * sc / 100; lb.top = 16 * sc / 100;
+        lb.right = lb.left + ts.cx + 8 * sc / 100; lb.bottom = lb.top + ts.cy + 2 * sc / 100;
+        RoundRect(dc, lb.left, lb.top, lb.right, lb.bottom, 6 * sc / 100, 6 * sc / 100);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(0x10, 0x10, 0x10));
+        TextOutW(dc, lb.left + 4 * sc / 100, lb.top + 1 * sc / 100, name, n);
+        SelectObject(dc, of); SelectObject(dc, op); SelectObject(dc, ob);
+        DeleteObject(f); DeleteObject(pen); DeleteObject(br); DeleteObject(bk);
+        EndPaint(h, &ps);
+        return 0;
+    }
+    if (m == WM_DESTROY) RemovePropW(h, L"sc");
+    return DefWindowProcW(h, m, wp, lp);
+}
+
+static HWND cursor_window(const char *id, const char *name) {
+    static int reg = 0;
+    wchar_t wn[64];
+    HDC dc = GetDC(g_mainForm);
+    int sc = MulDiv(GetDeviceCaps(dc, LOGPIXELSY), 100, 96);
+    HFONT f = cursor_font(sc);
+    HGDIOBJ of = SelectObject(dc, f);
+    SIZE ts;
+    HWND h;
+    if (!reg) {
+        WNDCLASSW wc; memset(&wc, 0, sizeof(wc));
+        wc.lpfnWndProc = cursor_proc; wc.hInstance = g_hinst; wc.lpszClassName = L"FlimCursor";
+        RegisterClassW(&wc);
+        reg = 1;
+    }
+    MultiByteToWideChar(CP_UTF8, 0, name, -1, wn, 64);
+    GetTextExtentPoint32W(dc, wn, (int)wcslen(wn), &ts);
+    SelectObject(dc, of); DeleteObject(f);
+    ReleaseDC(g_mainForm, dc);
+    h = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, L"FlimCursor", wn, WS_POPUP,
+                        0, 0, (12 + 8 + 2) * sc / 100 + ts.cx, (16 + 4) * sc / 100 + ts.cy, g_mainForm, NULL, g_hinst, NULL);
+    if (!h) return NULL;
+    SetLayeredWindowAttributes(h, CUR_KEY, 0, LWA_COLORKEY);
+    SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)cursor_color(id));
+    SetPropW(h, L"sc", (HANDLE)(intptr_t)sc);
+    return h;
+}
+
+// Main thread (net bar timer): place, show or hide every peer's arrow.
+static void cursor_update(void) {
+    DWORD now = GetTickCount();
+    int i, live = g_netState == NET_ON && g_mainForm && !IsIconic(g_mainForm);
+    EnterCriticalSection(&g_netTextLock);
+    for (i = 0; i < g_ncur; i++) {
+        PeerCursor *c = &g_cur[i];
+        POINT s;
+        char pat[96], name[64];
+        const char *p = NULL, *q;
+        int pl = c->w[1] == 'l', why;
+        static const char *const WHY[] = { "shown", "not connected / FL minimized", "not over a grid", "idle",
+                                           "left", "other pattern / arrangement", "not in view", "covered" };
+        sprintf_s(pat, sizeof(pat), "\"id\":\"%s\",\"name\":\"", c->id);
+        why = !live ? 1 : !c->w[0] ? 2 : now - c->at >= CUR_STALE_MS ? 3 : !(p = strstr(g_peersJson, pat)) ? 4 :
+              c->p != (pl ? cur_arr() : cur_pat()) ? 5 : 0;
+        if (!why) { int r = cur_to_screen(pl, c->x, c->y, &s); why = r > 0 ? 0 : r == 0 ? 6 : 7; }
+        if (why != c->why) { c->why = why; logmsg("CURSOR %s: %s", c->id, WHY[why]); }
+        if (why) {
+            if (c->ov && IsWindowVisible(c->ov)) ShowWindow(c->ov, SW_HIDE);
+            continue;
+        }
+        p += strlen(pat);
+        q = strchr(p, '"');
+        if (!q || q - p >= (int)sizeof(name)) continue;
+        memcpy(name, p, q - p); name[q - p] = 0;
+        if (c->ov && strcmp(name, c->name) != 0) { DestroyWindow(c->ov); c->ov = NULL; }   // renamed: new label size
+        if (!c->ov) {
+            strcpy_s(c->name, sizeof(c->name), name);
+            if (!(c->ov = cursor_window(c->id, name))) continue;
+        }
+        SetWindowPos(c->ov, HWND_TOP, s.x, s.y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+    LeaveCriticalSection(&g_netTextLock);
+}
+
 // Hooks for the notes / clips code ------------------------------------------------------
 // Local change of a unit about to be sent (main thread). d = the records being sent.
 // Returns 0 if someone else holds the unit: the caller reverts instead of sending.
@@ -3958,6 +4241,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
         scan_clips(now);
         scan_meta(now);
         focus_poll(now);
+        cursor_poll(now);
         n = g_nslot;
         for (i = 0; i < n; i++) {
             Slot *s = &g_slots[i];
@@ -4246,6 +4530,8 @@ static void handle_msg(const char *m) {
         on_pat_op(m);
     } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"focus\"")) {
         on_focus(m);
+    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"cur\"")) {
+        on_cursor(m);
     } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"notes.full\"")) {
         if (!g_isLeader) {
             unsigned char *keep = (unsigned char *)calloc(MAX_PAT, 1);
@@ -5507,7 +5793,7 @@ static void splash_hook_install(void) {
 static DWORD WINAPI engineMain(LPVOID p) {
     (void)p;
     srand(GetTickCount() ^ GetCurrentProcessId());
-    logmsg("=== flim v." FLIM_VERSION " - engine v4.5 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples + markers/time signature + pattern ops + plugin samples + focus) loaded ===");
+    logmsg("=== flim v." FLIM_VERSION " - engine v4.6 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples + markers/time signature + pattern markers/time signatures + pattern ops + plugin samples + focus) loaded ===");
 
     HMODULE fl = NULL;
     int tries;
@@ -5634,6 +5920,7 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved) {
         {
             char v[8];
             g_noLocal = GetEnvironmentVariableA("FLIM_SAMPLE_NOLOCAL", v, sizeof(v)) && v[0] == '1';
+            g_curNoCover = GetEnvironmentVariableA("FLIM_CURSOR_NOCOVER", v, sizeof(v)) && v[0] == '1';
         }
         CreateThread(NULL, 0, outThread, NULL, 0, NULL);
         CreateThread(NULL, 0, inThread, NULL, 0, NULL);

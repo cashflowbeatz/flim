@@ -10,7 +10,7 @@ Python 3 with `python -m pip install --user capstone pefile numpy`.
 | `flre.py` | static analysis of `FLEngine_x64.dll`: disassembly (`dis`, `near`), resolving the protector's call stubs (`resolve`), callers of a function (`callers`, `show_callers`), rip-relative refs to a global (`xrefs`, `show_xrefs`), Delphi published method names -> addresses (`meth('EEPatInsMenuClick')`, `find_name`), strings (`strs`). Run as `python flre.py "dis(0x11180c0)"`. |
 | `probe/probe.c` | **dev-only** DLL injected into a running FL. Answers commands on `\\.\pipe\flimprobe_<pid>`: read/write memory, read a Delphi string, make a Delphi string, call a function on FL's main thread. Any local program can use that pipe while FL runs, so only inject it into an FL you're testing with. Build: `probe\build.bat`. |
 | `fl.py` | client for the probe (`inject(pid)`, `Probe(pid)`: `r`, `q`, `d`, `g` (deref a global VA), `call(va, ...)`, `mkstr`, `ustr`), plus window helpers that never move the real mouse or keyboard (`windows`, `close_dialogs`, `confirm`, `poke`) and screenshots (`shot_fl`). |
-| `mk.py` | helpers on top of `fl.py` for the two-FL test session (`A`, `B` = leader/member pids from the engine log): markers, time signature, channels, patterns, pattern ops. |
+| `mk.py` | helpers on top of `fl.py` for the two-FL test session (`A`, `B` = leader/member pids from the engine log): markers, time signature, channels, patterns, pattern ops, pattern markers (`pmarks`, `pr_add_marker`), opening FL windows without input (`show(p, 3)` = piano roll). |
 | `flp.py`, `tlv.py`, `paths.py` | parse FLP / .fst events, Image-Line's tag/length/value plugin data, and list sample paths inside plugin states. |
 | `survey.py` | which factory presets store sample paths in their plugin data, and in what layout. |
 | `harness/t_samples.c` | offline test of the plugin-data sample path code (includes the engine source). `harness\build.bat`, then `t_samples.exe` -> `OK`. |
@@ -29,3 +29,8 @@ Notes on FL internals that took a while to find:
   table maps the name to the address (`meth()`).
 - FL's message box is its own form (`TMsgForm`, `0xa885e0`); dialogs inside a call block the probe's
   main-thread call until they are closed (`fl.confirm` / `fl.close_dialogs`).
+- Editor grids are painted by the form, not child windows: piano roll grid = `TEventPanel_PR` at form+0xc40,
+  playlist = `TEventPanel_AU` at form+0xcf8; bounds at +0x90, ticks/pixel = form+0xaec (double), scroll
+  form+0xafc / grid+0x3fc. The engine's "where everyone is pointing" section has the full mapping.
+  `FLIM_CURSOR_NOCOVER=1` shows other people's arrows even when FL is behind other windows (tests).
+- Screenshots: capture FL's window with `PrintWindow`, never the screen (other apps may be on top).

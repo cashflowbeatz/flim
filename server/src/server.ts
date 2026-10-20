@@ -128,6 +128,7 @@ wss.on("connection", (ws) => {
         session.projectSwap(client, msg.flp);
         break;
       case "op":
+        if (msg.op.kind === "cur") { session.relayOp(client, msg.op); break; } // mouse position: frequent, not an edit
         session.touchLocksOf(client.user.id); // editing keeps the user's locks fresh
         session.relayOp(client, msg.op);
         console.log(`[op] ${client.user.name}: ${JSON.stringify(msg.op).slice(0, 120)}`);

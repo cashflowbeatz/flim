@@ -4,8 +4,8 @@
 own windows, zoom and selection, while the song itself (knobs, plugins, channels, notes, playlist, mixer,
 samples) is kept in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/), but for FL.
 
-> 🚧 **Still missing features.** A few parts of a project don't sync yet, such as time signatures of
-> single patterns. See [What's synced](#whats-synced) for the full list.
+> 🚧 **Still missing features.** A few things don't sync yet, such as samples inside Kontakt and
+> other people's selection. See [What's synced](#whats-synced) for the full list.
 
 > ⚠️ **Unofficial and experimental.** flim is not made by, affiliated with or endorsed by Image-Line.
 > It works by running extra code inside FL Studio's process, and it only supports **one exact FL build**
@@ -39,9 +39,9 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 ### What's synced
 | Synced | Not yet |
 |---|---|
-| Channel volume / pan / on-off / mixer routing | Time signatures of single patterns (set from the pattern menu) |
-| Every plugin parameter (generators and effects) | Samples inside plugins that store them compressed or encrypted (Kontakt, ...) |
-| Full plugin state (presets, wavetables, ...) | Showing other people's selection or mouse cursor inside an editor |
+| Channel volume / pan / on-off / mixer routing | Samples inside plugins that store them compressed or encrypted (Kontakt, ...) |
+| Every plugin parameter (generators and effects) | Showing other people's selection inside an editor |
+| Full plugin state (presets, wavetables, ...) | |
 | Mixer volume / pan / stereo separation / mute | |
 | Mixer track names, colors and routing (sends on/off and send levels) | |
 | Adding, deleting and reordering channels; channel names and colors | |
@@ -50,10 +50,11 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 | Inserting, cloning, deleting and splitting patterns (later patterns move along) | |
 | Playlist clips; playlist track names and colors | |
 | Playlist markers (including time signature markers); the project's time signature | |
+| Time signatures of single patterns (pattern menu) and piano roll markers | |
 | Automation clips | |
 | Sample files used by channels, audio clips and plugins like FPC (see [Samples](#samples)) | |
 | Opening or loading a project (the leader's project is sent to everyone) | |
-| Which window everyone is working in (see [Who's where](#whos-where)) | |
+| Which window everyone is working in, and where their mouse is in the piano roll and playlist (see [Who's where](#whos-where)) | |
 
 **Locks:** while you tweak a mixer knob, change a plugin, edit a pattern's notes or edit the playlist,
 that part is yours. If someone else touches it at the same time, their change is undone and FL's hint bar
@@ -67,6 +68,10 @@ one at the same moment, the leader's change wins.
 The status next to the Connect button shows the window each other person last clicked or typed in,
 e.g. `Connected to flim.example.com · leader · 2 people · Alex: Piano roll - Kick · Pattern 3`.
 Hover over it to see everyone in FL's hint bar.
+
+When someone's mouse is over the piano roll or the playlist, you see a small arrow with their name at
+the same spot in yours (the same note and bar, whatever your zoom or scroll), as long as you are looking
+at the same pattern or arrangement. The arrows can't be clicked and never get in your way.
 
 ---
 

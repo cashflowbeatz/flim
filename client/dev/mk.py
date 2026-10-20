@@ -41,3 +41,20 @@ def setup(a):
         rec = a.alloc(24)
         a.w(rec, struct.pack('<IHHIHHBBBBBBBB', 0, 0x4000, 0, 96 * pat, 60 + pat, 0, 120, 0, 64, 0, 64, 100, 128, 128))
         a.cmd('call %x %d %d' % (a.q(a.q(arr) + 8), arr, rec))
+def pmarks(p, pat):
+    # pattern pat's markers (piano roll): [(pos, action, name, tail hex)]; time signature = action 8, tail[0:2] = num, den
+    L = p.q(p.g(0x1498920) + pat * 0xC0 + 0x30)
+    n = p.q(L - 8) if L else 0
+    out = []
+    for i in range(n):
+        r = p.r(L + i * 0x34, 0x34)
+        out.append((struct.unpack('<i', r[0:4])[0], struct.unpack('<i', r[4:8])[0], p.ustr(struct.unpack('<Q', r[8:16])[0]), r[16:].hex()))
+    return out
+def show(p, wid):
+    # ui.showWindow(wid) natively: 0 mixer, 1 channel rack, 2 playlist, 3 piano roll, 4 browser
+    o = p.q(p.g(0x149a508)); iface = p.q(o + 0x54)
+    return p.cmd('call %x %d %d 1' % (p.q(p.q(iface)), iface, wid))
+def pr_add_marker(p, pos, action, num=4, den=4):
+    # what the piano roll does after its marker dialog (on the pattern it shows; open it with show(p, 3))
+    pr = p.q(p.g(0x149a2e0))
+    return p.cmd('call %x %d %d 0 %d %d %d' % (p.a(0xd4c810), pr, pos, action, num, den))
