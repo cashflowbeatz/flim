@@ -18,8 +18,9 @@ If the Build Tools are installed somewhere else, change `VCVARS` at the top of `
 | `engine/flim_engine.c`, `flim_engine.rc` | the engine: polls FL's state, sends and applies edits on FL's main thread, locks, sample transfer (WinHTTP, SHA-256 via BCrypt), WinHTTP WebSocket client, Connect button and dialog |
 | `common/flim_config.h` | `%APPDATA%\flim\flim.ini` read/write, name sanitizing, DPAPI-encrypted password |
 | `common/flim_res.h` | dialog resource IDs |
-| `restart_test.ps1` | dev loop: close FL, rebuild, start leader "A" and member "B" connected to a server |
+| `restart_test.ps1` | dev loop: close FL, rebuild, start leader "A" and member "B" connected to a server (`-Minimized`, `-NoLocalB`) |
 | `gen_icon.py` | regenerates `launcher/flim.ico` (needs Pillow) |
+| `dev/` | reverse-engineering and test tools (not built or shipped), see [dev/README.md](dev/README.md) |
 
 ## FL build dependency
 The engine calls FL's internal functions and reads its data at addresses found for

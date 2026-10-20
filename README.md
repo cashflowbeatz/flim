@@ -224,6 +224,7 @@ client/                 the FL side (C, Win32)
   common/               settings (flim.ini) and resource IDs shared by both
   build.bat             build script (MSVC)
   restart_test.ps1      dev loop: rebuild and start two connected FLs
+  dev/                  reverse-engineering and test tools (not built or shipped)
 server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
   src/                  server.ts (connections, password), session.ts (ordering, locks), protocol.ts,
                         blobs.ts (sample file store)

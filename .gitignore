@@ -11,3 +11,5 @@ server/dist/
 *.log
 *.flp
 *.fst
+# dev tools
+__pycache__/
