@@ -4,8 +4,8 @@
 own windows, zoom and selection, while the song itself (knobs, plugins, channels, notes, playlist, mixer,
 samples) is kept in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/), but for FL.
 
-> 🚧 **Still missing features.** Some parts of a project don't sync yet, including markers, automation
-> clips and inserting patterns. See [What's synced](#whats-synced) for the full list.
+> 🚧 **Still missing features.** A few parts of a project don't sync yet, such as time signatures of
+> single patterns. See [What's synced](#whats-synced) for the full list.
 
 > ⚠️ **Unofficial and experimental.** flim is not made by, affiliated with or endorsed by Image-Line.
 > It works by running extra code inside FL Studio's process, and it only supports **one exact FL build**
@@ -39,25 +39,34 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 ### What's synced
 | Synced | Not yet |
 |---|---|
-| Channel volume / pan / on-off / mixer routing | Markers, time signature |
-| Every plugin parameter (generators and effects) | Automation clips |
-| Full plugin state (presets, wavetables, ...) | Inserting a pattern in the middle (shifts all later patterns) |
-| Mixer volume / pan / stereo separation / mute | Samples stored inside plugins (FPC, Slicex, DirectWave, Kontakt, ...) |
-| Mixer track names, colors and routing (sends on/off and send levels) | Showing other people's selection or cursor |
+| Channel volume / pan / on-off / mixer routing | Time signatures of single patterns (set from the pattern menu) |
+| Every plugin parameter (generators and effects) | Samples inside plugins that store them compressed or encrypted (Kontakt, ...) |
+| Full plugin state (presets, wavetables, ...) | Showing other people's selection or mouse cursor inside an editor |
+| Mixer volume / pan / stereo separation / mute | |
+| Mixer track names, colors and routing (sends on/off and send levels) | |
 | Adding, deleting and reordering channels; channel names and colors | |
 | Adding, replacing and removing mixer effects | |
 | Notes in every pattern; pattern names, colors and length (so new patterns too) | |
+| Inserting, cloning, deleting and splitting patterns (later patterns move along) | |
 | Playlist clips; playlist track names and colors | |
-| Sample files used by channels and audio clips (see [Samples](#samples)) | |
+| Playlist markers (including time signature markers); the project's time signature | |
+| Automation clips | |
+| Sample files used by channels, audio clips and plugins like FPC (see [Samples](#samples)) | |
 | Opening or loading a project (the leader's project is sent to everyone) | |
+| Which window everyone is working in (see [Who's where](#whos-where)) | |
 
 **Locks:** while you tweak a mixer knob, change a plugin, edit a pattern's notes or edit the playlist,
 that part is yours. If someone else touches it at the same time, their change is undone and FL's hint bar
 shows *"Pattern 3 is being edited by Alex"* or *"Channel 'Serum 2' is being edited by Alex"*. A plugin is
 locked as a whole: any knob or preset change on it takes the lock. Locks are released shortly after you
 stop: about 0.6 s for a channel or mixer knob, 2 s for a plugin, a pattern or the playlist.
-Names, colors and routing have no locks; if two people change the same one at the same moment, the
-leader's change wins.
+Names, colors, routing, markers and the time signature have no locks; if two people change the same
+one at the same moment, the leader's change wins.
+
+### Who's where
+The status next to the Connect button shows the window each other person last clicked or typed in,
+e.g. `Connected to flim.example.com · leader · 2 people · Alex: Piano roll - Kick · Pattern 3`.
+Hover over it to see everyone in FL's hint bar.
 
 ---
 
@@ -116,8 +125,8 @@ The server listens on port **8080**. Give your friends your address and the pass
 - If the leader leaves, the session ends. The members keep their copy of the project.
 
 ### Samples
-The samples your channels and audio clips use are sent along automatically, both when the leader's
-project is sent and when someone loads a new sample into a channel during the session.
+The samples your channels, audio clips and sample-based plugins use are sent along automatically,
+both when the leader's project is sent and when someone loads a new sample during the session.
 - Each file is uploaded to the server **once**; the others download only the files they don't already
   have, into `Documents\flim\samples\`, and their copy of the project points at those files.
 - While that happens, the toolbar status shows *"Uploading samples: 12.3 / 40.0 MB"* (or *Downloading*).
@@ -126,7 +135,10 @@ project is sent and when someone loads a new sample into a channel during the se
   e.g. *"Sending them uploads 60.6 MB (63,504,132 bytes). Send them now?"*. **No** leaves those samples
   out (they will be missing for the others) and flim won't ask about them again until FL restarts.
 - Samples in FL's factory content are never sent: every FL installation has them.
-- Not covered yet: samples stored inside plugins (FPC, Slicex, DirectWave, Kontakt, ...).
+- Samples inside plugin states are found too: in FPC (and other newer Image-Line plugins that store
+  them the same way), and as plain file paths in any other plugin's state. For the latter, the
+  receiving copy points at a link to the downloaded file under `Documents\flim\samples\`, named to
+  keep the plugin's data valid. Plugins that compress or encrypt their state (Kontakt, ...) aren't covered.
 
 ### Server addresses
 | You type | Means |
@@ -207,7 +219,8 @@ on one machine.
 ```
 client/                 the FL side (C, Win32)
   launcher/flim.c       flim.exe: setup window, starts FL, loads the engine into it
-  engine/flim_engine.c  the engine: edit detection, applying edits, locks, sample transfer, networking, toolbar UI
+  engine/flim_engine.c  the engine: edit detection, applying edits, locks, pattern ops, sample transfer,
+                        networking, toolbar UI (status + who is where)
   common/               settings (flim.ini) and resource IDs shared by both
   build.bat             build script (MSVC)
   restart_test.ps1      dev loop: rebuild and start two connected FLs

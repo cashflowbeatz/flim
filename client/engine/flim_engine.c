@@ -13,6 +13,8 @@
 //           (WH_GETMESSAGE hook) via ProcessRECEvent(REC_UpdateValue|REC_UpdateControl)
 //  - LOCKS: a param is locked while we tweak it, released after a short idle;
 //           params locked by a peer are snapped back if tweaked locally
+//  - PATTERNS: insert / clone / delete / split are hooked (TFLProject vmt) and replayed as calls
+//  - FOCUS: which FL window each person last used, shown next to the status
 //  - NET: WinHTTP WebSocket (ws:// or wss://). Not connected at start: the Connect
 //         button in FL's toolbar asks for a server URL + password (remembered in
 //         %APPDATA%\flim\flim.ini, see common/flim_config.h), with a status text beside it.
@@ -129,6 +131,7 @@ static char  *g_flBase = NULL;
 static int    g_chanPlugN[MAX_CH];
 static int    g_fxN[MAX_MIX][MAX_FX_SLOTS];
 static volatile LONG g_isLeader = 0;
+static volatile LONG g_patDepth = 0;   // a pattern op is running (main thread; its dialogs pump messages): scans wait
 static rec_t  g_rec = NULL;
 static HINTERNET g_ws = NULL;    // the open WebSocket (NULL = not connected); guarded by g_sendLock
 static CRITICAL_SECTION g_sendLock, g_slotLock, g_qLock;
@@ -146,7 +149,7 @@ static HINSTANCE g_hinst = NULL;
 #define ADDCHAN_VA    0xf1ceb0     // AddChannel(-1, 0, 1) -> new channel obj (appended)
 #define DELCHAN_VA    0xf1d6c0     // DeleteChannel(index, 0, flags); flags 1|2 = no confirmation dialog
 #define DELCHAN_FLAGS 3            // bit 2 = "already confirmed" (FL's menu sets it after its own dialog)
-#define RESOLVER_VA   0xf1e370     // ResolveChannel(index, 0, &obj)
+#define RESOLVER_VA   0xf1e370     // ResolveChannel(index, global, &obj): global 0 = index in the rack's filter group
 #define CHANLIST_VA   0x1498140    // global: pointer to channel list (items +8, count +0x10)
 #define MIX_SLOTS_OFF 0x1324       // mixer track: 10 effect slot object pointers
 #define MOVECHAN_VA   0xf4a780     // ReorderChannels(**MOVEOBJ, mode, **MOVEARG, flags): FL's Alt+Up/Down + sorts
@@ -242,7 +245,7 @@ static gridrefresh_t g_gridRefresh;
 // often needs the message loop to run between load and the next call).
 enum { T_PARAM, T_SNAP, T_LOAD, T_ADDCH, T_DELCH, T_STRUCT, T_FULL, T_ORDER, T_FXCLEAR, T_FXSYNC,
        T_NOTESNAP, T_NOTES, T_NOTESYNC, T_PROJLOAD, T_PROJDONE, T_PROJSNAP,
-       T_CLIPSNAP, T_CLIPS, T_UNITREVERT, T_HINT, T_METASNAP, T_META };
+       T_CLIPSNAP, T_CLIPS, T_UNITREVERT, T_HINT, T_METASNAP, T_META, T_PATOP };
 enum { U_CH, U_FX };
 enum { SNAP_BASELINE, SNAP_IF_DIFF, SNAP_FORCE, SNAP_ADD, SNAP_COLLECT };
 #define QCAP 16384
@@ -607,7 +610,7 @@ static void dstr_free(wchar_t *w) { if (w) free((unsigned char *)w - 16); }
 
 static void *chan_obj(int i) {
     void *o = NULL;
-    __try { if (!g_resolve(i, 0, &o)) o = NULL; } __except (EXCEPTION_EXECUTE_HANDLER) { o = NULL; }
+    __try { if (!g_resolve(i, 1, &o)) o = NULL; } __except (EXCEPTION_EXECUTE_HANDLER) { o = NULL; }   // i: full channel list
     return o;
 }
 static void *fx_obj(int t, int s) {
@@ -1321,7 +1324,7 @@ static void scan_notes(DWORD now) {
     static DWORD last = 0;
     static int pend[MAX_PAT];
     int p, np = 0, i;
-    if (now - last < NOTES_SCAN_MS) return;
+    if (now - last < NOTES_SCAN_MS || g_patDepth) return;
     last = now;
     if (!g_notesReady) { notes_rebaseline(); g_notesReady = 1; return; }
     for (p = 1; p < MAX_PAT; p++) {
@@ -1548,18 +1551,27 @@ static void do_clips(const QItem *it) {
     logmsg("CLIPS applied arrangement %d (%d clips)", it->a, it->mode);
 }
 
+// A locally added channel whose chan.add has not been queued yet (poll thread).
+static int chan_add_pending(void) {
+    int i;
+    for (i = 0; i < g_nChKnown && i < MAX_CH; i++) if (g_chU[i].addAt) return 1;
+    return 0;
+}
+
 // Poll thread: the current arrangement's clips changed locally and settled?
 static void scan_clips(DWORD now) {
     static DWORD last = 0;
     int arr;
     uint64_t h;
-    if (now - last < NOTES_SCAN_MS) return;
+    if (now - last < NOTES_SCAN_MS || g_patDepth) return;
     last = now;
     arr = cur_arr();
     if (arr != g_clipArr) { clips_rebaseline(); return; }       // switched arrangement: new baseline
     h = clips_hash(arr);
     if (h != g_clipSeen) { g_clipSeen = h; g_clipChangedAt = now; }
     if (g_clipChangedAt && now - g_clipChangedAt >= NOTES_SETTLE_MS) {
+        // a new automation clip / audio clip channel: its chan.add must go out first
+        if (chan_add_pending()) return;
         g_clipChangedAt = 0;
         if (g_clipSeen != g_clipHash && (LONG)(now - g_clipSuppress) >= 0) enqueue_unit(T_CLIPSNAP, 0, arr, 0, 0, NULL);
     }
@@ -1614,6 +1626,22 @@ static void on_clips_set(const char *m) {
 #define PL_TRK_COLOR  0x2c
 #define PL_TRK_MAX    500
 #define PLTRACK_VA    0x11dec90    // SetPlaylistTrack(arrangement, track, name, color)
+// playlist markers (per arrangement) and the project time signature
+#define ARR_MARKERS   0x21c48      // arrangement object: dynamic array of marker records (stride 0x34)
+#define MARK_SIZE     0x34         // +0 position, +4 action (8 = time signature), +8 UnicodeString name,
+#define MARK_TAIL     0x10         //   +0x10.. plain data (+0x10 numerator, +0x11 denominator)
+#define MARK_MAX      4096
+#define MARKADD_VA    0xf69960     // MarkerListAdd(&list, pos, name, action, num, den): appends a record
+#define MARKTYPE_VA   0xf5bf38     // global -> RTTI of the marker record array (for DynArraySetLength)
+#define DYNSETLEN_VA  0x417fc0     // Delphi DynArraySetLength(&arr, typeinfo, 1, newLength)
+#define MARKREFRESH_VA 0xd4bc60    // MarkersChanged(playlist form): sort, redraw, time signature from markers
+#define PL_MARKSEL    0xd58        // playlist form: index of the marker being edited (-1 = none)
+#define SONGLOCK_VA   0x1499b38    // global: CRITICAL_SECTION* FL holds while editing markers / time signature
+#define MODIFIED_VA   0x10c7570    // SetModified(1): project changed
+#define TSNUM_VA      0x14997d0    // global -> int: project time signature numerator
+#define TSDEN_VA      0x1497bd0    //                                       denominator
+#define TSSET_VA      0x1255160    // TimeSigFromControls(main form): what the toolbar's time settings call
+#define TSCTLS_VA     0x12552d0    // TimeSigToControls(main form): controls from the two globals
 #define META_ARR_MAX  8
 #define META_MAX      (META_ARR_MAX * 512)
 #define META_SCAN_MS  150
@@ -1632,9 +1660,12 @@ typedef void (*patname_t)(int pat, const wchar_t *name);
 typedef void (*patcolor_t)(int pat, uint32_t color);
 typedef void (*patrefresh_t)(void *obj, uint8_t a, uint8_t b);
 typedef void (*pltrack_t)(void *arr, int track, const wchar_t *name, uint32_t color);
+typedef void (*markadd_t)(void *list, int pos, const wchar_t *name, int action, uint8_t num, uint8_t den);
+typedef void (*dynsetlen_t)(void *arr, void *typeinfo, int64_t dims, int64_t len);
+typedef void (*setmod_t)(int on);
 
-enum { M_MIX, M_ROUTE, M_CHAN, M_PAT, M_PLT, M_NTYPES };
-static const char *const M_TAG[M_NTYPES] = { "mx", "rt", "ch", "pt", "pl" };
+enum { M_MIX, M_ROUTE, M_CHAN, M_PAT, M_PLT, M_MARK, M_TSIG, M_NTYPES };
+static const char *const M_TAG[M_NTYPES] = { "mx", "rt", "ch", "pt", "pl", "mk", "ts" };
 static uint64_t g_mHash[M_NTYPES][META_MAX];   // last state sent or applied
 static uint64_t g_mSeen[M_NTYPES][META_MAX];   // last state the scanner saw
 static DWORD    g_mAt[M_NTYPES][META_MAX];     // when g_mSeen last moved (0 = settled/handled)
@@ -1667,6 +1698,8 @@ static int meta_cap(int type) {
     case M_MIX: case M_ROUTE: return MAX_MIX;
     case M_CHAN: return MAX_CH;
     case M_PAT: return MAX_PAT;
+    case M_MARK: return META_ARR_MAX;
+    case M_TSIG: return 1;
     default: return META_MAX;
     }
 }
@@ -1683,6 +1716,16 @@ static char *arr_obj(int arr) {
     char *arrs = *(char **)(g_flBase + (ARRS_VA - IMG_BASE));
     return *(char **)(arrs + (size_t)arr * 8);
 }
+// Marker array of an arrangement (Delphi dynamic array: length as int64 at -8).
+static char **mark_list(int arr) { return (char **)(arr_obj(arr) + ARR_MARKERS); }
+static int mark_count(const char *a) {
+    int64_t n = a ? *(const int64_t *)(a - 8) : 0;
+    return n < 0 || n > MARK_MAX ? 0 : (int)n;
+}
+static int *ts_num(void) { return *(int **)(g_flBase + (TSNUM_VA - IMG_BASE)); }
+static int *ts_den(void) { return *(int **)(g_flBase + (TSDEN_VA - IMG_BASE)); }
+static CRITICAL_SECTION *song_lock(void) { return *(CRITICAL_SECTION **)(g_flBase + (SONGLOCK_VA - IMG_BASE)); }
+
 // i = arrangement * 512 + track (1..500)
 static char *pl_track(int i) {
     char *a = arr_obj(i / 512);
@@ -1693,6 +1736,8 @@ static int meta_valid(int type, int i) {
     case M_MIX: case M_ROUTE: return i >= 0 && i < mix_count();
     case M_CHAN: return i >= 0 && i < g_nChKnown;
     case M_PAT: return i >= 1 && i < MAX_PAT;
+    case M_MARK: return i >= 0 && i < arr_count();
+    case M_TSIG: return i == 0;
     default: return i % 512 >= 1 && i % 512 <= PL_TRK_MAX && i / 512 < arr_count();
     }
 }
@@ -1731,6 +1776,21 @@ static uint64_t meta_hash(int type, int i) {
             h = fnv_add(h, r + PAT_LENGTH, 4);
             h = fnv_ustr(h, *(wchar_t **)(r + PAT_NAME));
             break; }
+        case M_MARK: {
+            const char *a = *mark_list(i);
+            int k, n = mark_count(a);
+            h = fnv_add(h, &n, 4);
+            for (k = 0; k < n; k++) {
+                const char *r = a + (size_t)k * MARK_SIZE;
+                h = fnv_add(h, r, 8);
+                h = fnv_add(h, r + MARK_TAIL, MARK_SIZE - MARK_TAIL);
+                h = fnv_ustr(h, *(wchar_t **)(r + 8));
+            }
+            break; }
+        case M_TSIG:
+            h = fnv_add(h, ts_num(), 4);
+            h = fnv_add(h, ts_den(), 4);
+            break;
         default: {
             char *r = pl_track(i);
             if (!r) return 0;
@@ -1763,7 +1823,12 @@ static void meta_absorb(void) {
 // Main thread. NULL if the entity is gone.
 static char *meta_json(int t, int i) {
     size_t cap = 32768;
-    char *m = (char *)malloc(cap);
+    char *m;
+    if (t == M_MARK) {
+        __try { cap += (size_t)mark_count(*mark_list(i)) * (64 + 2 * ((MARK_SIZE - MARK_TAIL + 2) / 3 * 4) + 4 * 256); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return NULL; }
+    }
+    m = (char *)malloc(cap);
     int o = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"meta.set\",\"e\":\"%s\",\"i\":%d", M_TAG[t], i);
     __try {
         const wchar_t *name = NULL;
@@ -1795,8 +1860,31 @@ static char *meta_json(int t, int i) {
                     o += sprintf_s(m + o, cap - o, "%s[%d,%d]", k++ ? "," : "", d, *(int32_t *)(r + MIX_ROUTE + d * 8));
             o += sprintf_s(m + o, cap - o, "]");
             break; }
+        case M_MARK: {
+            // "mk":[[pos,action,"<tail b64>","<name b64>"],...]
+            const char *a = *mark_list(i);
+            int k, n = mark_count(a);
+            o += sprintf_s(m + o, cap - o, ",\"mk\":[");
+            for (k = 0; k < n; k++) {
+                const char *r = a + (size_t)k * MARK_SIZE;
+                const wchar_t *nm = *(wchar_t **)(r + 8);
+                int nl = ustr_len(nm);
+                if (nl > 255) nl = 255;
+                o += sprintf_s(m + o, cap - o, "%s[%d,%d,\"", k ? "," : "", *(int32_t *)r, *(int32_t *)(r + 4));
+                b64enc((const unsigned char *)r + MARK_TAIL, MARK_SIZE - MARK_TAIL, m + o);
+                o += (int)strlen(m + o);
+                o += sprintf_s(m + o, cap - o, "\",\"");
+                b64enc(nl ? (const unsigned char *)nm : (const unsigned char *)"", nl * 2, m + o);
+                o += (int)strlen(m + o);
+                o += sprintf_s(m + o, cap - o, "\"]");
+            }
+            o += sprintf_s(m + o, cap - o, "]");
+            break; }
+        case M_TSIG:
+            o += sprintf_s(m + o, cap - o, ",\"nu\":%d,\"de\":%d", *ts_num(), *ts_den());
+            break;
         }
-        if (t != M_ROUTE) {
+        if (t != M_ROUTE && t != M_MARK && t != M_TSIG) {
             int nl = ustr_len(name);
             o += sprintf_s(m + o, cap - o, ",\"c\":%u,\"n\":\"", color);
             b64enc(nl ? (const unsigned char *)name : (const unsigned char *)"", nl * 2, m + o);
@@ -1826,7 +1914,7 @@ static void scan_meta(DWORD now) {
     static DWORD last = 0;
     static int pend[M_NTYPES * META_MAX];
     int t, i, np = 0;
-    if (now - last < META_SCAN_MS) return;
+    if (now - last < META_SCAN_MS || g_patDepth) return;
     last = now;
     if (!g_metaReady) { meta_rebaseline(); g_metaReady = 1; return; }
     for (t = 0; t < M_NTYPES; t++)
@@ -1859,6 +1947,68 @@ static void on_meta_set(const char *m) {
 }
 
 static wchar_t *meta_name_arg(const wchar_t *w) { return w[0] ? dstr_keep(w) : NULL; }   // '' = nil string
+
+// Replace an arrangement's markers with the ones in "mk":[...] (main thread, inside do_meta's SEH):
+// empty the array the way FL's own delete shrinks it, re-add each with FL's adder, then FL's refresh.
+static void marks_apply(int arr, const char *m) {
+    const char *q = strstr(m, "\"mk\":["), *e;
+    char **list = mark_list(arr);
+    void *ti = *(void **)(g_flBase + (MARKTYPE_VA - IMG_BASE));
+    markadd_t add = (markadd_t)(g_flBase + (MARKADD_VA - IMG_BASE));
+    int n = 0;
+    if (!q) return;
+    q += 6;
+    EnterCriticalSection(song_lock());
+    __try {
+    ((dynsetlen_t)(g_flBase + (DYNSETLEN_VA - IMG_BASE)))(list, ti, 1, 0);
+    while (*q == '[' && n < MARK_MAX) {
+        char *x;
+        int pos = (int)strtol(q + 1, &x, 10), action;
+        size_t tn = 0, nn = 0;
+        unsigned char *tail = NULL, *nb = NULL;
+        wchar_t name[256];
+        if (*x != ',') break;
+        action = (int)strtol(x + 1, &x, 10);
+        if (strncmp(x, ",\"", 2) != 0 || !(e = strchr(x + 2, '"'))) break;
+        tail = b64dec(x + 2, (size_t)(e - x - 2), &tn);
+        x = (char *)e + 1;
+        if (strncmp(x, ",\"", 2) != 0 || !(e = strchr(x + 2, '"'))) { free(tail); break; }
+        nb = b64dec(x + 2, (size_t)(e - x - 2), &nn);
+        nn = nn / 2 > 255 ? 255 : nn / 2;
+        memcpy(name, nb, nn * 2); name[nn] = 0;
+        add(list, pos, nn ? dstr_keep(name) : NULL, action,
+            tn > 0 ? tail[0] : 4, tn > 1 ? tail[1] : 4);
+        if (tn == MARK_SIZE - MARK_TAIL && mark_count(*list) == n + 1)
+            memcpy(*list + (size_t)n * MARK_SIZE + MARK_TAIL, tail, MARK_SIZE - MARK_TAIL);
+        free(tail); free(nb);
+        n++;
+        q = e + 1;
+        if (*q == ']') q++;
+        if (*q == ',') q++;
+    }
+    } __finally { LeaveCriticalSection(song_lock()); }
+    if (arr == cur_arr()) {
+        char *form = **(char ***)(g_flBase + (PLFORM_VA - IMG_BASE));
+        if (form) {
+            *(int32_t *)(form + PL_MARKSEL) = -1;
+            ((formfn_t)(g_flBase + (MARKREFRESH_VA - IMG_BASE)))(form);
+        }
+    }
+    ((setmod_t)(g_flBase + (MODIFIED_VA - IMG_BASE)))(1);
+}
+
+// Project time signature: FL's setter reads the toolbar's time controls, so put the new values in
+// the controls (from the globals), put the old globals back, and let the setter see the change.
+static void tsig_apply(int nu, int de) {
+    char *form = **(char ***)(g_flBase + (MAINFORM_VA - IMG_BASE));
+    int *pn = ts_num(), *pd = ts_den(), on = *pn, od = *pd;
+    if (!form || nu < 1 || nu > 16 || de < 1 || de > 16 || (nu == on && de == od)) return;
+    *pn = nu; *pd = de;
+    ((formfn_t)(g_flBase + (TSCTLS_VA - IMG_BASE)))(form);
+    *pn = on; *pd = od;
+    ((formfn_t)(g_flBase + (TSSET_VA - IMG_BASE)))(form);
+    if (*pn != nu || *pd != de) logmsg("META time signature %d/%d came out as %d/%d", nu, de, *pn, *pd);
+}
 
 static void do_meta(const QItem *it) {
     const char *m = it->path, *e = strstr(m, "\"e\":\""), *q;
@@ -1957,6 +2107,13 @@ static void do_meta(const QItem *it) {
                 ((pltrack_t)(g_flBase + (PLTRACK_VA - IMG_BASE)))(arr_obj(i / 512), i % 512,
                     name ? meta_name_arg(name) : *(wchar_t **)(r + PL_TRK_NAME),
                     hasC ? color : *(uint32_t *)(r + PL_TRK_COLOR));
+            break; }
+        case M_MARK:
+            marks_apply(i, m);
+            break;
+        case M_TSIG: {
+            int nu = 0, de = 0;
+            if (int_after(m, NULL, "\"nu\":", &nu) && int_after(m, NULL, "\"de\":", &de)) tsig_apply(nu, de);
             break; }
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("META apply faulted %s %d", M_TAG[t], i); }
@@ -2123,6 +2280,9 @@ static char     g_myName[96];      // UTF-8, sanitized
 
 static void net_connect(const char *url, const char *pw);
 static void net_disconnect(void);
+static void focus_summary(char *out, int cap, const char *sep);
+static void json_esc(const char *in, char *out, int cap);
+static void fl_hint(const char *msg);
 
 // Any thread: set the status text (UTF-8) and repaint the bar.
 static void net_status(int state, const char *fmt, ...) {
@@ -2144,8 +2304,10 @@ static void net_show_connected(const char *m) {
     const char *p = strstr(m, "\"peers\":[");
     int n = 0;
     while (p && (p = strstr(p + 1, "\"role\":\"")) != NULL) n++;
-    net_status(NET_ON, "Connected to %s \xC2\xB7 %s \xC2\xB7 %d %s", g_netShown, g_isLeader ? "leader" : "member",
-               n, n == 1 ? "person" : "people");
+    char where[600];
+    focus_summary(where, sizeof(where), " \xC2\xB7 ");
+    net_status(NET_ON, "Connected to %s \xC2\xB7 %s \xC2\xB7 %d %s%s%s", g_netShown, g_isLeader ? "leader" : "member",
+               n, n == 1 ? "person" : "people", where[0] ? " \xC2\xB7 " : "", where);
 }
 
 static void bar_paint(HWND h) {
@@ -2350,6 +2512,13 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         int x = (short)LOWORD(lp), on = x >= g_btnX && x < g_btnX + g_btnW;
         if (on != g_btnHover) { g_btnHover = on; InvalidateRect(h, NULL, FALSE); }
         if (on) { TRACKMOUSEEVENT t = { sizeof(t), TME_LEAVE, h, 0 }; TrackMouseEvent(&t); }
+        else if (x >= g_btnX + g_btnW && g_netState == NET_ON) {
+            // over the status: what everyone is working on, in FL's hint bar (like FL's own controls)
+            static char last[1200];
+            char where[1200];
+            focus_summary(where, sizeof(where), "   |   ");
+            if (where[0] && strcmp(where, last) != 0) { strcpy_s(last, sizeof(last), where); fl_hint(where); }
+        }
         return 0;
     }
     case WM_MOUSELEAVE: g_btnHover = 0; InvalidateRect(h, NULL, FALSE); return 0;
@@ -2805,6 +2974,173 @@ static void proj_poll(DWORD now) {
     }
 }
 
+// ---------------- pattern structure (insert, clone, delete, split...) ----------------
+// These renumber patterns, so they can't travel as per-pattern edits (every later pattern would
+// look changed). FL runs them as TFLProject virtual methods; we hook those vmt slots, send the
+// call itself once FL has done it here (nothing if it was cancelled), and the peers make the same
+// call. Afterwards both sides re-take their baselines: the renumbered patterns aren't edits.
+// Open-array arguments arrive as (pointer, high index).
+#define PATOP_N       6
+static const int PATOP_SLOT[PATOP_N] = {
+    0xd8,       // Clone(pats[])
+    0xe0,       // Delete(pats[]): asks for confirmation
+    0xe8,       // (pats[], a, target): drag-rearrange
+    0xf0,       // (pats[], a, b, c)
+    0xf8,       // Insert(pattern): "Insert one"
+    0x100,      // SplitByChannel(pats[])
+};
+#define PATOP_INSERT  4            // the one slot that takes a single pattern number
+#define MSGBOX_VA     0xa885e0     // FL's message box (text, flags, callback) -> button id (12 bytes, detoured)
+#define MSGBOX_CORE_VA 0xa88560    //   what it calls: (text, flags, 3, callback)
+typedef uint64_t (*patop_t)(void *self, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e);
+typedef int (*msgcore_t)(void *text, uint32_t flags, uint8_t kind, void *cb);
+static patop_t g_patOrig[PATOP_N];
+static volatile LONG g_patRemote = 0;     // replaying a peer's op: don't send it back
+static volatile LONG g_mbAuto = 0;        // main thread: FL message boxes are answered without showing
+
+// Detour target for FL's message box. A peer's op must not wait for a dialog here: answer
+// OK / Yes (what the peer already chose) while g_mbAuto is set; otherwise FL's own code.
+static int msgbox_detour(void *text, uint32_t flags, void *cb) {
+    if (g_mbAuto) {
+        uint32_t t = flags & 0xf;
+        logmsg("PATTERN op: answered FL's dialog (flags 0x%x)", flags);
+        return (t == MB_YESNO || t == MB_YESNOCANCEL) ? IDYES : IDOK;
+    }
+    return ((msgcore_t)(g_flBase + (MSGBOX_CORE_VA - IMG_BASE)))(text, flags, 3, cb);
+}
+
+// Everything a pattern op can renumber: notes, names, colors, lengths.
+static uint64_t pat_sig(void) {
+    uint64_t h = 1469598103934665603ull, x;
+    int p;
+    for (p = 1; p < MAX_PAT; p++) {
+        x = notes_hash(p); h = fnv_add(h, &x, 8);
+        x = meta_hash(M_PAT, p); h = fnv_add(h, &x, 8);
+    }
+    return h;
+}
+
+static uint64_t patop_common(int k, void *self, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e) {
+    int send = !g_patRemote && !g_patDepth && g_ws && !g_projBusy && !closing_now();
+    uint64_t sig = send ? pat_sig() : 0, r;
+    InterlockedIncrement(&g_patDepth);
+    r = g_patOrig[k](self, a, b, c, d, e);
+    InterlockedDecrement(&g_patDepth);
+    if (!send) return r;
+    if (pat_sig() == sig) { logmsg("PATTERN op 0x%x: nothing changed (cancelled?), not sent", PATOP_SLOT[k]); return r; }
+    {
+        char m[8192];
+        int o = sprintf_s(m, sizeof(m), "{\"t\":\"op\",\"op\":{\"kind\":\"pat.op\",\"s\":%d,\"p\":[", PATOP_SLOT[k]);
+        if (k == PATOP_INSERT) o += sprintf_s(m + o, sizeof(m) - o, "%d", (int)a);
+        else {
+            int i, n = (int)b + 1;
+            __try { for (i = 0; i < n && i < MAX_PAT; i++) o += sprintf_s(m + o, sizeof(m) - o, "%s%d", i ? "," : "", ((int *)a)[i]); }
+            __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PATTERN op 0x%x: bad pattern list, not sent", PATOP_SLOT[k]); return r; }
+        }
+        sprintf_s(m + o, sizeof(m) - o, "],\"a\":%d,\"b\":%d,\"c\":%u}}", (int)c, (int)d, (unsigned)(uint16_t)e);
+        ws_send(m);
+        logmsg("PATTERN op sent: %.200s", m);
+    }
+    notes_rebaseline();
+    return r;
+}
+#define PATOP_HOOK(k) static uint64_t patop_hook##k(void *s, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e) \
+    { return patop_common(k, s, a, b, c, d, e); }
+PATOP_HOOK(0) PATOP_HOOK(1) PATOP_HOOK(2) PATOP_HOOK(3) PATOP_HOOK(4) PATOP_HOOK(5)
+static const patop_t PATOP_HOOKS[PATOP_N] = { patop_hook0, patop_hook1, patop_hook2, patop_hook3, patop_hook4, patop_hook5 };
+
+// Once, when FL's project object exists: hook the vmt slots and detour the message box.
+static void patops_install(void) {
+    void **vmt;
+    unsigned char *mb = (unsigned char *)(g_flBase + (MSGBOX_VA - IMG_BASE));
+    unsigned char jmp[12] = { 0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xE0 };   // mov rax, imm64; jmp rax
+    void *target = (void *)msgbox_detour;
+    DWORD old;
+    int k;
+    char *proj = (char *)fl_project();
+    if (!proj) { logmsg("PATTERN ops: no project object, not hooked"); return; }
+    vmt = *(void ***)proj;
+    // the detour replaces the whole function: check it is the 12-byte prologue we know
+    if (memcmp(mb, "\x48\x83\xec\x28\xb0\x03\x4d\x89\xc1\x41\x89\xc0", 12) != 0) {
+        logmsg("PATTERN ops: FL's message box looks different, not hooked");
+        return;
+    }
+    if (!VirtualProtect(vmt + 0xd8 / 8, 8 * PATOP_N, PAGE_EXECUTE_READWRITE, &old)) { logmsg("PATTERN ops: vmt not writable"); return; }
+    for (k = 0; k < PATOP_N; k++) {
+        g_patOrig[k] = (patop_t)vmt[PATOP_SLOT[k] / 8];
+        vmt[PATOP_SLOT[k] / 8] = (void *)PATOP_HOOKS[k];
+    }
+    VirtualProtect(vmt + 0xd8 / 8, 8 * PATOP_N, old, &old);
+    memcpy(jmp + 2, &target, 8);
+    if (VirtualProtect(mb, sizeof(jmp), PAGE_EXECUTE_READWRITE, &old)) {
+        memcpy(mb, jmp, sizeof(jmp));
+        VirtualProtect(mb, sizeof(jmp), old, &old);
+        FlushInstructionCache(GetCurrentProcess(), mb, sizeof(jmp));
+    }
+    logmsg("PATTERN ops hooked (vmt %p)", (void *)vmt);
+}
+
+// Main thread, from the message hook (also inside modal loops): while a peer's op is replayed,
+// FL's follow-up dialogs (Insert opens a rename box) are closed as if cancelled. The peer's
+// own choice (e.g. the name) arrives as its own edit.
+static BOOL CALLBACK close_name_dlg(HWND h, LPARAM lp) {
+    DWORD pid = 0;
+    (void)lp;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid == GetCurrentProcessId() && IsWindowVisible(h) && wnd_class_is(h, "TNameEditForm")) {
+        PostMessageW(h, WM_CLOSE, 0, 0);
+        logmsg("PATTERN op: closed FL's rename box");
+    }
+    return TRUE;
+}
+static void patop_dialogs(void) {
+    static DWORD last = 0;
+    DWORD now = GetTickCount();
+    if (!g_mbAuto || now - last < 50) return;
+    last = now;
+    EnumWindows(close_name_dlg, 0);
+}
+
+static void on_pat_op(const char *m) {
+    QItem q; memset(&q, 0, sizeof(q));
+    q.type = T_PATOP; q.path = _strdup(m);
+    enqueue(&q);
+}
+
+// A peer's pattern op (main thread): the same call here, dialogs answered as the peer did.
+static void do_patop(const QItem *it) {
+    const char *m = it->path, *q = strstr(m, "\"p\":[");
+    int slot = 0, k, n = 0, a = 0, b = 0, c = 0;
+    static int pats[MAX_PAT];
+    void *proj = fl_project();
+    if (!q || !proj || !int_after(m, NULL, "\"s\":", &slot)) return;
+    for (k = 0; k < PATOP_N && PATOP_SLOT[k] != slot; k++) {}
+    if (k == PATOP_N || !g_patOrig[k]) { logmsg("PATTERN op 0x%x: not supported here", slot); return; }
+    for (q += 5; *q && *q != ']' && n < MAX_PAT; ) {
+        char *e;
+        pats[n++] = (int)strtol(q, &e, 10);
+        if (e == q) break;
+        q = e;
+        if (*q == ',') q++;
+    }
+    if (!n) return;
+    int_after(m, NULL, "\"a\":", &a);
+    int_after(m, NULL, "\"b\":", &b);
+    int_after(m, NULL, "\"c\":", &c);
+    InterlockedExchange(&g_patRemote, 1);
+    InterlockedExchange(&g_mbAuto, 1);
+    InterlockedIncrement(&g_patDepth);
+    __try {
+        if (k == PATOP_INSERT) g_patOrig[k](proj, (uint64_t)(int64_t)pats[0], 0, 0, 0, 0);
+        else g_patOrig[k](proj, (uint64_t)pats, (uint64_t)(int64_t)(n - 1), (uint64_t)(int64_t)a, (uint64_t)(int64_t)b, (uint64_t)(uint16_t)c);
+    } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PATTERN op 0x%x faulted", slot); }
+    InterlockedDecrement(&g_patDepth);
+    InterlockedExchange(&g_mbAuto, 0);
+    InterlockedExchange(&g_patRemote, 0);
+    notes_rebaseline();
+    logmsg("PATTERN op applied: slot 0x%x, %d patterns (first %d)", slot, n, pats[0]);
+}
+
 // ---------------- unit locks (mutexing) ----------------
 // Notes of a pattern ("pat:<n>") and the clips of an arrangement ("clips:<a>") sync as whole
 // units, so two people editing the same unit at once would overwrite each other. Whoever
@@ -3196,6 +3532,112 @@ static void do_hint(const QItem *it) {
     LeaveCriticalSection(&g_ulockLock);
 }
 
+// ---- where everyone is working ----
+// Each client tells the others which FL window it last clicked or typed in (its caption, e.g.
+// "Piano roll - Kick · Pattern 3", "Mixer - Insert 2", a plugin's name). Shown after the status
+// text, and in full in FL's hint bar when the mouse is over the flim status.
+#define FOCUS_MAX     32
+#define FOCUS_POLL_MS 300
+typedef struct { char id[64]; char where[200]; } PeerFocus;
+static PeerFocus g_focus[FOCUS_MAX];
+static int g_nfocus = 0;                   // guarded by g_netTextLock
+static volatile HWND g_focusHwnd = NULL;   // last window that got a click / key (main thread sets it)
+static volatile LONG g_focusResend = 0;    // someone joined: tell them where we are
+
+// Caption of the FL form h is in, without FL's icon glyphs (private-use characters).
+static int focus_label(char *out, int cap) {
+    HWND h = g_focusHwnd;
+    wchar_t t[200], c[200];
+    int i, o = 0;
+    while (h && h != g_mainForm && !is_fl_form(h)) h = GetParent(h);
+    if (!h || h == g_mainForm) return 0;                // toolbar, menus...: keep the last place
+    InternalGetWindowText(h, t, 200);
+    for (i = 0; t[i] && o < 190; i++) if (t[i] < 0xE000 || t[i] > 0xF8FF) c[o++] = t[i];
+    while (o && (c[o - 1] == L' ' || c[o - 1] == L'-')) o--;
+    c[o] = 0;
+    if (!o) return 0;
+    if (wnd_class_is(h, "TEventEditForm") && wcsncmp(c, L"Piano roll", 10) == 0) {
+        int pat = 0;
+        wchar_t nm[64] = L"";
+        __try {
+            pat = **(int **)(g_flBase + (0x1499de0 - IMG_BASE));          // current pattern (what the piano roll edits)
+            if (pat >= 1 && pat < MAX_PAT) {
+                const wchar_t *n = *(const wchar_t **)(pat_rec(pat) + PAT_NAME);
+                int k = ustr_len(n);
+                if (k > 60) k = 60;
+                if (k) { memcpy(nm, n, (size_t)k * 2); nm[k] = 0; }
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) { pat = 0; }
+        if (pat >= 1 && pat < MAX_PAT) {
+            if (nm[0]) swprintf_s(c + o, 200 - o, L" \x00B7 %s", nm);
+            else swprintf_s(c + o, 200 - o, L" \x00B7 Pattern %d", pat);
+        }
+    }
+    return WideCharToMultiByte(CP_UTF8, 0, c, -1, out, cap, NULL, NULL) > 1;
+}
+
+// Poll thread: send our place when it changed (or someone new is here).
+static void focus_poll(DWORD now) {
+    static DWORD last = 0;
+    static char sent[200] = "";
+    char cur[200], esc[420], m[512];
+    if (now - last < FOCUS_POLL_MS || !g_ws) return;
+    last = now;
+    if (!focus_label(cur, sizeof(cur))) {
+        if (!g_focusResend || !sent[0]) return;
+        strcpy_s(cur, sizeof(cur), sent);
+    }
+    if (strcmp(cur, sent) == 0 && !InterlockedExchange(&g_focusResend, 0)) return;
+    strcpy_s(sent, sizeof(sent), cur);
+    json_esc(cur, esc, sizeof(esc));
+    sprintf_s(m, sizeof(m), "{\"t\":\"op\",\"op\":{\"kind\":\"focus\",\"w\":\"%s\"}}", esc);
+    ws_send(m);
+}
+
+// Inbound focus op (recv thread): {"t":"op","seq":..,"from":"<id>","op":{"kind":"focus","w":"..."}}
+static void on_focus(const char *m) {
+    const char *f = strstr(m, "\"from\":\""), *w = strstr(m, "\"w\":\"");
+    char id[64], where[200];
+    int i, o = 0;
+    if (!f || !w) return;
+    for (f += 8, i = 0; f[i] && f[i] != '"' && i < (int)sizeof(id) - 1; i++) id[i] = f[i];
+    id[i] = 0;
+    for (w += 5; *w && *w != '"' && o < (int)sizeof(where) - 1; w++) {
+        if (*w == '\\' && w[1]) {
+            w++;
+            if (*w == 'u') { w += 4; continue; }             // json_esc only escapes control characters this way
+        }
+        where[o++] = *w;
+    }
+    where[o] = 0;
+    EnterCriticalSection(&g_netTextLock);
+    for (i = 0; i < g_nfocus && strcmp(g_focus[i].id, id) != 0; i++) {}
+    if (i == g_nfocus && g_nfocus < FOCUS_MAX) strcpy_s(g_focus[g_nfocus++].id, sizeof(g_focus[0].id), id);
+    if (i < g_nfocus) strcpy_s(g_focus[i].where, sizeof(g_focus[0].where), where);
+    LeaveCriticalSection(&g_netTextLock);
+    if (g_peersJson[0]) net_show_connected(g_peersJson);
+}
+
+// "Alex: Piano roll - Kick<sep>Bo: Mixer" for the people in the session now (any thread).
+static void focus_summary(char *out, int cap, const char *sep) {
+    int i, o = 0;
+    out[0] = 0;
+    EnterCriticalSection(&g_netTextLock);
+    for (i = 0; i < g_nfocus; i++) {
+        char pat[96], who[64];
+        const char *p, *q;
+        sprintf_s(pat, sizeof(pat), "\"id\":\"%s\",\"name\":\"", g_focus[i].id);
+        if (!g_focus[i].where[0] || !(p = strstr(g_peersJson, pat))) continue;   // left the session
+        p += strlen(pat);
+        q = strchr(p, '"');
+        if (!q || q - p >= (int)sizeof(who)) continue;
+        memcpy(who, p, q - p); who[q - p] = 0;
+        o += _snprintf_s(out + o, cap - o, _TRUNCATE, "%s%s: %s", o ? sep : "", who, g_focus[i].where);
+        if (o < 0 || o >= cap - 1) break;
+    }
+    LeaveCriticalSection(&g_netTextLock);
+}
+
 // Hooks for the notes / clips code ------------------------------------------------------
 // Local change of a unit about to be sent (main thread). d = the records being sent.
 // Returns 0 if someone else holds the unit: the caller reverts instead of sending.
@@ -3272,6 +3714,7 @@ static void run_task_inner(const QItem *it) {
     case T_HINT:   do_hint(it); free(it->path); break;
     case T_METASNAP: do_metasnap(it); break;
     case T_META:   do_meta(it); free(it->path); break;
+    case T_PATOP:  do_patop(it); free(it->path); break;
     }
 }
 
@@ -3291,7 +3734,7 @@ static void drain_queue_mainthread(void) {
 
         if (g_projBusy && it.type != T_PROJLOAD && it.type != T_PROJDONE && it.type != T_PROJSNAP) {
             if (it.type == T_LOAD || it.type == T_ADDCH) { if (it.path) { DeleteFileA(it.path); free(it.path); } }
-            else if (it.type == T_UNITREVERT || it.type == T_PROJLOAD || it.type == T_HINT || it.type == T_META) free(it.path);
+            else if (it.type == T_UNITREVERT || it.type == T_PROJLOAD || it.type == T_HINT || it.type == T_META || it.type == T_PATOP) free(it.path);
             else if (it.type == T_ORDER || it.type == T_FXSYNC || it.type == T_NOTES || it.type == T_NOTESYNC || it.type == T_CLIPS) free(it.order);
             continue;
         }
@@ -3325,8 +3768,11 @@ static LRESULT CALLBACK getMsgHook(int code, WPARAM wp, LPARAM lp) {
     if (code >= 0 && lp) {
         const MSG *msg = (const MSG *)lp;
         switch (msg->message) {
-        case WM_LBUTTONDOWN: case WM_LBUTTONUP: case WM_RBUTTONDOWN: case WM_RBUTTONUP:
-        case WM_MBUTTONDOWN: case WM_MOUSEWHEEL: case WM_KEYDOWN: case WM_KEYUP:
+        case WM_LBUTTONDOWN: case WM_RBUTTONDOWN: case WM_MBUTTONDOWN: case WM_KEYDOWN:
+            g_focusHwnd = msg->hwnd;
+            g_lastInput = GetTickCount();
+            break;
+        case WM_LBUTTONUP: case WM_RBUTTONUP: case WM_MOUSEWHEEL: case WM_KEYUP:
         case WM_SYSKEYDOWN: case WM_LBUTTONDBLCLK:
             g_lastInput = GetTickCount();
             break;
@@ -3344,6 +3790,7 @@ static LRESULT CALLBACK getMsgHook(int code, WPARAM wp, LPARAM lp) {
     }
     g_lastHookTick = GetTickCount();
     InterlockedIncrement(&g_hookCalls);
+    if (g_mbAuto) patop_dialogs();
     if (code >= 0) drain_queue_mainthread();
     return CallNextHookEx(g_hook, code, wp, lp);
 }
@@ -3510,6 +3957,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
         scan_notes(now);
         scan_clips(now);
         scan_meta(now);
+        focus_poll(now);
         n = g_nslot;
         for (i = 0; i < n; i++) {
             Slot *s = &g_slots[i];
@@ -3794,6 +4242,10 @@ static void handle_msg(const char *m) {
         on_clips_set(m);
     } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"meta.set\"")) {
         on_meta_set(m);
+    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"pat.op\"")) {
+        on_pat_op(m);
+    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"focus\"")) {
+        on_focus(m);
     } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"notes.full\"")) {
         if (!g_isLeader) {
             unsigned char *keep = (unsigned char *)calloc(MAX_PAT, 1);
@@ -3850,6 +4302,7 @@ static void handle_msg(const char *m) {
         if (s) s->lockedByPeer = 0;
     } else if (strstr(m, "\"t\":\"presence\"")) {
         strncpy_s(g_peersJson, sizeof(g_peersJson), m, _TRUNCATE);
+        InterlockedExchange(&g_focusResend, 1);           // a newcomer: tell them where we are
         logmsg("server: %.300s", m);
         net_show_connected(m);
     } else if (strstr(m, "\"t\":\"error\"")) {
@@ -3876,8 +4329,14 @@ static void handle_msg(const char *m) {
 // locally (same path with the same content, or any file known to have that content) or
 // downloaded into Documents\flim\samples\<hash>\; the paths in the op's data are then rewritten
 // to the local files. Later ops wait behind it, again to keep the order.
-// Samples inside plugin states (Slicex, FPC, DirectWave...) are not covered.
+// Samples inside plugin states (event 213, the plugin's own data) travel the same way: paths
+// are found in Image-Line's tag/length/value layout (FPC and other newer IL plugins; rewritten
+// with every enclosing length fixed), and as plain absolute UTF-16 / ANSI paths anywhere else in
+// the data (any other plugin). Those get a local alias of exactly the same length (a hard link
+// to the downloaded file), so length fields inside a format we don't know stay valid.
+// Compressed / encrypted states (Kontakt...) show no paths and are left as they are.
 #define EV_SAMPLE_PATH   196
+#define EV_PLUGIN_DATA   213
 #define SAMPLE_ASK_BYTES (50ull * 1024 * 1024)
 #define SAMPLE_MAX_BYTES (2000ull * 1024 * 1024)
 #define SAMPLE_PATH_MAX  1024
@@ -4128,17 +4587,120 @@ static void ev_wstr(const unsigned char *p, size_t n, wchar_t *out, int cap) {
 }
 
 typedef struct { wchar_t **paths; int n, cap; } PathList;
+static void pathlist_add(PathList *L, const wchar_t *w) {
+    int i;
+    if (!w[0]) return;
+    for (i = 0; i < L->n; i++) if (wcscmp(L->paths[i], w) == 0) return;
+    if (L->n == L->cap) { L->cap = L->cap ? L->cap * 2 : 16; L->paths = (wchar_t **)realloc(L->paths, sizeof(wchar_t *) * L->cap); }
+    L->paths[L->n++] = _wcsdup(w);
+}
+
+// ---- paths inside plugin data ----
+static int audio_ext(const wchar_t *w, size_t n) {
+    static const wchar_t *const EXT[] = { L".wav", L".mp3", L".ogg", L".flac", L".aif", L".aiff", L".wv", L".rx2", L".rex", L".sf2" };
+    size_t i, k;
+    for (i = 0; i < sizeof(EXT) / sizeof(EXT[0]); i++) {
+        k = wcslen(EXT[i]);
+        if (n > k && _wcsnicmp(w + n - k, EXT[i], k) == 0) return 1;
+    }
+    return 0;
+}
+// [tag u32][length u64][payload] records exactly covering v[a, b)?
+static int tlv_valid(const unsigned char *v, size_t a, size_t b) {
+    if (a >= b) return 0;
+    while (a < b) {
+        uint64_t ln;
+        if (b - a < 12) return 0;
+        ln = *(const uint64_t *)(v + a + 4);
+        if (ln > b - a - 12) return 0;
+        a += 12 + (size_t)ln;
+    }
+    return 1;
+}
+// Image-Line plugin data: a 4-byte header (FPC) or none, then TLV records. -1 = not that layout.
+static int tlv_start(const unsigned char *v, size_t n) {
+    if (tlv_valid(v, 4, n)) return 4;
+    if (tlv_valid(v, 0, n)) return 0;
+    return -1;
+}
+// A TLV payload that is a sample path (UTF-16, optional trailing NUL) -> out. 0 = not one.
+static int tlv_path(const unsigned char *p, size_t n, wchar_t *out, int cap) {
+    size_t k = n / 2, i;
+    if (n < 8 || (n & 1) || k >= (size_t)cap) return 0;
+    memcpy(out, p, k * 2);
+    out[k] = 0;
+    if (k && !out[k - 1]) k--;
+    for (i = 0; i < k; i++) if (out[i] < 32) return 0;
+    out[k] = 0;
+    return (is_abs_path(out) || out[0] == L'%') && audio_ext(out, k);
+}
+static void tlv_collect(const unsigned char *v, size_t a, size_t b, int depth, PathList *L) {
+    wchar_t w[SAMPLE_PATH_MAX];
+    while (a < b) {
+        size_t s = a + 12, e = s + (size_t)*(const uint64_t *)(v + a + 4);
+        if (tlv_path(v + s, e - s, w, SAMPLE_PATH_MAX)) pathlist_add(L, w);
+        else if (depth < 8 && tlv_valid(v, s, e)) tlv_collect(v, s, e, depth + 1, L);
+        a = e;
+    }
+}
+// Plain absolute paths anywhere in the data: "X:\..." / "\\..." as UTF-16LE or ANSI,
+// ending in an audio extension. *wide tells which encoding was found (for the rewrite).
+static size_t raw_path_at(const unsigned char *v, size_t i, size_t n, int wide, wchar_t *out, int cap) {
+    size_t k = 0, step = wide ? 2 : 1;
+    while (i + k * step + step <= n && k + 1 < (size_t)cap) {
+        unsigned c = wide ? *(const uint16_t *)(v + i + k * step) : v[i + k * step];
+        if (c < 32 || c == '"' || c == '*' || c == '?' || c == '<' || c == '>' || c == '|') break;
+        out[k++] = (wchar_t)c;
+    }
+    out[k] = 0;
+    if (!wide && k) {                                       // ANSI: decode with the system code page
+        char a[SAMPLE_PATH_MAX];
+        size_t j;
+        for (j = 0; j < k; j++) a[j] = (char)v[i + j];
+        a[k] = 0;
+        if (!MultiByteToWideChar(CP_ACP, 0, a, -1, out, cap)) return 0;
+    }
+    while (k > 4 && !audio_ext(out, wcslen(out))) {         // the string may run on into other data
+        out[--k] = 0;
+        if (!wide) { out[0] = 0; return 0; }
+    }
+    return is_abs_path(out) && audio_ext(out, wcslen(out)) ? k : 0;
+}
+static int raw_starts(const unsigned char *v, size_t i, size_t n, int wide) {
+    size_t st = wide ? 2 : 1;
+    unsigned c0, c1, c2;
+    if (i + 3 * st > n) return 0;
+    c0 = wide ? *(const uint16_t *)(v + i) : v[i];
+    c1 = wide ? *(const uint16_t *)(v + i + st) : v[i + st];
+    c2 = wide ? *(const uint16_t *)(v + i + 2 * st) : v[i + 2 * st];
+    if (wide && (v[i + 1] || v[i + 3])) return 0;
+    return ((c0 | 0x20) >= 'a' && (c0 | 0x20) <= 'z' && c1 == ':' && c2 == '\\') || (c0 == '\\' && c1 == '\\');
+}
+static void raw_collect(const unsigned char *v, size_t n, PathList *L) {
+    wchar_t w[SAMPLE_PATH_MAX];
+    size_t i, k;
+    int wide;
+    for (wide = 1; wide >= 0; wide--)
+        for (i = 0; i + 8 < n; i++)
+            if (raw_starts(v, i, n, wide) && (k = raw_path_at(v, i, n, wide, w, SAMPLE_PATH_MAX)) != 0) {
+                pathlist_add(L, w);
+                i += k * (wide ? 2 : 1) - 1;
+            }
+}
+
 static int collect_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
     PathList *L = (PathList *)ctx;
     wchar_t w[SAMPLE_PATH_MAX];
-    int i;
     (void)at; (void)end;
+    if (id == EV_PLUGIN_DATA && n >= 12) {
+        int st = tlv_start(p, n);
+        if (st >= 0) tlv_collect(p, (size_t)st, n, 0, L);
+        raw_collect(p, n, L);
+        return 1;
+    }
     if (id != EV_SAMPLE_PATH || n < 4) return 1;
     ev_wstr(p, n, w, SAMPLE_PATH_MAX);
-    if (!w[0]) return 1;
-    for (i = 0; i < L->n; i++) if (wcscmp(L->paths[i], w) == 0) return 1;
-    if (L->n == L->cap) { L->cap = L->cap ? L->cap * 2 : 16; L->paths = (wchar_t **)realloc(L->paths, sizeof(wchar_t *) * L->cap); }
-    L->paths[L->n++] = _wcsdup(w);
+    pathlist_add(L, w);
     return 1;
 }
 static void pathlist_free(PathList *L) {
@@ -4154,23 +4716,132 @@ static void rw_put(RewriteCtx *c, const void *p, size_t n) {
     memcpy(c->o + c->n, p, n);
     c->n += n;
 }
+static void rw_event(RewriteCtx *c, int id, const unsigned char *p, size_t len) {
+    unsigned char b = (unsigned char)id;
+    size_t v = len;
+    rw_put(c, &b, 1);
+    do { b = (unsigned char)(v & 0x7f); v >>= 7; if (v) b |= 0x80; rw_put(c, &b, 1); } while (v);
+    rw_put(c, p, len);
+}
+static const wchar_t *map_find(const wchar_t *from) {   // caller holds g_sampleLock
+    int i;
+    for (i = 0; i < g_npmap; i++) if (wcscmp(g_pmap[i].from, from) == 0) return g_pmap[i].to;
+    return NULL;
+}
+// TLV records of v[a, b) into c, mapped path leaves replaced (lengths follow). Caller holds g_sampleLock.
+static void tlv_rewrite(const unsigned char *v, size_t a, size_t b, int depth, RewriteCtx *c) {
+    wchar_t w[SAMPLE_PATH_MAX];
+    while (a < b) {
+        size_t s = a + 12, e = s + (size_t)*(const uint64_t *)(v + a + 4);
+        const wchar_t *to = tlv_path(v + s, e - s, w, SAMPLE_PATH_MAX) ? map_find(w) : NULL;
+        RewriteCtx sub;
+        uint64_t ln;
+        memset(&sub, 0, sizeof(sub));
+        if (to) {
+            int nul = e - s >= 2 && !v[e - 1] && !v[e - 2];
+            rw_put(&sub, to, wcslen(to) * 2);
+            if (nul) rw_put(&sub, L"", 2);
+            c->changed = 1;
+        } else if (depth < 8 && tlv_valid(v, s, e)) {
+            sub.d = v;
+            tlv_rewrite(v, s, e, depth + 1, &sub);
+            if (sub.changed) c->changed = 1;
+        } else rw_put(&sub, v + s, e - s);
+        ln = sub.n;
+        rw_put(c, v + a, 4);
+        rw_put(c, &ln, 8);
+        if (sub.n) rw_put(c, sub.o, sub.n);
+        free(sub.o);
+        a = e;
+    }
+}
+static void samples_dir(wchar_t *out, int cap);
+// A local name for `to` that is exactly `len` characters long (plain paths in plugin data
+// keep their length): <samples>\<folder>\<name>, a hard link (or copy) of the file.
+static int alias_path(const wchar_t *to, size_t len, wchar_t *out, int cap) {
+    wchar_t dir[MAX_PATH], name[MAX_PATH], folder[MAX_PATH], h[17];
+    const wchar_t *b = to + wcslen(to), *ext;
+    size_t fixed, k, i;
+    uint64_t fh = 1469598103934665603ull;
+    while (b > to && b[-1] != L'\\') b--;
+    ext = wcsrchr(b, L'.');
+    samples_dir(dir, MAX_PATH);
+    wcscpy_s(name, MAX_PATH, b);
+    fixed = wcslen(dir) + 2;                                // two backslashes
+    if (fixed + wcslen(name) + 1 > len) {                   // too long: a short name keeps the extension
+        swprintf_s(name, MAX_PATH, L"s%s", ext ? ext : L"");
+        if (fixed + wcslen(name) + 1 > len) return 0;
+    }
+    k = len - fixed - wcslen(name);
+    if (k >= MAX_PATH || len >= (size_t)cap) return 0;
+    for (i = 0; to[i]; i++) { fh ^= to[i]; fh *= 1099511628211ull; }
+    swprintf_s(h, 17, L"%016llx", (unsigned long long)fh);
+    for (i = 0; i < k; i++) folder[i] = i < 16 ? h[i] : L'_';
+    folder[k] = 0;
+    swprintf_s(out, cap, L"%s\\%s\\%s", dir, folder, name);
+    if (wcslen(out) != len) return 0;
+    if (file_exists_w(out)) {                               // made earlier: must be this file (short names can collide)
+        uint64_t sa, sb;
+        if (!file_info(out, &sa, NULL) || !file_info(to, &sb, NULL) || sa != sb) return 0;
+    } else {
+        wchar_t d2[MAX_PATH * 2];
+        swprintf_s(d2, MAX_PATH * 2, L"%s\\%s", dir, folder);
+        SHCreateDirectoryExW(NULL, d2, NULL);
+        if (!CreateHardLinkW(out, to, NULL) && !CopyFileW(to, out, TRUE)) return 0;
+    }
+    return 1;
+}
+// Same-length replacement of plain paths in plugin data (in place). Caller holds g_sampleLock.
+static int raw_rewrite(unsigned char *v, size_t n) {
+    wchar_t w[SAMPLE_PATH_MAX], al[SAMPLE_PATH_MAX];
+    size_t i, k, j;
+    int wide, changed = 0;
+    for (wide = 1; wide >= 0; wide--)
+        for (i = 0; i + 8 < n; i++) {
+            const wchar_t *to;
+            if (!raw_starts(v, i, n, wide) || (k = raw_path_at(v, i, n, wide, w, SAMPLE_PATH_MAX)) == 0) continue;
+            to = map_find(w);
+            if (to && wcslen(w) == k && alias_path(to, k, al, SAMPLE_PATH_MAX)) {
+                int ascii = 1;
+                for (j = 0; j < k; j++) ascii &= al[j] < 128;
+                if (wide) memcpy(v + i, al, k * 2);
+                else if (ascii) for (j = 0; j < k; j++) v[i + j] = (unsigned char)al[j];
+                else { logmsg("SAMPLES %S: no same-length local name, it will be missing", w); i += k - 1; continue; }
+                changed = 1;
+                logmsg("SAMPLES plugin data: %S -> %S", w, al);
+            } else if (to) logmsg("SAMPLES %S: no same-length local name, it will be missing", w);
+            i += k * (wide ? 2 : 1) - 1;
+        }
+    return changed;
+}
+
 // Caller holds g_sampleLock.
 static int rewrite_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
     RewriteCtx *c = (RewriteCtx *)ctx;
     wchar_t w[SAMPLE_PATH_MAX];
     int i;
+    if (id == EV_PLUGIN_DATA && n >= 12) {
+        RewriteCtx t;
+        int st = tlv_start(p, n), ch = 0;
+        memset(&t, 0, sizeof(t));
+        if (st >= 0) {
+            t.d = p;
+            rw_put(&t, p, (size_t)st);
+            tlv_rewrite(p, (size_t)st, n, 0, &t);
+            ch = t.changed;
+        } else rw_put(&t, p, n);
+        if (raw_rewrite(t.o, t.n)) ch = 1;
+        if (ch) { rw_event(c, id, t.o, t.n); c->changed = 1; }
+        else rw_put(c, c->d + at, end - at);
+        free(t.o);
+        return 1;
+    }
     if (id == EV_SAMPLE_PATH && n >= 4) {
         ev_wstr(p, n, w, SAMPLE_PATH_MAX);
         for (i = 0; i < g_npmap; i++) {
             if (wcscmp(g_pmap[i].from, w) != 0) continue;
-            {
-                size_t len = (wcslen(g_pmap[i].to) + 1) * 2, v = len;
-                unsigned char b = (unsigned char)id;
-                rw_put(c, &b, 1);
-                do { b = (unsigned char)(v & 0x7f); v >>= 7; if (v) b |= 0x80; rw_put(c, &b, 1); } while (v);
-                rw_put(c, g_pmap[i].to, len);        // UTF-16LE + terminating NUL
-                c->changed = 1;
-            }
+            rw_event(c, id, (const unsigned char *)g_pmap[i].to, (wcslen(g_pmap[i].to) + 1) * 2);   // UTF-16LE + NUL
+            c->changed = 1;
             return 1;
         }
     }
@@ -4649,6 +5320,9 @@ static void json_esc(const char *in, char *out, int cap) {
 
 // Forget every lock: they belong to the connection (the server drops them on disconnect).
 static void net_reset(void) {
+    EnterCriticalSection(&g_netTextLock);
+    g_nfocus = 0;                                         // where the others were: belongs to the session
+    LeaveCriticalSection(&g_netTextLock);
     int i;
     InterlockedExchange(&g_isLeader, 0);
     EnterCriticalSection(&g_slotLock);
@@ -4833,7 +5507,7 @@ static void splash_hook_install(void) {
 static DWORD WINAPI engineMain(LPVOID p) {
     (void)p;
     srand(GetTickCount() ^ GetCurrentProcessId());
-    logmsg("=== flim v." FLIM_VERSION " - engine v4.4 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples) loaded ===");
+    logmsg("=== flim v." FLIM_VERSION " - engine v4.5 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples + markers/time signature + pattern ops + plugin samples + focus) loaded ===");
 
     HMODULE fl = NULL;
     int tries;
@@ -4901,6 +5575,7 @@ static DWORD WINAPI engineMain(LPVOID p) {
         logmsg("settled after %lu ms (%ld params)", GetTickCount() - start, g_nslot);
         EnumWindows(findMainForm, (LPARAM)&g_mainForm);
         logmsg("main form %p", (void *)g_mainForm);
+        patops_install();
         InterlockedExchange(&g_uiWanted, 1);
         PostMessageW(g_mainWnd, WM_NULL, 0, 0);
     }
