@@ -35,10 +35,10 @@ export interface Op {
 
 // ---- client -> server ----
 export type ClientMsg =
-  // `password`: the server's FLIM_PASSWORD (ignored when the server has none)
-  | { t: "host"; user: UserInfo; password?: string }
-  | { t: "join"; user: UserInfo; session: string; password?: string }
-  | { t: "join_room"; user: UserInfo; room: string; password?: string } // join-or-create a named room
+  // host: take the first free public slot (01..08) with a new session password. `owner` = the
+  // server's owner key (FLIM_OWNER_KEY) asks for the reserved slot 00 instead.
+  | { t: "host"; user: UserInfo; password: string; owner?: string }
+  | { t: "join"; user: UserInfo; session: string; password: string } // session = slot id ("03")
   | { t: "snapshot"; flp: string } // leader seeds/updates the project blob
   | { t: "project_swap"; flp: string } // leader only; replaces the project
   | { t: "op"; op: Op }
@@ -48,7 +48,9 @@ export type ClientMsg =
 
 // ---- server -> client ----
 export type ServerMsg =
-  | { t: "welcome"; session: string; role: Role; you: UserInfo; peers: PeerInfo[] }
+  // blob: this session's key for the sample store (header x-flim-key, see blobs.ts)
+  // ends_in: ms until the session's time limit ends it (0 = no limit, slot 00)
+  | { t: "welcome"; session: string; role: Role; you: UserInfo; peers: PeerInfo[]; blob: string; ends_in: number }
   | { t: "snapshot"; flp: string | null; epoch: number }
   | { t: "op"; seq: number; from: string; op: Op }
   | { t: "lock"; key: UnitKey; granted: boolean; owner: string | null }
@@ -57,7 +59,10 @@ export type ServerMsg =
   | { t: "project_swap"; flp: string; epoch: number } // members: show resync notice, reload
   | { t: "presence"; peers: PeerInfo[] }
   | { t: "leader_left" } // session is ending
-  | { t: "error"; code: string; msg: string };
+  // codes: bad_json, bad_password, bad_owner, owner_required, no_session, full, in_use, id_in_use, session_full,
+  // bad_request, too_many_attempts, too_many_connections, cooldown (+retry_in ms), idle / time_up
+  // (session closed; time_up + cooldown ms), not_joined, not_leader, locked, unknown
+  | { t: "error"; code: string; msg: string; retry_in?: number; cooldown?: number };
 
 export const LOCK_TTL_MS = 30_000; // safety auto-release if a client never releases
 export const PING_INTERVAL_MS = 15_000;

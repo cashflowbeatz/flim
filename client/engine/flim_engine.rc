@@ -4,18 +4,50 @@
 
 IDD_CONNECT DIALOGEX 0, 0, 260, 136
 STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "flim - connect to a server"
+CAPTION "flim - join a session"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Server URL (e.g. wss://my-flim.fly.dev, or localhost:8080):", -1, 10, 10, 240, 10
+    LTEXT           "Session link from the host (e.g. https://flim.fly.dev/03):", -1, 10, 10, 240, 10
     EDITTEXT        IDC_URL, 10, 22, 240, 14, ES_AUTOHSCROLL
-    LTEXT           "Password (leave empty if the server has none):", -1, 10, 42, 240, 10
+    LTEXT           "Session password:", -1, 10, 42, 240, 10
     EDITTEXT        IDC_PASSWORD, 10, 54, 160, 14, ES_AUTOHSCROLL | ES_PASSWORD
     AUTOCHECKBOX    "Remember", IDC_REMEMBER, 178, 56, 72, 10
     LTEXT           "Your name:", -1, 10, 76, 240, 10
     EDITTEXT        IDC_CNAME, 10, 88, 120, 14, ES_AUTOHSCROLL
     DEFPUSHBUTTON   "Connect", IDOK, 144, 114, 56, 16
     PUSHBUTTON      "Cancel", IDCANCEL, 204, 114, 46, 16
+END
+
+// Owner key row (IDC_HOWNERLBL / IDC_HOWNER) is shown only on Ctrl+click: session 00 on flim.fly.dev, or a
+// self-hosted server's password (FLIM_PASSWORD).
+IDD_HOST DIALOGEX 0, 0, 260, 166
+STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "flim - host a session"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Server:", -1, 10, 10, 240, 10
+    EDITTEXT        IDC_HSERVER, 10, 22, 240, 14, ES_AUTOHSCROLL
+    LTEXT           "Session password (you give it to the people you invite):", -1, 10, 42, 240, 10
+    EDITTEXT        IDC_HPASSWORD, 10, 54, 160, 14, ES_AUTOHSCROLL
+    LTEXT           "Your name:", -1, 10, 74, 240, 10
+    EDITTEXT        IDC_CNAME, 10, 86, 120, 14, ES_AUTOHSCROLL
+    LTEXT           "Owner key (or your own server's password):", IDC_HOWNERLBL, 10, 106, 240, 10, NOT WS_VISIBLE
+    EDITTEXT        IDC_HOWNER, 10, 118, 160, 14, ES_AUTOHSCROLL | ES_PASSWORD | NOT WS_VISIBLE
+    DEFPUSHBUTTON   "Host", IDOK, 144, 144, 56, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 204, 144, 46, 16
+END
+
+// IDC_HNOTE: the time limit note (empty for an untimed session).
+IDD_HOSTED DIALOGEX 0, 0, 260, 146
+STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "flim - you're hosting"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Send the link and the password to the people you invite. They click Connect in flim and enter both.", -1, 10, 8, 240, 20
+    EDITTEXT        IDC_HINFO, 10, 32, 240, 56, ES_MULTILINE | ES_READONLY | ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_HNOTE, 10, 94, 240, 24
+    PUSHBUTTON      "Copy", IDC_HCOPY, 144, 124, 56, 16
+    DEFPUSHBUTTON   "OK", IDOK, 204, 124, 46, 16
 END
 
 // Startup splash: replaces FL's Artwork\Skins\Default\Title.png in this process only.

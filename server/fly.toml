@@ -7,6 +7,7 @@ app = 'your-flim-app'
 primary_region = 'iad'
 
 [build]
+
 [http_service]
   internal_port = 8080
   force_https = true
@@ -16,8 +17,8 @@ primary_region = 'iad'
 
   [http_service.concurrency]
     type = 'connections'
-    hard_limit = 50
-    soft_limit = 25
+    hard_limit = 120
+    soft_limit = 100
 
   [[http_service.checks]]
     interval = '30s'
@@ -28,4 +29,4 @@ primary_region = 'iad'
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  memory = '512mb'

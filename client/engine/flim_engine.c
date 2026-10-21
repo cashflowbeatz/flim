@@ -15,12 +15,15 @@
 //           params locked by a peer are snapped back if tweaked locally
 //  - PATTERNS: insert / clone / delete / split are hooked (TFLProject vmt) and replayed as calls
 //  - FOCUS: which FL window each person last used, shown next to the status
-//  - NET: WinHTTP WebSocket (ws:// or wss://). Not connected at start: the Connect
-//         button in FL's toolbar asks for a server URL + password (remembered in
-//         %APPDATA%\flim\flim.ini, see common/flim_config.h), with a status text beside it.
+//  - NET: WinHTTP WebSocket (ws:// or wss://). Not connected at start: in FL's toolbar, Host
+//         opens a session on a server (first free slot 01..08; Ctrl+click + owner key = slot 00)
+//         with a password the host picks, Connect joins one by its link (https://server/NN) +
+//         password (remembered in %APPDATA%\flim\flim.ini, see common/flim_config.h), with a
+//         status text beside them.
 // Config: user name from flim.ini (set by flim.exe). Env overrides for dev/tests:
-//         FLIM_NAME, FLIM_ROOM (default FLIM), FLIM_AUTOCONNECT=<url> (+ FLIM_PASSWORD) connects
-//         at startup; legacy FLIM_SERVER=host:port means FLIM_AUTOCONNECT=ws://host:port.
+//         FLIM_NAME, FLIM_AUTOCONNECT=<session link> (+ FLIM_PASSWORD) joins at startup;
+//         with FLIM_HOST=1 it is a server address to host on instead (+ FLIM_OWNER_KEY = slot 00);
+//         legacy FLIM_SERVER=host:port means FLIM_AUTOCONNECT=ws://host:port.
 //         Tests only: FLIM_SAMPLE_NOLOCAL=1 (always download samples), FLIM_CURSOR_NOCOVER=1 (show
 //         other people's arrows even where another window covers FL).
 // Logs to %TEMP%\flim_engine.log.
@@ -38,11 +41,13 @@
 #include "../common/flim_res.h"
 #include "../common/flim_version.h"
 #include <bcrypt.h>
+#include <commctrl.h>
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "shell32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "advapi32.lib")
 
 #define FL_MODULE    L"FLEngine_x64.dll"
@@ -450,6 +455,31 @@ static int parse_url(const char *in, NetUrl *u) {
     if (u->port != (scheme ? 443 : 80)) sprintf_s(u->shown + strlen(u->shown), sizeof(u->shown) - strlen(u->shown), ":%u", u->port);
     if (pathA[1]) strncat_s(u->shown, sizeof(u->shown), pathA, _TRUNCATE);
     return 1;
+}
+
+// The server itself: the socket always opens at "/" (the session goes into the host / join message).
+static void url_root(NetUrl *u) {
+    char *slash = strchr(u->shown, '/');
+    if (slash) *slash = 0;
+    wcscpy_s(u->path, 512, L"/");
+}
+
+// A session link: server address + "/NN" (the slot, e.g. https://flim.fly.dev/03).
+static int parse_link(const char *in, NetUrl *u, char sess[4]) {
+    const wchar_t *p;
+    int n = 0;
+    if (!parse_url(in, u)) return 0;
+    p = u->path[0] == L'/' ? u->path + 1 : u->path;
+    while (p[n] >= L'0' && p[n] <= L'9') n++;
+    if (n < 1 || n > 2 || (p[n] && !(p[n] == L'/' && !p[n + 1]))) return 0;
+    sprintf_s(sess, 4, "%02d", _wtoi(p));
+    url_root(u);
+    return 1;
+}
+
+// The link people paste into Connect.
+static void session_link(const NetUrl *u, const char *sess, char *out, int cap) {
+    sprintf_s(out, cap, "%s://%s/%s", u->secure ? "https" : "ws", u->shown, sess);
 }
 
 typedef struct { HINTERNET ses, con, ws; } NetConn;
@@ -2271,17 +2301,31 @@ static void wguard_pass(void) {
 
 // ---------------- toolbar: Connect button + connection status ----------------
 // Our own child window in FL's top toolbar row (FL's Delphi code doesn't know about it),
-// right-aligned in the empty stretch after the meters:   [ Connect ]  * Not connected
-// Clicking opens the connect dialog (server URL + password), or offers to disconnect.
+// filling the empty stretch after the meters:   [ Connect ] [ Host ]  * Not connected      TIME LEFT
+// Connect opens the join dialog (session link + password), or offers to disconnect; Host opens
+// the host dialog (hidden while connected). Clicking the status while hosting shows the link again.
 enum { NET_OFF, NET_CONNECTING, NET_ON, NET_ERR };
 #define WM_FLIM_STATUS  (WM_APP + 0x31)
-#define BAR_W_REF       440        // bar size at FL's 41 px toolbar row; scaled with the row
-#define BAR_H_REF       26
+#define WM_FLIM_HOSTED  (WM_APP + 0x32)    // net thread: our session is open, show its link
+#define WM_FLIM_ALERT   (WM_APP + 0x33)    // net thread: show g_alert in a message box
+#define BAR_H_REF       26         // bar height at FL's 41 px toolbar row; sizes below scale with it
 #define BTN_W_REF       88
-#define METERS_W_REF    250        // what FL draws at the left of the "Splitter_1" panel
+#define HOST_W_REF      60
 static HWND     g_netBar = NULL, g_netRow = NULL;
-static int      g_btnHover = 0, g_btnDown = 0, g_btnW = BTN_W_REF;
+static int      g_btnHover = 0, g_btnDown = 0, g_btnW = BTN_W_REF;   // hover / down: 1 Connect, 2 Host
 static int      g_btnX = 0;        // the button starts after the badge (bean + "flim v.YY.MM.DD")
+static int      g_hostX = 0, g_hostW = HOST_W_REF;
+static HWND     g_tip = NULL;      // tooltip over the timer
+static RECT     g_timerRc;         // where the timer was drawn (empty = none)
+
+// Public sessions end after 15 minutes (server); whoever was in one then waits 5 minutes before
+// hosting / joining another public one. Both counted down at the right end of the bar.
+#define LIMIT_TEXT  "To avoid hogging, sessions are limited to 15 minutes for testing. " \
+                    "You will keep all progress on your client when time runs out."
+#define LIMIT_TEXTW L"To avoid hogging, sessions are limited to 15 minutes for testing. " \
+                    L"You will keep all progress on your client when time runs out."
+static volatile ULONGLONG g_endsAt = 0;      // GetTickCount64 when our session ends (0 = no limit)
+static volatile ULONGLONG g_coolUntil = 0;   // GetTickCount64 when our cooldown ends
 static HFONT    g_verFont = NULL;
 static int      g_verFontH = 0;
 static HICON    g_bean = NULL;
@@ -2296,7 +2340,8 @@ static CRITICAL_SECTION g_netTextLock;
 static wchar_t  g_netText[256] = L"Not connected";
 static char     g_myName[96];      // UTF-8, sanitized
 
-static void net_connect(const char *url, const char *pw);
+static void net_connect(const char *url, const char *pw, int host, const char *owner);
+static void samples_key(const char *hex);
 static void net_disconnect(void);
 static void focus_summary(char *out, int cap, const char *sep);
 static void json_esc(const char *in, char *out, int cap);
@@ -2317,8 +2362,54 @@ static void net_status(int state, const char *fmt, ...) {
     if (g_netBar) PostMessageW(g_netBar, WM_FLIM_STATUS, 0, 0);
 }
 
-static char g_netShown[300];       // the server as shown in the status ("host[:port]")
+static char g_netShown[300];       // the server as shown in the status ("host[:port]", then "host[:port]/NN")
+static char g_netRoot[300];        // the server alone ("host[:port]")
+static NetUrl g_netUrl;            // the server of the current connection
 static char g_netErr[160];         // why the server ended the current connection, if it said so
+static char g_session[4];          // our session's slot ("03") once welcomed
+static char g_hostPw[256];         // hosting: the session password, until the welcome
+static char g_hostedText[700];     // hosting: session + link + password, for the "you're hosting" dialog
+static char g_alert[400];          // message box text (g_netTextLock)
+static int  g_alertInfo;           // ... shown as information, not a warning
+static volatile LONG g_hosting = 0;  // this connection hosts (vs joins)
+
+static int bar_host_shown(void) { int st = g_netState; return !(st == NET_ON || st == NET_CONNECTING); }
+// Which button is at x: 1 = Connect / Disconnect, 2 = Host, 0 = none.
+static int bar_btn_at(int x) {
+    if (x >= g_btnX && x < g_btnX + g_btnW) return 1;
+    if (bar_host_shown() && x >= g_hostX && x < g_hostX + g_hostW) return 2;
+    return 0;
+}
+static int bar_btns_end(void) { return bar_host_shown() ? g_hostX + g_hostW : g_btnX + g_btnW; }
+
+// Any thread: a message box on FL's main thread.
+static void net_alert_v(int info, const char *fmt, va_list ap) {
+    EnterCriticalSection(&g_netTextLock);
+    vsprintf_s(g_alert, sizeof(g_alert), fmt, ap);
+    g_alertInfo = info;
+    LeaveCriticalSection(&g_netTextLock);
+    if (g_netBar) PostMessageW(g_netBar, WM_FLIM_ALERT, 0, 0);
+}
+static void net_alert(const char *fmt, ...) { va_list ap; va_start(ap, fmt); net_alert_v(0, fmt, ap); va_end(ap); }
+static void net_info(const char *fmt, ...) { va_list ap; va_start(ap, fmt); net_alert_v(1, fmt, ap); va_end(ap); }
+
+// The bar's timer: time left in a timed session, else a running cooldown. 0 = nothing to show.
+static int bar_timer_text(wchar_t *out, int cap, int *cool, int *last) {
+    ULONGLONG now = GetTickCount64(), end = g_endsAt, cu = g_coolUntil, left;
+    unsigned s;
+    *cool = *last = 0;
+    if (g_netState == NET_ON && end) left = end > now ? end - now : 0;
+    else if (cu > now) { left = cu - now; *cool = 1; }
+    else { out[0] = 0; return 0; }
+    s = (unsigned)((left + 999) / 1000);
+    *last = s <= 60;
+    swprintf_s(out, cap, L"%s %02u:%02u", *cool ? L"COOLDOWN:" : L"TIME LEFT:", s / 60, s % 60);
+    return 1;
+}
+static unsigned cooldown_secs(void) {
+    ULONGLONG now = GetTickCount64(), cu = g_coolUntil;
+    return cu > now ? (unsigned)((cu - now + 999) / 1000) : 0;
+}
 
 // welcome / presence: "Connected to <server> · leader · 3 people"
 static void net_show_connected(const char *m) {
@@ -2369,29 +2460,52 @@ static void bar_paint(HWND h) {
         DrawTextW(mem, L"flim v." FLIM_VERSION_W, -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         SelectObject(mem, g_barFont);
     }
-    {   // button
-        int r = H / 4, on = (st == NET_ON || st == NET_CONNECTING);
-        COLORREF face = g_btnDown ? RGB(0x2e, 0x34, 0x38) : g_btnHover ? RGB(0x6a, 0x76, 0x7e) : RGB(0x5a, 0x64, 0x6b);
-        HBRUSH fb = CreateSolidBrush(face);
-        HPEN pen = CreatePen(PS_SOLID, 1, RGB(0x37, 0x3e, 0x43));
-        HGDIOBJ ob = SelectObject(mem, fb), op = SelectObject(mem, pen);
-        RECT br = { g_btnX, 0, g_btnX + g_btnW, H };
-        RoundRect(mem, g_btnX, 0, g_btnX + g_btnW, H, r, r);
-        SelectObject(mem, ob); SelectObject(mem, op); DeleteObject(fb); DeleteObject(pen);
-        SetTextColor(mem, RGB(0xee, 0xf1, 0xf3));
-        if (g_btnDown) OffsetRect(&br, 0, 1);
-        DrawTextW(mem, on ? L"Disconnect" : L"Connect", -1, &br, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    {   // buttons
+        int b, on = (st == NET_ON || st == NET_CONNECTING);
+        for (b = 1; b <= (on ? 1 : 2); b++) {
+            int r = H / 4, bx = b == 1 ? g_btnX : g_hostX, bw = b == 1 ? g_btnW : g_hostW;
+            COLORREF face = g_btnDown == b ? RGB(0x2e, 0x34, 0x38) : g_btnHover == b ? RGB(0x6a, 0x76, 0x7e) : RGB(0x5a, 0x64, 0x6b);
+            HBRUSH fb = CreateSolidBrush(face);
+            HPEN pen = CreatePen(PS_SOLID, 1, RGB(0x37, 0x3e, 0x43));
+            HGDIOBJ ob = SelectObject(mem, fb), op = SelectObject(mem, pen);
+            RECT br = { bx, 0, bx + bw, H };
+            RoundRect(mem, bx, 0, bx + bw, H, r, r);
+            SelectObject(mem, ob); SelectObject(mem, op); DeleteObject(fb); DeleteObject(pen);
+            SetTextColor(mem, RGB(0xee, 0xf1, 0xf3));
+            if (g_btnDown == b) OffsetRect(&br, 0, 1);
+            DrawTextW(mem, b == 2 ? L"Host" : on ? L"Disconnect" : L"Connect", -1, &br, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
     }
     {   // status dot + text
         COLORREF dot = st == NET_ON ? RGB(0x5c, 0xd6, 0x6b) : st == NET_CONNECTING ? RGB(0xf2, 0xb7, 0x3a)
                      : st == NET_ERR ? RGB(0xf0, 0x6a, 0x5f) : RGB(0x8d, 0x97, 0x9e);
-        int d = H * 8 / BAR_H_REF, x = g_btnX + g_btnW + H / 2;
+        int d = H * 8 / BAR_H_REF, x = bar_btns_end() + H / 2;
         HBRUSH db = CreateSolidBrush(dot);
         HGDIOBJ ob = SelectObject(mem, db), op = SelectObject(mem, GetStockObject(NULL_PEN));
         RECT tr;
         Ellipse(mem, x, (H - d) / 2, x + d + 1, (H - d) / 2 + d + 1);
         SelectObject(mem, ob); SelectObject(mem, op); DeleteObject(db);
-        SetRect(&tr, x + d + H / 4, 0, W, H);
+        {   // timer at the right end (with a tooltip)
+            wchar_t tt[48];
+            int cool, last;
+            RECT rr = { 0, 0, 0, 0 };
+            if (bar_timer_text(tt, 48, &cool, &last)) {
+                SIZE sz;
+                GetTextExtentPoint32W(mem, tt, (int)wcslen(tt), &sz);
+                SetRect(&rr, W - sz.cx - H / 4, 0, W - H / 4, H);
+                SetTextColor(mem, cool ? RGB(0xf2, 0xb7, 0x3a) : last ? RGB(0xff, 0xa0, 0x96) : RGB(0xd4, 0xda, 0xde));
+                DrawTextW(mem, tt, -1, &rr, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+            }
+            if (!EqualRect(&rr, &g_timerRc)) {
+                g_timerRc = rr;
+                if (g_tip) {
+                    TOOLINFOW ti; memset(&ti, 0, sizeof(ti));
+                    ti.cbSize = TTTOOLINFOW_V2_SIZE; ti.hwnd = h; ti.uId = 1; ti.rect = rr;
+                    SendMessageW(g_tip, TTM_NEWTOOLRECTW, 0, (LPARAM)&ti);
+                }
+            }
+        }
+        SetRect(&tr, x + d + H / 4, 0, g_timerRc.right ? g_timerRc.left - H / 2 : W, H);
         SetTextColor(mem, st == NET_ERR ? RGB(0xff, 0xa0, 0x96) : RGB(0xd4, 0xda, 0xde));
         EnterCriticalSection(&g_netTextLock);
         DrawTextW(mem, g_netText, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
@@ -2402,7 +2516,7 @@ static void bar_paint(HWND h) {
     EndPaint(h, &ps);
 }
 
-// Right-align in the "Splitter_1" panel (FL's flexible gap); shrink if the window is narrow.
+// Fill the "Splitter_1" panel (FL's flexible gap) from just after the meters.
 static void bar_layout(void) {
     RECT rr, sr, cur;
     HWND spl;
@@ -2411,7 +2525,6 @@ static void bar_layout(void) {
     GetClientRect(g_netRow, &rr);
     rowH = rr.bottom > 0 ? rr.bottom : 41;
     h = rowH * BAR_H_REF / 41; if (h < 18) h = 18;
-    w = h * BAR_W_REF / BAR_H_REF;
     g_btnW = h * BTN_W_REF / BAR_H_REF;
     {   // badge width = bean (h) + gap + version text + gap
         HDC dc = GetDC(g_netBar);
@@ -2423,18 +2536,32 @@ static void bar_layout(void) {
         SelectObject(dc, of); DeleteObject(f); ReleaseDC(g_netBar, dc);
         g_btnX = BEAN_SZ(h) + h / 8 + sz.cx + h * 2 / 3;
     }
-    w += g_btnX;
+    g_hostW = h * HOST_W_REF / BAR_H_REF;
+    g_hostX = g_btnX + g_btnW + h / 4;
     right = rr.right - 8; minX = rr.right / 2;
     spl = FindWindowExW(g_netRow, NULL, L"TQuickEditToolbarPanel", L"Splitter_1");
     if (spl && IsWindowVisible(spl)) {
         GetWindowRect(spl, &sr);
         MapWindowPoints(NULL, g_netRow, (POINT *)&sr, 2);
         right = sr.right - 8;
-        minX = sr.left + rowH * METERS_W_REF / 41 + 8;
+        minX = sr.left + h / 4;
+        {   // FL's own panels sit before it (meters: CPU / MB); never start on top of one that reaches in
+            HWND c;
+            for (c = GetWindow(g_netRow, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
+                RECT cr;
+                if (c == spl || c == g_netBar || !IsWindowVisible(c)) continue;
+                GetWindowRect(c, &cr);
+                MapWindowPoints(NULL, g_netRow, (POINT *)&cr, 2);
+                if (cr.left < sr.left + (sr.right - sr.left) / 2 && cr.right > minX - h / 4 && cr.right < right)
+                    minX = cr.right + h / 4;
+            }
+        }
     }
-    if (right - w < minX) w = right - minX;
-    if (w < g_btnX + g_btnW) w = g_btnX + g_btnW;
-    x = right - w;
+    // left-aligned right after FL's meters (CPU / MB), filling the gap: the status gets all the room
+    // there is, the timer sits at the right end
+    w = right - minX;
+    if (w < g_hostX + g_hostW) w = g_hostX + g_hostW;
+    x = minX;
     GetWindowRect(g_netBar, &cur);
     MapWindowPoints(NULL, g_netRow, (POINT *)&cur, 2);
     if (cur.left != x || cur.right - cur.left != w || cur.bottom - cur.top != h) {
@@ -2443,61 +2570,205 @@ static void bar_layout(void) {
     }
 }
 
-// ---- connect dialog ----
-static char g_dlgUrl[512], g_dlgPw[256];
+// ---- connect / host dialogs ----
+static char g_dlgUrl[512], g_dlgPw[256], g_dlgOwner[256];
+static int  g_dlgOwnerMode;
+
+static void dlg_init_name(HWND dlg) {
+    wchar_t v[512];
+    MultiByteToWideChar(CP_UTF8, 0, g_myName, -1, v, 512);
+    SetDlgItemTextW(dlg, IDC_CNAME, v);
+    SendDlgItemMessageW(dlg, IDC_CNAME, EM_LIMITTEXT, 64, 0);
+}
+
+// The name from IDC_CNAME: 0 = not usable (the user was told).
+static int dlg_take_name(HWND dlg) {
+    wchar_t w[512], name[FLIM_NAME_MAX + 1];
+    char n8[sizeof(g_myName)];
+    GetDlgItemTextW(dlg, IDC_CNAME, w, 512);
+    if (!flim_sanitize_name(w, name, FLIM_NAME_MAX + 1)) {
+        MessageBoxW(dlg, L"Enter a name with at least one letter or digit.", L"flim", MB_OK | MB_ICONWARNING);
+        SetFocus(GetDlgItem(dlg, IDC_CNAME));
+        return 0;
+    }
+    // save the name only when it was edited here (FLIM_NAME dev overrides stay out of flim.ini)
+    WideCharToMultiByte(CP_UTF8, 0, name, -1, n8, sizeof(n8), NULL, NULL);
+    if (strcmp(n8, g_myName) != 0) { strcpy_s(g_myName, sizeof(g_myName), n8); flimcfg_set(L"name", name); }
+    return 1;
+}
+
+// Text of a dialog control as UTF-8.
+static void dlg_text8(HWND dlg, int id, char *out, int cap) {
+    wchar_t w[512];
+    GetDlgItemTextW(dlg, id, w, 512);
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, out, cap, NULL, NULL);
+    SecureZeroMemory(w, sizeof(w));
+}
 
 static INT_PTR CALLBACK connect_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
     (void)lp;
     if (m == WM_INITDIALOG) {
         wchar_t v[512], rem[8];
-        flimcfg_get(L"server_url", v, 512);
+        flimcfg_get(L"join_link", v, 512);
         SetDlgItemTextW(dlg, IDC_URL, v);
-        flimcfg_get_secret(L"server_pw", g_dlgPw, sizeof(g_dlgPw));
+        flimcfg_get_secret(L"join_pw", g_dlgPw, sizeof(g_dlgPw));
         MultiByteToWideChar(CP_UTF8, 0, g_dlgPw, -1, v, 512);
         SetDlgItemTextW(dlg, IDC_PASSWORD, v);
         SecureZeroMemory(g_dlgPw, sizeof(g_dlgPw)); SecureZeroMemory(v, sizeof(v));
         flimcfg_get(L"remember_pw", rem, 8);
         CheckDlgButton(dlg, IDC_REMEMBER, rem[0] == L'0' ? BST_UNCHECKED : BST_CHECKED);
-        MultiByteToWideChar(CP_UTF8, 0, g_myName, -1, v, 512);
-        SetDlgItemTextW(dlg, IDC_CNAME, v);
-        SendDlgItemMessageW(dlg, IDC_CNAME, EM_LIMITTEXT, 64, 0);
+        dlg_init_name(dlg);
         SetFocus(GetDlgItem(dlg, GetWindowTextLengthW(GetDlgItem(dlg, IDC_URL)) ? IDOK : IDC_URL));
         return FALSE;
     }
     if (m == WM_COMMAND && LOWORD(wp) == IDOK) {
-        wchar_t w[512], name[FLIM_NAME_MAX + 1];
+        wchar_t w[512];
         NetUrl u;
+        char sess[4];
         int remember = IsDlgButtonChecked(dlg, IDC_REMEMBER) == BST_CHECKED;
-        GetDlgItemTextW(dlg, IDC_URL, w, 512);
-        WideCharToMultiByte(CP_UTF8, 0, w, -1, g_dlgUrl, sizeof(g_dlgUrl), NULL, NULL);
-        if (!parse_url(g_dlgUrl, &u)) {
-            MessageBoxW(dlg, L"That doesn't look like a server address.\n\nExamples:\n  wss://my-flim.fly.dev\n  localhost:8080",
-                        L"flim", MB_OK | MB_ICONWARNING);
+        dlg_text8(dlg, IDC_URL, g_dlgUrl, sizeof(g_dlgUrl));
+        if (!parse_link(g_dlgUrl, &u, sess)) {
+            MessageBoxW(dlg, L"That doesn't look like a session link.\n\n"
+                        L"It's the server with the session number, as the host got it, e.g.\n"
+                        L"  https://flim.fly.dev/03", L"flim", MB_OK | MB_ICONWARNING);
             SetFocus(GetDlgItem(dlg, IDC_URL));
             return TRUE;
         }
-        GetDlgItemTextW(dlg, IDC_CNAME, w, 512);
-        if (!flim_sanitize_name(w, name, FLIM_NAME_MAX + 1)) {
-            MessageBoxW(dlg, L"Enter a name with at least one letter or digit.", L"flim", MB_OK | MB_ICONWARNING);
-            SetFocus(GetDlgItem(dlg, IDC_CNAME));
+        if (!GetWindowTextLengthW(GetDlgItem(dlg, IDC_PASSWORD))) {
+            MessageBoxW(dlg, L"Enter the session password (the host has it).", L"flim", MB_OK | MB_ICONWARNING);
+            SetFocus(GetDlgItem(dlg, IDC_PASSWORD));
             return TRUE;
         }
-        {   // save the name only when it was edited here (FLIM_NAME dev overrides stay out of flim.ini)
-            char n8[sizeof(g_myName)];
-            WideCharToMultiByte(CP_UTF8, 0, name, -1, n8, sizeof(n8), NULL, NULL);
-            if (strcmp(n8, g_myName) != 0) { strcpy_s(g_myName, sizeof(g_myName), n8); flimcfg_set(L"name", name); }
-        }
-        GetDlgItemTextW(dlg, IDC_PASSWORD, w, 512);
-        WideCharToMultiByte(CP_UTF8, 0, w, -1, g_dlgPw, sizeof(g_dlgPw), NULL, NULL);
-        SecureZeroMemory(w, sizeof(w));
+        if (!dlg_take_name(dlg)) return TRUE;
+        dlg_text8(dlg, IDC_PASSWORD, g_dlgPw, sizeof(g_dlgPw));
         GetDlgItemTextW(dlg, IDC_URL, w, 512);
-        flimcfg_set(L"server_url", w);
+        flimcfg_set(L"join_link", w);
         flimcfg_set(L"remember_pw", remember ? L"1" : L"0");
-        flimcfg_set_secret(L"server_pw", remember ? g_dlgPw : NULL);
+        flimcfg_set_secret(L"join_pw", remember ? g_dlgPw : NULL);
         EndDialog(dlg, IDOK);
         return TRUE;
     }
     if (m == WM_COMMAND && LOWORD(wp) == IDCANCEL) { EndDialog(dlg, IDCANCEL); return TRUE; }
+    return FALSE;
+}
+
+// A password suggestion for the host (they can type their own).
+static void random_pw(wchar_t *out, int n) {
+    static const char a[] = "abcdefghjkmnpqrstuvwxyz23456789";
+    unsigned char r[16];
+    int i;
+    BCryptGenRandom(NULL, r, sizeof(r), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    for (i = 0; i < n && i < (int)sizeof(r); i++) out[i] = (wchar_t)a[r[i] % (sizeof(a) - 1)];
+    out[i] = 0;
+}
+
+// lp = 1: owner mode (Ctrl+click), also asks for the owner key = session 00.
+static INT_PTR CALLBACK host_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
+    if (m == WM_INITDIALOG) {
+        wchar_t v[512];
+        g_dlgOwnerMode = (int)lp;
+        flimcfg_get(L"host_server", v, 512);
+        SetDlgItemTextW(dlg, IDC_HSERVER, v[0] ? v : L"flim.fly.dev");
+        random_pw(v, 8);
+        SetDlgItemTextW(dlg, IDC_HPASSWORD, v);
+        SendDlgItemMessageW(dlg, IDC_HPASSWORD, EM_LIMITTEXT, 128, 0);
+        dlg_init_name(dlg);
+        if (g_dlgOwnerMode) {
+            ShowWindow(GetDlgItem(dlg, IDC_HOWNERLBL), SW_SHOW);
+            ShowWindow(GetDlgItem(dlg, IDC_HOWNER), SW_SHOW);
+            flimcfg_get_secret(L"owner_key", g_dlgOwner, sizeof(g_dlgOwner));
+            if (!g_dlgOwner[0]) flimcfg_get_secret(L"server_pw", g_dlgOwner, sizeof(g_dlgOwner));  // the old server password
+            MultiByteToWideChar(CP_UTF8, 0, g_dlgOwner, -1, v, 512);
+            SetDlgItemTextW(dlg, IDC_HOWNER, v);
+            SecureZeroMemory(g_dlgOwner, sizeof(g_dlgOwner)); SecureZeroMemory(v, sizeof(v));
+            SetWindowTextW(dlg, L"flim - host with the owner key");
+        } else {   // no owner row: move the buttons up into its place
+            RECT lbl, btn, wr;
+            int i, dy;
+            GetWindowRect(GetDlgItem(dlg, IDC_HOWNERLBL), &lbl);
+            GetWindowRect(GetDlgItem(dlg, IDOK), &btn);
+            dy = btn.top - lbl.top;
+            for (i = 0; i < 2; i++) {
+                HWND b = GetDlgItem(dlg, i ? IDCANCEL : IDOK);
+                RECT r; GetWindowRect(b, &r);
+                MapWindowPoints(NULL, dlg, (POINT *)&r, 2);
+                SetWindowPos(b, NULL, r.left, r.top - dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            }
+            GetWindowRect(dlg, &wr);
+            SetWindowPos(dlg, NULL, 0, 0, wr.right - wr.left, wr.bottom - wr.top - dy, SWP_NOMOVE | SWP_NOZORDER);
+        }
+        SetFocus(GetDlgItem(dlg, IDC_HPASSWORD));
+        SendDlgItemMessageW(dlg, IDC_HPASSWORD, EM_SETSEL, 0, -1);
+        return FALSE;
+    }
+    if (m == WM_COMMAND && LOWORD(wp) == IDOK) {
+        wchar_t w[512];
+        NetUrl u;
+        dlg_text8(dlg, IDC_HSERVER, g_dlgUrl, sizeof(g_dlgUrl));
+        if (!parse_url(g_dlgUrl, &u)) {
+            MessageBoxW(dlg, L"That doesn't look like a server address.\n\nExamples:\n  flim.fly.dev\n  localhost:8080",
+                        L"flim", MB_OK | MB_ICONWARNING);
+            SetFocus(GetDlgItem(dlg, IDC_HSERVER));
+            return TRUE;
+        }
+        if (!GetWindowTextLengthW(GetDlgItem(dlg, IDC_HPASSWORD))) {
+            MessageBoxW(dlg, L"Pick a session password.", L"flim", MB_OK | MB_ICONWARNING);
+            SetFocus(GetDlgItem(dlg, IDC_HPASSWORD));
+            return TRUE;
+        }
+        if (g_dlgOwnerMode && !GetWindowTextLengthW(GetDlgItem(dlg, IDC_HOWNER))) {
+            MessageBoxW(dlg, L"Enter the owner key.", L"flim", MB_OK | MB_ICONWARNING);
+            SetFocus(GetDlgItem(dlg, IDC_HOWNER));
+            return TRUE;
+        }
+        if (!dlg_take_name(dlg)) return TRUE;
+        dlg_text8(dlg, IDC_HPASSWORD, g_dlgPw, sizeof(g_dlgPw));
+        g_dlgOwner[0] = 0;
+        if (g_dlgOwnerMode) {
+            dlg_text8(dlg, IDC_HOWNER, g_dlgOwner, sizeof(g_dlgOwner));
+            flimcfg_set_secret(L"owner_key", g_dlgOwner);
+        }
+        GetDlgItemTextW(dlg, IDC_HSERVER, w, 512);
+        flimcfg_set(L"host_server", w);
+        EndDialog(dlg, IDOK);
+        return TRUE;
+    }
+    if (m == WM_COMMAND && LOWORD(wp) == IDCANCEL) { EndDialog(dlg, IDCANCEL); return TRUE; }
+    return FALSE;
+}
+
+// "You're hosting": session, link and password, with a Copy button.
+static INT_PTR CALLBACK hosted_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
+    (void)lp;
+    if (m == WM_INITDIALOG) {
+        wchar_t w[700];
+        EnterCriticalSection(&g_netTextLock);
+        MultiByteToWideChar(CP_UTF8, 0, g_hostedText, -1, w, 700);
+        LeaveCriticalSection(&g_netTextLock);
+        SetDlgItemTextW(dlg, IDC_HINFO, w);
+        SecureZeroMemory(w, sizeof(w));
+        SetDlgItemTextW(dlg, IDC_HNOTE, g_endsAt ? LIMIT_TEXTW : L"");
+        SetFocus(GetDlgItem(dlg, IDOK));
+        return FALSE;
+    }
+    if (m == WM_COMMAND && LOWORD(wp) == IDC_HCOPY) {
+        wchar_t w[700];
+        int n = GetDlgItemTextW(dlg, IDC_HINFO, w, 700);
+        if (OpenClipboard(dlg)) {
+            HGLOBAL g = GlobalAlloc(GMEM_MOVEABLE, (n + 1) * sizeof(wchar_t));
+            EmptyClipboard();
+            if (g) {
+                memcpy(GlobalLock(g), w, (n + 1) * sizeof(wchar_t));
+                GlobalUnlock(g);
+                if (!SetClipboardData(CF_UNICODETEXT, g)) GlobalFree(g);
+            }
+            CloseClipboard();
+            SetDlgItemTextW(dlg, IDC_HCOPY, L"Copied");
+        }
+        SecureZeroMemory(w, sizeof(w));
+        return TRUE;
+    }
+    if (m == WM_COMMAND && (LOWORD(wp) == IDOK || LOWORD(wp) == IDCANCEL)) { EndDialog(dlg, IDOK); return TRUE; }
     return FALSE;
 }
 
@@ -2506,15 +2777,35 @@ static void bar_clicked(HWND h) {
     int st = g_netState;
     HWND owner = g_mainForm ? g_mainForm : h;
     if (st == NET_ON || st == NET_CONNECTING) {
-        if (MessageBoxW(owner, L"Disconnect from the flim server?\n\n"
+        if (MessageBoxW(owner, L"Disconnect from the flim session?\n\n"
                         L"Your FL project stays as it is; nothing is synced until you connect again.",
                         L"flim", MB_YESNO | MB_ICONQUESTION) == IDYES)
             net_disconnect();
         return;
     }
     if (DialogBoxParamW(g_hinst, MAKEINTRESOURCEW(IDD_CONNECT), owner, connect_proc, 0) == IDOK) {
-        net_connect(g_dlgUrl, g_dlgPw);
+        net_connect(g_dlgUrl, g_dlgPw, 0, NULL);
         SecureZeroMemory(g_dlgPw, sizeof(g_dlgPw));
+    }
+}
+
+// Main thread (Host's click; ownerMode = Ctrl was held).
+static void host_clicked(HWND h, int ownerMode) {
+    HWND owner = g_mainForm ? g_mainForm : h;
+    unsigned cs = cooldown_secs();
+    if (!bar_host_shown()) return;
+    if (cs && !ownerMode) {
+        wchar_t msg[200];
+        swprintf_s(msg, 200, L"COOLDOWN: you can host a session again in %u:%02u.\n\n"
+                   L"After a session's time runs out, everyone in it waits 5 minutes, so others get a turn.",
+                   cs / 60, cs % 60);
+        MessageBoxW(owner, msg, L"flim", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+    if (DialogBoxParamW(g_hinst, MAKEINTRESOURCEW(IDD_HOST), owner, host_proc, ownerMode) == IDOK) {
+        net_connect(g_dlgUrl, g_dlgPw, 1, g_dlgOwner);
+        SecureZeroMemory(g_dlgPw, sizeof(g_dlgPw));
+        SecureZeroMemory(g_dlgOwner, sizeof(g_dlgOwner));
     }
 }
 
@@ -2523,17 +2814,56 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     case WM_PAINT: bar_paint(h); return 0;
     case WM_ERASEBKGND: return 1;
     case WM_FLIM_STATUS: InvalidateRect(h, NULL, FALSE); return 0;
-    case WM_TIMER: if (wp == CUR_TIMER) cursor_update(); else bar_layout(); return 0;
+    case WM_FLIM_HOSTED: {
+        static int showing = 0;
+        if (showing || !g_hostedText[0]) return 0;
+        showing = 1;
+        DialogBoxParamW(g_hinst, MAKEINTRESOURCEW(IDD_HOSTED), g_mainForm ? g_mainForm : h, hosted_proc, 0);
+        showing = 0;
+        return 0;
+    }
+    case WM_FLIM_ALERT: {
+        wchar_t w[400];
+        EnterCriticalSection(&g_netTextLock);
+        int info;
+        MultiByteToWideChar(CP_UTF8, 0, g_alert, -1, w, 400);
+        g_alert[0] = 0;
+        info = g_alertInfo;
+        LeaveCriticalSection(&g_netTextLock);
+        if (!w[0]) return 0;
+        MessageBoxW(g_mainForm ? g_mainForm : h, w, L"flim", MB_OK | (info ? MB_ICONINFORMATION : MB_ICONWARNING));
+        return 0;
+    }
+    case WM_NOTIFY:
+        if (((NMHDR *)lp)->code == TTN_GETDISPINFOW) {
+            int cool = !(g_netState == NET_ON && g_endsAt);
+            ((NMTTDISPINFOW *)lp)->lpszText = (LPWSTR)(cool
+                ? L"Cooldown: after a session's time runs out, everyone in it waits 5 minutes before hosting or "
+                  L"joining another one.\n\n" LIMIT_TEXTW
+                : LIMIT_TEXTW);
+            return 0;
+        }
+        break;
+    case WM_TIMER:
+        if (wp == CUR_TIMER) cursor_update();
+        else {
+            wchar_t tt[48];
+            int cool, last;
+            bar_layout();
+            if (bar_timer_text(tt, 48, &cool, &last) || g_timerRc.right) InvalidateRect(h, NULL, FALSE);   // the countdown
+        }
+        return 0;
     case WM_SETCURSOR: {
         POINT p; GetCursorPos(&p); ScreenToClient(h, &p);
-        SetCursor(LoadCursor(NULL, p.x >= g_btnX && p.x < g_btnX + g_btnW ? IDC_HAND : IDC_ARROW));
+        SetCursor(LoadCursor(NULL, bar_btn_at(p.x) || (p.x >= bar_btns_end() && g_hostedText[0] && g_netState == NET_ON)
+                                   ? IDC_HAND : IDC_ARROW));
         return TRUE;
     }
     case WM_MOUSEMOVE: {
-        int x = (short)LOWORD(lp), on = x >= g_btnX && x < g_btnX + g_btnW;
+        int x = (short)LOWORD(lp), on = bar_btn_at(x);
         if (on != g_btnHover) { g_btnHover = on; InvalidateRect(h, NULL, FALSE); }
         if (on) { TRACKMOUSEEVENT t = { sizeof(t), TME_LEAVE, h, 0 }; TrackMouseEvent(&t); }
-        else if (x >= g_btnX + g_btnW && g_netState == NET_ON) {
+        else if (x >= bar_btns_end() && g_netState == NET_ON) {
             // over the status: what everyone is working on, in FL's hint bar (like FL's own controls)
             static char last[1200];
             char where[1200];
@@ -2543,15 +2873,22 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         return 0;
     }
     case WM_MOUSELEAVE: g_btnHover = 0; InvalidateRect(h, NULL, FALSE); return 0;
-    case WM_LBUTTONDOWN:
-        if ((short)LOWORD(lp) >= g_btnX && (short)LOWORD(lp) < g_btnX + g_btnW) { g_btnDown = 1; SetCapture(h); InvalidateRect(h, NULL, FALSE); }
+    case WM_LBUTTONDOWN: {
+        int x = (short)LOWORD(lp), b = bar_btn_at(x);
+        if (b) { g_btnDown = b; SetCapture(h); InvalidateRect(h, NULL, FALSE); }
+        else if (x >= bar_btns_end() && g_hostedText[0] && g_netState == NET_ON) PostMessageW(h, WM_FLIM_HOSTED, 0, 0);
         return 0;
+    }
     case WM_LBUTTONUP:
         if (g_btnDown) {
             RECT rc; POINT p = { (short)LOWORD(lp), (short)HIWORD(lp) };
-            GetClientRect(h, &rc); rc.left = g_btnX; rc.right = g_btnX + g_btnW;
+            int b = g_btnDown;
+            GetClientRect(h, &rc);
             g_btnDown = 0; g_btnHover = 0; ReleaseCapture(); InvalidateRect(h, NULL, FALSE);
-            if (PtInRect(&rc, p)) bar_clicked(h);
+            if (PtInRect(&rc, p) && bar_btn_at(p.x) == b) {
+                if (b == 1) bar_clicked(h);
+                else host_clicked(h, GetKeyState(VK_CONTROL) < 0);
+            }
         }
         return 0;
     }
@@ -2597,6 +2934,23 @@ static void ui_create(void) {
     bar_layout();
     SetTimer(g_netBar, 1, 1000, NULL);       // follow FL's window resizes
     SetTimer(g_netBar, CUR_TIMER, CUR_TIMER_MS, NULL);   // other people's arrows follow our scroll / zoom
+    {   // tooltip over the timer (its rect follows the paint)
+        INITCOMMONCONTROLSEX ic = { sizeof(ic), ICC_WIN95_CLASSES };
+        TOOLINFOW ti;
+        InitCommonControlsEx(&ic);
+        g_tip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+                                CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, g_netBar, NULL, g_hinst, NULL);
+        if (g_tip) {
+            memset(&ti, 0, sizeof(ti));
+            ti.cbSize = TTTOOLINFOW_V2_SIZE; ti.uFlags = TTF_SUBCLASS; ti.hwnd = g_netBar; ti.uId = 1;
+            ti.lpszText = LPSTR_TEXTCALLBACKW;
+            SendMessageW(g_tip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+            SendMessageW(g_tip, TTM_SETMAXTIPWIDTH, 0, 320);
+            SendMessageW(g_tip, TTM_SETDELAYTIME, TTDT_AUTOPOP, 20000);
+        }
+    }
+    if (g_hostedText[0]) PostMessageW(g_netBar, WM_FLIM_HOSTED, 0, 0);   // auto-connect was quicker than FL's UI
+    if (g_alert[0]) PostMessageW(g_netBar, WM_FLIM_ALERT, 0, 0);
     {
         RECT b; GetWindowRect(g_netBar, &b);
         logmsg("UI net bar %p in toolbar row %p at %ld,%ld %ldx%ld (bg %06lx)", (void *)g_netBar, (void *)row,
@@ -4500,6 +4854,67 @@ static void apply_plug_full(const char *m) {
     logmsg("PLUG full state received: leader has %d channels, %d units queued", nch, items);
 }
 
+// Errors that end the connection: status text + message box.
+static const struct { const char *code, *status, *alert; } k_netErrors[] = {
+    { "bad_password", "Wrong session password", "Wrong session password." },
+    { "no_session", "Session not found",
+      "That session isn't running.\n\nCheck the link, and ask the host whether they are still hosting." },
+    { "full", "All sessions are in use", "All sessions on this server are in use right now.\n\nTry again later." },
+    { "owner_required", "Server password needed",
+      "This server needs its password to start a session.\n\nCtrl+click Host and enter it (whoever runs the server has it)." },
+    { "in_use", "Session 00 is already running", "Session 00 is already running." },
+    { "bad_owner", "Wrong owner key", "Wrong owner key." },
+    { "too_many_attempts", "Too many wrong passwords",
+      "Too many wrong passwords from this computer.\n\nWait 10 minutes, then try again." },
+    { "id_in_use", "Already in this session", "You are already in this session (from another FL?)." },
+    { "session_full", "Session is full", "That session already has 8 people." },
+    { "too_many_connections", "Too many connections", "Too many flim connections from your network right now." },
+    { "bad_request", "Bad session password", "The session password must be 1 to 128 characters." },
+    { "idle", "Session closed: 5 minutes idle",
+      "The session was closed after 5 minutes without activity.\n\nHost again to start a new one." },
+};
+
+static void net_server_error(const char *m) {
+    char pat[48];
+    int i;
+    uint32_t ms = 0;
+    if ((jget_u32(m, "cooldown", &ms) || jget_u32(m, "retry_in", &ms)) && ms) g_coolUntil = GetTickCount64() + ms;
+    if (strstr(m, "\"code\":\"time_up\"")) {
+        strcpy_s(g_netErr, sizeof(g_netErr), "Time's up: session ended");
+        net_info("Time's up: this session's 15 minutes are over.\n\n"
+                 "Everything you made stays in your FL. You can host or join a session again in 5 minutes.");
+        return;
+    }
+    if (strstr(m, "\"code\":\"cooldown\"")) {
+        unsigned cs = cooldown_secs();
+        strcpy_s(g_netErr, sizeof(g_netErr), "Cooldown");
+        net_info("COOLDOWN: you can host or join a session again in %u:%02u.\n\n"
+                 "After a session's time runs out, everyone in it waits 5 minutes, so others get a turn.", cs / 60, cs % 60);
+        return;
+    }
+    for (i = 0; i < (int)(sizeof(k_netErrors) / sizeof(k_netErrors[0])); i++) {
+        sprintf_s(pat, sizeof(pat), "\"code\":\"%s\"", k_netErrors[i].code);
+        if (strstr(m, pat)) {
+            strcpy_s(g_netErr, sizeof(g_netErr), k_netErrors[i].status);
+            net_alert("%s", k_netErrors[i].alert);
+            return;
+        }
+    }
+}
+
+// Hosting and welcomed: remember session + link + password (clicking the status shows them
+// again) and show them.
+static void hosted_ready(void) {
+    char link[400];
+    session_link(&g_netUrl, g_session, link, sizeof(link));
+    EnterCriticalSection(&g_netTextLock);
+    sprintf_s(g_hostedText, sizeof(g_hostedText), "Session: %s\r\nLink: %s\r\nPassword: %s", g_session, link, g_hostPw);
+    LeaveCriticalSection(&g_netTextLock);
+    SecureZeroMemory(g_hostPw, sizeof(g_hostPw));
+    logmsg("hosting session %s: %s", g_session, link);
+    if (g_netBar) PostMessageW(g_netBar, WM_FLIM_HOSTED, 0, 0);
+}
+
 static void handle_msg(const char *m) {
     uint32_t id, v;
     int unit, a, b;
@@ -4566,6 +4981,21 @@ static void handle_msg(const char *m) {
         // our own role is the first "role" field; later ones belong to the peers list
         const char *r = strstr(m, "\"role\":\"");
         g_isLeader = r && strncmp(r + 8, "leader", 6) == 0;
+        {   // our slot, and the session's key for the sample store
+            const char *q = strstr(m, "\"session\":\""), *b = strstr(m, "\"blob\":\"");
+            if (q && isdigit((unsigned char)q[11]) && isdigit((unsigned char)q[12]) && q[13] == '"') {
+                g_session[0] = q[11]; g_session[1] = q[12]; g_session[2] = 0;
+            }
+            sprintf_s(g_netShown, sizeof(g_netShown), "%s/%s", g_netRoot, g_session);
+            if (b) samples_key(b + 8);
+        }
+        {   // time limit: counted down in the bar; members get the note now, the host in the hosted dialog
+            uint32_t ms = 0;
+            jget_u32(m, "ends_in", &ms);
+            g_endsAt = ms ? GetTickCount64() + ms : 0;
+            if (ms && !g_hosting) net_info("%s", LIMIT_TEXT);
+        }
+        if (g_hosting && g_isLeader) hosted_ready();
         net_show_connected(m);
         if (!g_isLeader) ws_send("{\"t\":\"op\",\"op\":{\"kind\":\"state.req\"}}");
     } else if (strstr(m, "\"t\":\"op\"")) {
@@ -4593,10 +5023,11 @@ static void handle_msg(const char *m) {
         net_show_connected(m);
     } else if (strstr(m, "\"t\":\"error\"")) {
         logmsg("server: %.300s", m);
-        if (strstr(m, "\"code\":\"bad_password\"")) strcpy_s(g_netErr, sizeof(g_netErr), "Wrong password");
+        net_server_error(m);
     } else if (strstr(m, "\"t\":\"leader_left\"")) {
         logmsg("server: %.300s", m);
-        strcpy_s(g_netErr, sizeof(g_netErr), "The session leader left: session ended");
+        strcpy_s(g_netErr, sizeof(g_netErr), "The host left: session ended");
+        net_alert("The host left: the session ended.");
     }
 }
 
@@ -4638,7 +5069,7 @@ static PathMap *g_pmap;    static int g_npmap, g_cappmap;    // receiver: path i
 static char (*g_declined)[65]; static int g_ndeclined, g_capdeclined;   // "No" in the upload dialog
 static CRITICAL_SECTION g_sampleLock, g_outLock, g_inLock;                        // all of the above + the blob server address
 static NetUrl  g_blobUrl;
-static char    g_blobKey[65];                                // sha256 hex of the server password
+static char    g_blobKey[65];                                // the session's sample store key (welcome)
 static volatile LONG g_blobOn = 0;
 static int     g_noLocal = 0;                                // FLIM_SAMPLE_NOLOCAL=1 (tests): ignore local copies
 static OutItem *g_outHead, *g_outTail;
@@ -5561,11 +5992,21 @@ static DWORD WINAPI inThread(LPVOID p) {
     }
 }
 
-// Connected: where the blob store is (same server, same password).
-static void samples_connected(const NetUrl *u, const char *pw) {
+// Connected: where the blob store is (same server). Usable once the welcome brings the key.
+static void samples_connected(const NetUrl *u) {
     EnterCriticalSection(&g_sampleLock);
     g_blobUrl = *u;
-    sha_hex(pw, strlen(pw), g_blobKey);
+    g_blobKey[0] = 0;
+    InterlockedExchange(&g_blobOn, 0);
+    LeaveCriticalSection(&g_sampleLock);
+}
+// welcome: the session's key for the sample store (64 hex digits).
+static void samples_key(const char *hex) {
+    int i;
+    for (i = 0; i < 64; i++) if (!isxdigit((unsigned char)hex[i])) return;
+    EnterCriticalSection(&g_sampleLock);
+    memcpy(g_blobKey, hex, 64);
+    g_blobKey[64] = 0;
     InterlockedExchange(&g_blobOn, 1);
     LeaveCriticalSection(&g_sampleLock);
 }
@@ -5585,13 +6026,12 @@ static void samples_disconnected(void) {
 }
 
 // ---------------- connection (one net thread per connect) ----------------
-// net_connect starts a thread that opens the socket, joins the room and runs the receive
-// loop. Each connect / disconnect bumps g_netGen; a thread whose generation is stale
+// net_connect starts a thread that opens the socket, hosts or joins a session and runs the
+// receive loop. Each connect / disconnect bumps g_netGen; a thread whose generation is stale
 // (the user disconnected or reconnected meanwhile) no longer touches the status.
-typedef struct { LONG gen; char url[512]; char pw[256]; } NetReq;
+typedef struct { LONG gen; int host; char url[512]; char pw[256]; char owner[256]; } NetReq;
 static volatile LONG g_netGen = 0;
 static volatile LONG g_pollStarted = 0;
-static char g_room[64] = "FLIM";
 
 static void json_esc(const char *in, char *out, int cap) {
     int o = 0;
@@ -5608,6 +6048,10 @@ static void json_esc(const char *in, char *out, int cap) {
 static void net_reset(void) {
     EnterCriticalSection(&g_netTextLock);
     g_nfocus = 0;                                         // where the others were: belongs to the session
+    g_session[0] = 0;
+    g_endsAt = 0;
+    SecureZeroMemory(g_hostedText, sizeof(g_hostedText));
+    SecureZeroMemory(g_hostPw, sizeof(g_hostPw));
     LeaveCriticalSection(&g_netTextLock);
     int i;
     InterlockedExchange(&g_isLeader, 0);
@@ -5624,11 +6068,15 @@ static DWORD WINAPI netThread(LPVOID p) {
     NetReq *r = (NetReq *)p;
     NetUrl u;
     NetConn c;
-    char err[200], name[2 * sizeof(g_myName)], pw[600], hello[1024];
+    char err[200], name[2 * sizeof(g_myName)], pw[600], own[600], hello[2048], sess[4] = "";
     unsigned char *buf = NULL;
     DWORD cap = 0, len = 0;
 
-    if (!parse_url(r->url, &u)) { net_status(NET_ERR, "Bad server address"); goto done; }
+    if (r->host ? !parse_url(r->url, &u) : !parse_link(r->url, &u, sess)) {
+        net_status(NET_ERR, r->host ? "Bad server address" : "Bad session link");
+        goto done;
+    }
+    url_root(&u);
     logmsg("NET connecting to %s (%s, port %u)", r->url, u.secure ? "wss" : "ws", u.port);
     if (!ws_open(&u, &c, err, sizeof(err))) {
         logmsg("NET connect to %s failed: %s", r->url, err);
@@ -5643,19 +6091,35 @@ static DWORD WINAPI netThread(LPVOID p) {
     }
     g_ws = c.ws;
     strcpy_s(g_netShown, sizeof(g_netShown), u.shown);
+    strcpy_s(g_netRoot, sizeof(g_netRoot), u.shown);
+    g_netUrl = u;
     g_netErr[0] = 0;
+    InterlockedExchange(&g_hosting, r->host);
+    EnterCriticalSection(&g_netTextLock);
+    strcpy_s(g_hostPw, sizeof(g_hostPw), r->host ? r->pw : "");
+    LeaveCriticalSection(&g_netTextLock);
     LeaveCriticalSection(&g_sendLock);
-    samples_connected(&u, r->pw);
-    net_status(NET_CONNECTING, "Joining %s...", u.shown);
+    samples_connected(&u);
+    if (r->host) net_status(NET_CONNECTING, "Hosting on %s...", u.shown);
+    else net_status(NET_CONNECTING, "Joining %s/%s...", u.shown, sess);
 
     json_esc(g_myName, name, sizeof(name));
     json_esc(r->pw, pw, sizeof(pw));
-    sprintf_s(hello, sizeof(hello),
-        "{\"t\":\"join_room\",\"room\":\"%s\",\"password\":\"%s\",\"user\":{\"id\":\"%s\",\"name\":\"%s\"}}",
-        g_room, pw, g_myId, name);
+    if (r->host) {
+        json_esc(r->owner, own, sizeof(own));
+        sprintf_s(hello, sizeof(hello),
+            "{\"t\":\"host\",\"password\":\"%s\"%s%s%s,\"user\":{\"id\":\"%s\",\"name\":\"%s\"}}",
+            pw, own[0] ? ",\"owner\":\"" : "", own, own[0] ? "\"" : "", g_myId, name);
+        SecureZeroMemory(own, sizeof(own));
+        logmsg("hosting on %s%s as %s (%s)", u.shown, r->owner[0] ? " (owner: session 00)" : "", g_myName, g_myId);
+    } else {
+        sprintf_s(hello, sizeof(hello),
+            "{\"t\":\"join\",\"session\":\"%s\",\"password\":\"%s\",\"user\":{\"id\":\"%s\",\"name\":\"%s\"}}",
+            sess, pw, g_myId, name);
+        logmsg("joining session %s on %s as %s (%s)", sess, u.shown, g_myName, g_myId);
+    }
     ws_send(hello);
     SecureZeroMemory(hello, sizeof(hello)); SecureZeroMemory(pw, sizeof(pw));
-    logmsg("joining room %s as %s (%s)", g_room, g_myName, g_myId);
     if (!InterlockedExchange(&g_pollStarted, 1)) CreateThread(NULL, 0, pollThread, NULL, 0, NULL);
 
     for (;;) {
@@ -5694,12 +6158,14 @@ done:
     return 0;
 }
 
-static void net_connect(const char *url, const char *pw) {
+static void net_connect(const char *url, const char *pw, int host, const char *owner) {
     NetReq *r = (NetReq *)calloc(1, sizeof(NetReq));
     HANDLE th;
     r->gen = InterlockedIncrement(&g_netGen);
+    r->host = host;
     strncpy_s(r->url, sizeof(r->url), url, _TRUNCATE);
     strncpy_s(r->pw, sizeof(r->pw), pw ? pw : "", _TRUNCATE);
+    strncpy_s(r->owner, sizeof(r->owner), owner ? owner : "", _TRUNCATE);
     {
         NetUrl u;
         if (parse_url(url, &u)) net_status(NET_CONNECTING, "Connecting to %s...", u.shown);
@@ -5873,13 +6339,6 @@ static DWORD WINAPI engineMain(LPVOID p) {
         if (flim_sanitize_name(w, clean, FLIM_NAME_MAX + 1))
             WideCharToMultiByte(CP_UTF8, 0, clean, -1, g_myName, sizeof(g_myName), NULL, NULL);
         else sprintf_s(g_myName, sizeof(g_myName), "FL-%lu", GetCurrentProcessId());
-        if (GetEnvironmentVariableA("FLIM_ROOM", env, sizeof(env)) > 0) {
-            int i, o = 0;                               // room goes into JSON unescaped: keep it simple
-            for (i = 0; env[i] && o < (int)sizeof(g_room) - 1; i++)
-                if (isalnum((unsigned char)env[i]) || env[i] == '-' || env[i] == '_') g_room[o++] = env[i];
-            g_room[o] = 0;
-            if (!o) strcpy_s(g_room, sizeof(g_room), "FLIM");
-        }
         sprintf_s(g_myId, sizeof(g_myId), "fl-%lu-%u", GetCurrentProcessId(), (unsigned)rand());
         logmsg("I am %s (%s); not connected until Connect is clicked", g_myName, g_myId);
 
@@ -5890,9 +6349,12 @@ static DWORD WINAPI engineMain(LPVOID p) {
             else env[0] = 0;
         }
         if (env[0]) {
+            char own[256] = "", hv[8] = "";
+            int host = GetEnvironmentVariableA("FLIM_HOST", hv, sizeof(hv)) > 0 && hv[0] == '1';
             GetEnvironmentVariableA("FLIM_PASSWORD", pw, sizeof(pw));
-            net_connect(env, pw);
-            SecureZeroMemory(pw, sizeof(pw));
+            if (host) GetEnvironmentVariableA("FLIM_OWNER_KEY", own, sizeof(own));
+            net_connect(env, pw, host, own);
+            SecureZeroMemory(pw, sizeof(pw)); SecureZeroMemory(own, sizeof(own));
         }
     }
     // This thread installed the main-thread hooks, and Windows removes a hook when the

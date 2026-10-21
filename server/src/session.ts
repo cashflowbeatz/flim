@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { WebSocket } from "ws";
 import { LOCK_TTL_MS, Op, PeerInfo, Role, ServerMsg, UnitKey, UserInfo } from "./protocol";
 
@@ -6,6 +7,7 @@ export interface Client {
   user: UserInfo;
   role: Role;
   alive: boolean; // for ping/pong liveness
+  ip: string;
 }
 
 interface Lock {
@@ -17,9 +19,18 @@ export function send(ws: WebSocket, msg: ServerMsg): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
 }
 
+const sha = (v: string) => crypto.createHash("sha256").update(v, "utf8").digest();
+
+// One session = one slot. Everything a session holds (clients, locks, snapshot, ops, sample
+// files via blobKey) stays inside it: no message from one session ever reaches another.
 export class Session {
   readonly code: string;
+  readonly blobKey = crypto.randomBytes(32).toString("hex"); // sample store access (blobs.ts)
   leaderId: string;
+  lastActive = Date.now(); // any message from any member; idle sessions are closed
+  readonly endsAt: number | null; // time limit (null = none)
+  private pwHash: Buffer;
+  private ended = false;
   private clients = new Set<Client>();
   private locks = new Map<UnitKey, Lock>();
   private seq = 0;
@@ -27,11 +38,48 @@ export class Session {
   private epoch = 0;
   private onEmpty: () => void;
 
-  constructor(code: string, leader: Client, onEmpty: () => void) {
+  constructor(code: string, password: string, leader: Client, endsAt: number | null, onEmpty: () => void) {
     this.code = code;
+    this.endsAt = endsAt;
+    this.pwHash = sha(password);
     this.leaderId = leader.user.id;
     this.onEmpty = onEmpty;
     this.add(leader);
+  }
+
+  passwordOk(given: unknown): boolean {
+    return crypto.timingSafeEqual(sha(typeof given === "string" ? given : ""), this.pwHash);
+  }
+
+  hasUser(id: string): boolean {
+    for (const c of this.clients) if (c.user.id === id) return true;
+    return false;
+  }
+
+  touch(): void {
+    this.lastActive = Date.now();
+  }
+
+  ips(): string[] {
+    return [...new Set([...this.clients].map((c) => c.ip))];
+  }
+
+  // Close the session for everyone (idle / time limit): the slot is free again.
+  end(code: string, msg: string, cooldown?: number): void {
+    for (const c of this.clients) {
+      send(c.ws, { t: "error", code, msg, ...(cooldown ? { cooldown } : {}) });
+      c.ws.close(4002, code);
+    }
+    this.clients.clear();
+    this.locks.clear();
+    this.flp = null;
+    this.finish();
+  }
+
+  private finish(): void {
+    if (this.ended) return;
+    this.ended = true;
+    this.onEmpty();
   }
 
   get size(): number {
@@ -53,7 +101,10 @@ export class Session {
 
   add(client: Client): void {
     this.clients.add(client);
-    send(client.ws, { t: "welcome", session: this.code, role: client.role, you: client.user, peers: this.peers() });
+    send(client.ws, {
+      t: "welcome", session: this.code, role: client.role, you: client.user, peers: this.peers(), blob: this.blobKey,
+      ends_in: this.endsAt === null ? 0 : Math.max(1, this.endsAt - Date.now()),
+    });
     send(client.ws, { t: "snapshot", flp: this.flp, epoch: this.epoch });
     send(client.ws, { t: "lock_state", locks: [...this.locks].map(([key, l]) => ({ key, owner: l.owner })) });
     this.broadcast({ t: "presence", peers: this.peers() }, client);
@@ -156,7 +207,11 @@ export class Session {
       this.broadcast({ t: "presence", peers: this.peers() });
     }
 
-    if (this.clients.size === 0) this.onEmpty();
+    if (this.clients.size === 0) {
+      this.locks.clear();
+      this.flp = null;
+      this.finish();
+    }
   }
 
   allClients(): Client[] {

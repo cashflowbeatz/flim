@@ -14,6 +14,35 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 
 ---
 
+## ! PUBLIC TEST !
+
+**Try flim with a friend right now, no server needed.** There is a public test server at
+**`flim.fly.dev`** with 8 session slots.
+
+1. You both need **FL Studio 2025, build 25.2.3.5171** (Help > About) on Windows 10/11.
+2. Download `flim-client-win64.zip` from the [latest release](../../releases/latest), unzip it, and run
+   **`flim.exe`**. The first time, it asks for your FL Studio folder and a name.
+3. **One of you hosts:** in FL's top toolbar (next to the CPU / memory meters) click **Host**. The
+   server is already filled in (`flim.fly.dev`) and so is a random session password (change it if you
+   like). Click **Host**. flim shows your **session link** (e.g. `https://flim.fly.dev/03`) and the
+   **password**, with a **Copy** button. Send both to your friend.
+4. **The other joins:** click **Connect**, paste the link, enter the password, click **Connect**. Your
+   friend's FL now loads the host's project, and from then on you're making the same song.
+
+Rules of the public test:
+- **Sessions last 15 minutes**, so nobody hogs a slot. The time left is shown at the right end of
+  flim's toolbar. When it runs out, everyone is disconnected, and **you keep all progress in your
+  FL**: save it as usual.
+- After a session's time runs out, everyone who was in it waits a **5-minute cooldown** (shown as
+  `COOLDOWN: mm:ss`) before hosting or joining again.
+- A session where nobody does anything for 5 minutes is closed.
+- If all 8 slots are taken, Host tells you so. Try again a bit later.
+- Up to 8 people per session. If the host leaves, the session ends.
+
+Want no time limit? [Run your own server](#server): it's one `npm start`, and it has no limits.
+
+---
+
 ## How it works
 
 ```
@@ -31,7 +60,7 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
   your FL Studio installation is modified on disk.
 - **`flim_engine.dll`** (the engine) runs inside FL. It watches for local edits, sends them to the server,
   and applies everyone else's edits through FL's own internal functions, so FL's UI stays consistent.
-  It adds a **Connect** button to FL's top toolbar.
+  It adds **Connect** and **Host** buttons to FL's top toolbar.
 - **`flim-server`** is a small WebSocket relay. It puts edits in one order for everyone and gives out locks,
   so two people can't edit the same pattern or knob at the same moment. One person (or a server
   somewhere) runs it, and everyone connects to it.
@@ -95,11 +124,16 @@ at the same pattern or arrangement. The arrows can't be clicked and never get in
    - a **name** that the others will see (letters, digits, spaces, `- _ .`, up to 24 characters).
 3. FL Studio opens. In the top toolbar, to the right of the meters:
 
-   `[ Connect ]  ● Not connected`
+   `[ Connect ] [ Host ]  ● Not connected`
 
-4. Click **Connect** and enter the server's address and password (ask whoever runs the server).
-   The status turns green: `Connected to flim.example.com · leader · 2 people`.
-5. Make music together. Click **Disconnect** to leave.
+4. **To start a session**, click **Host**. Enter the server (e.g. `flim.fly.dev`) and a session
+   password (a random one is filled in; change it if you like), click **Host**. flim shows your
+   **session link** (e.g. `https://flim.fly.dev/03`) and the password, with a **Copy** button: send
+   both to the people you want to play with. Click the status text later to see them again.
+   If every session on the server is taken, you're told so; try again later.
+5. **To join**, click **Connect**, paste the session link and enter the password.
+   The status turns green: `Connected to flim.fly.dev/03 · member · 2 people`.
+6. Make music together. Click **Disconnect** to leave.
 
 ### Server
 Only one person needs to run this.
@@ -108,11 +142,11 @@ git clone https://github.com/fckwader/flim.git
 cd flim/server
 npm install
 npm run build
-FLIM_PASSWORD=pick-a-password npm start      # PowerShell: $env:FLIM_PASSWORD="pick-a-password"; npm start
+npm start
 ```
-The server listens on port **8080**. Give your friends your address and the password:
+The server listens on port **8080**. Whoever hosts enters its address in the Host dialog:
 - **Same network:** `ws://<your-LAN-IP>:8080`, e.g. `ws://192.168.1.20:8080`.
-- **Over the internet:** forward TCP port 8080 on your router to this PC and give them
+- **Over the internet:** forward TCP port 8080 on your router to this PC and use
   `ws://<your-public-IP>:8080`. Or put the server behind a reverse proxy with HTTPS and use `wss://`
   (see [Server details](#server-details)).
 - **Just testing on one PC:** `localhost:8080`.
@@ -122,17 +156,25 @@ The server listens on port **8080**. Give your friends your address and the pass
 ## Using flim
 
 ### Sessions
-- A server holds **one session**. The **first person to connect is the leader**.
+- A server you run yourself holds **one session** (`01`). The public test server `flim.fly.dev`
+  runs up to **8** at once (`01` to `08`). Every session has its own password, and sessions are fully
+  separate: nothing (edits, locks, projects, sample files) crosses from one to another.
+- Whoever **hosts** a session is its **leader**.
 - Anyone who joins later is a **member** and gets the leader's current project. It is saved as a copy, e.g.
   `Documents\flim\MySong_flim_1012_2130.flp`, and opened automatically.
 - When the leader opens another project, it is sent to everyone. Your original `.flp` files are never
   saved over: flim always works on `*_flim_MMDD_hhmm.flp` copies.
 - If the leader leaves, the session ends. The members keep their copy of the project.
+- **On `flim.fly.dev` only** (testing, so nobody hogs a slot): sessions last at most **15 minutes**;
+  the time left is shown at the right end of flim's toolbar. When it runs out, everyone is
+  disconnected and keeps their FL project exactly as it is. Everyone who was in it then has a
+  **5-minute cooldown** (shown as `COOLDOWN: mm:ss`) before hosting or joining another session. A
+  session where nobody does anything for **5 minutes** is closed, so its slot is free again.
 
 ### Samples
 The samples your channels, audio clips and sample-based plugins use are sent along automatically,
 both when the leader's project is sent and when someone loads a new sample during the session.
-- Each file is uploaded to the server **once**; the others download only the files they don't already
+- Each file is uploaded to the server **once per session**; the others download only the files they don't already
   have, into `Documents\flim\samples\`, and their copy of the project points at those files.
 - While that happens, the toolbar status shows *"Uploading samples: 12.3 / 40.0 MB"* (or *Downloading*).
   Your other edits wait until the upload is done, so they arrive in the right order.
@@ -156,12 +198,12 @@ both when the leader's project is sent and when someone loads a new sample durin
 
 ### Changing your settings
 Run `flim.exe --setup` to change your FL folder or name. You can also change your name in the
-Connect dialog.
+Connect and Host dialogs.
 
 ### Where flim keeps things
 | What | Where |
 |---|---|
-| Settings (FL folder, name, last address, password if "Remember" is ticked) | `%APPDATA%\flim\flim.ini`. The password is encrypted for your Windows user (DPAPI). |
+| Settings (FL folder, name, last session link and host server, password if "Remember" is ticked) | `%APPDATA%\flim\flim.ini`. Passwords are encrypted for your Windows user (DPAPI). |
 | Log (attach it to bug reports) | `%TEMP%\flim_engine.log` |
 | Project copies received from the leader | `Documents\flim\` |
 | Samples received from others (safe to delete when no session is running) | `Documents\flim\samples\` |
@@ -172,24 +214,34 @@ Connect dialog.
 
 See [`server/README.md`](server/README.md) for the protocol and options.
 
-- **Password:** set `FLIM_PASSWORD`. If it isn't set, the server lets in anyone who knows its address
-  (fine for testing on your own PC, not for a public server). A wrong password is rejected right away.
+- **Session:** your server holds one session (`01`), with no time limit. Whoever hosts picks its
+  password; joining needs the session link and that password.
+- **Server password:** set `FLIM_PASSWORD` and only someone who knows it can host (Ctrl+click
+  **Host** to enter it). Without it, anyone who knows the address can host. Wrong passwords are
+  rejected after a second; 8 wrong ones from one IP in 10 minutes block that IP for the rest of the
+  10 minutes.
+- **Limits:** 8 people per session, 12 connections per IP, and a cap on messages per second per
+  connection.
+- **Public mode** (`FLIM_PUBLIC=1`, what `flim.fly.dev` runs): 8 sessions plus the owner's `00`
+  (`FLIM_OWNER_KEY`), 15-minute sessions with a 5-minute cooldown and an idle timeout. See
+  [`server/README.md`](server/README.md).
 - **Port:** 8080 by default; set `PORT` to change it.
 - **Encryption:** the server speaks plain `ws://`. For `wss://`, put it behind any reverse proxy that
   handles HTTPS and WebSockets (Caddy, nginx, a cloud load balancer, ...) and forward to port 8080.
   The proxy must pass plain HTTP requests too (sample files use `/blob/...` on the same port) and allow
   large request bodies.
-- **Sample store:** sample files are kept on the server's disk under their SHA-256, in `FLIM_BLOB_DIR`
-  (default: the system temp folder). `FLIM_BLOB_STORE_MAX` caps the total (default 4 GB; the least
-  recently used files go first) and `FLIM_BLOB_FILE_MAX` a single file (default 2000 MB). It's only a
-  cache: anything missing is uploaded again by the next session that needs it.
+- **Sample store:** sample files are kept on the server's disk under their SHA-256, in a folder per
+  session under `FLIM_BLOB_DIR` (default: the system temp folder), deleted when the session ends.
+  `FLIM_BLOB_SESSION_MAX` caps one session (default 2500 MB; its least recently used files go first),
+  `FLIM_BLOB_STORE_MAX` all of them together (default 5 GB; uploads are refused above it) and
+  `FLIM_BLOB_FILE_MAX` a single file (default 2000 MB).
 - **Docker:** a `Dockerfile` is included:
   ```bash
   docker build -t flim-server server
   docker run -p 8080:8080 -e FLIM_PASSWORD=pick-a-password flim-server
   ```
 - **Health check:** `GET /health` answers `flim-server ok`.
-- Sessions live in memory only. Restarting the server ends the session; run a single instance.
+- Sessions live in memory only. Restarting the server ends all sessions; run a single instance.
 
 ---
 
@@ -205,18 +257,18 @@ default location, change `VCVARS` at the top of `build.bat`. Both files are plai
 and use only DLLs that ship with Windows.
 
 ### Developer shortcuts
-These environment variables are read by the engine and skip the Connect dialog:
+These environment variables are read by the engine and skip the Connect / Host dialogs:
 
 | Variable | Effect |
 |---|---|
-| `FLIM_AUTOCONNECT=<url>` | connect at startup (with `FLIM_PASSWORD=<pw>`) |
+| `FLIM_AUTOCONNECT=<session link>` | join at startup (with `FLIM_PASSWORD=<session password>`) |
+| `FLIM_HOST=1` | `FLIM_AUTOCONNECT` is a server address to host on instead (`FLIM_OWNER_KEY=<key>`: the server's password, or the owner key = slot `00` on a public server) |
 | `FLIM_NAME=<name>` | override the name from `flim.ini` (e.g. to run two FLs on one PC) |
-| `FLIM_ROOM=<room>` | use another session name on the same server (default `FLIM`) |
 | `FLIM_SAMPLE_NOLOCAL=1` | never use a local copy of a received sample, always download it (to test sample transfer on one PC) |
 
-`client\restart_test.ps1 [-Url localhost:8080] [-Password ...]` closes all FL instances, rebuilds, and
-starts two of them ("A" as leader, "B" as member) connected to a server, which is handy for testing sync
-on one machine.
+`client\restart_test.ps1 [-Url localhost:8080] [-OwnerKey <server password>] [-Slot 01] [-Password test]`
+closes all FL instances, rebuilds, and starts two of them: "A" hosts, "B" joins session `-Slot`.
+Handy for testing sync on one machine with a local server (`npm start` in `server/`).
 
 ---
 
@@ -231,7 +283,7 @@ client/                 the FL side (C, Win32)
   restart_test.ps1      dev loop: rebuild and start two connected FLs
   dev/                  reverse-engineering and test tools (not built or shipped)
 server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
-  src/                  server.ts (connections, password), session.ts (ordering, locks), protocol.ts,
+  src/                  server.ts (connections, slots, limits), session.ts (ordering, locks), protocol.ts,
                         blobs.ts (sample file store)
   Dockerfile            container image
 ```
@@ -245,7 +297,10 @@ server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
   speaks plain WebSocket. Use `ws://host:8080`.
 - **"Can't connect: not a flim server (HTTP …)"**: something answered at that address, but it isn't
   flim-server.
-- **"Wrong password"**: ask whoever runs the server. The password is the server's `FLIM_PASSWORD`.
+- **"Wrong session password"** / **"Session not found"**: ask the host for the link and password again;
+  the session may have ended (host left, or 5 minutes without activity).
+- **"All sessions are in use"**: the server's session(s) are taken. Try again later.
+- **"Server password needed"**: the server has `FLIM_PASSWORD` set. Ctrl+click **Host** and enter it.
 - **Something didn't sync or FL crashed**: please open an issue and attach `%TEMP%\flim_engine.log`.
 
 ---

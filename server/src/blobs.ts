@@ -1,47 +1,65 @@
-// Sample file store: content-addressed by sha256, so a file is uploaded once per server
-// lifetime no matter how many projects or channel states reference it. Plain HTTP next to
-// the WebSocket (same port, same password):
+// Sample file store: content-addressed by sha256, so a file is uploaded once per session no
+// matter how many projects or channel states reference it. Plain HTTP next to the WebSocket:
 //   POST /blobs/missing   body: sha256 hex per line  -> the ones not stored, one per line
 //   HEAD /blob/<sha256>   200 + content-length | 404
 //   GET  /blob/<sha256>   the file
 //   PUT  /blob/<sha256>   store (streamed to disk; rejected if the content doesn't hash to <sha256>)
-// Auth: header x-flim-key = sha256 hex of the server password (any value if no password is set).
-// Files live in FLIM_BLOB_DIR (default: <tmp>/flim-blobs). On Fly that disk resets when the
-// machine stops: fine, clients re-upload what is missing. Oldest files are evicted above
-// FLIM_BLOB_STORE_MAX bytes.
+// Auth: header x-flim-key = the session's blob key (sent in `welcome`). Every session has its own
+// folder under FLIM_BLOB_DIR (default: <tmp>/flim-blobs), deleted when the session ends: a
+// session can neither see, fetch nor evict another session's files. Per session the oldest files
+// are evicted above FLIM_BLOB_SESSION_MAX bytes; uploads are refused (507) while all sessions
+// together hold FLIM_BLOB_STORE_MAX. On Fly that disk resets when the machine stops: fine,
+// clients re-upload what is missing.
 import crypto from "crypto";
 import fs from "fs";
 import http from "http";
 import os from "os";
 import path from "path";
 
-const DIR = process.env.FLIM_BLOB_DIR ?? path.join(os.tmpdir(), "flim-blobs");
+const ROOT = process.env.FLIM_BLOB_DIR ?? path.join(os.tmpdir(), "flim-blobs");
 const FILE_MAX = Number(process.env.FLIM_BLOB_FILE_MAX ?? 2000 * 1024 * 1024);
-const STORE_MAX = Number(process.env.FLIM_BLOB_STORE_MAX ?? 4 * 1024 * 1024 * 1024);
+const SESSION_MAX = Number(process.env.FLIM_BLOB_SESSION_MAX ?? 2500 * 1024 * 1024);
+const STORE_MAX = Number(process.env.FLIM_BLOB_STORE_MAX ?? 5 * 1024 * 1024 * 1024);
 const HEX = /^[0-9a-f]{64}$/;
 
-fs.mkdirSync(DIR, { recursive: true });
+// Nothing survives a restart: sessions don't either.
+fs.rmSync(ROOT, { recursive: true, force: true });
+fs.mkdirSync(ROOT, { recursive: true });
 
-function keyOk(req: http.IncomingMessage, password: string): boolean {
-  if (!password) return true;
-  const want = crypto.createHash("sha256").update(password, "utf8").digest("hex");
-  const got = String(req.headers["x-flim-key"] ?? "");
-  const h = (v: string) => crypto.createHash("sha256").update(v).digest();
-  return crypto.timingSafeEqual(h(got), h(want));
+// The session's folder. Named by a hash of its key, so it can't be guessed from anything sent.
+export function blobDir(blobKey: string): string {
+  return path.join(ROOT, crypto.createHash("sha256").update(blobKey).digest("hex").slice(0, 32));
 }
 
-const file = (hex: string) => path.join(DIR, hex);
+// Session ended: its files go with it.
+export function dropBlobs(blobKey: string): void {
+  fs.rm(blobDir(blobKey), { recursive: true, force: true }, () => {});
+}
 
-function exists(hex: string): fs.Stats | null {
+function dirSize(dir: string): number {
+  let total = 0;
   try {
-    return fs.statSync(file(hex));
+    for (const name of fs.readdirSync(dir)) {
+      try {
+        total += fs.statSync(path.join(dir, name)).size;
+      } catch {
+        /* raced with a delete */
+      }
+    }
   } catch {
-    return null;
+    /* no folder yet */
   }
+  return total;
 }
 
-// Keep the store under STORE_MAX: drop the least recently used files.
-function evict(): void {
+function storeSize(): number {
+  let total = 0;
+  for (const d of fs.readdirSync(ROOT)) total += dirSize(path.join(ROOT, d));
+  return total;
+}
+
+// Keep one session's folder under SESSION_MAX: drop its least recently used files.
+function evict(DIR: string): void {
   let entries: { p: string; size: number; t: number }[] = [];
   for (const name of fs.readdirSync(DIR)) {
     if (!HEX.test(name)) continue;
@@ -53,10 +71,10 @@ function evict(): void {
     }
   }
   let total = entries.reduce((a, e) => a + e.size, 0);
-  if (total <= STORE_MAX) return;
+  if (total <= SESSION_MAX) return;
   entries = entries.sort((a, b) => a.t - b.t);
   for (const e of entries) {
-    if (total <= STORE_MAX) break;
+    if (total <= SESSION_MAX) break;
     try {
       fs.unlinkSync(e.p);
       total -= e.size;
@@ -83,18 +101,33 @@ function readBody(req: http.IncomingMessage, max: number): Promise<string | null
   });
 }
 
-// Returns true if the request was a blob request (handled).
-export function handleBlob(req: http.IncomingMessage, res: http.ServerResponse, password: string): boolean {
+// Returns true if the request was a blob request (handled). `sessionKeyOk` says whether the
+// x-flim-key belongs to a running session.
+export function handleBlob(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  sessionKeyOk: (key: string) => boolean,
+): boolean {
   const url = (req.url ?? "").split("?")[0];
   const m = /^\/blob\/([0-9a-f]{64})$/.exec(url);
   const isMissing = url === "/blobs/missing";
   if (!m && !isMissing) return false;
-  if (!keyOk(req, password)) {
+  const key = String(req.headers["x-flim-key"] ?? "");
+  if (!HEX.test(key) || !sessionKeyOk(key)) {
     res.writeHead(401);
     res.end();
     req.resume();
     return true;
   }
+  const DIR = blobDir(key);
+  const file = (hex: string) => path.join(DIR, hex);
+  const exists = (hex: string): fs.Stats | null => {
+    try {
+      return fs.statSync(file(hex));
+    } catch {
+      return null;
+    }
+  };
 
   if (isMissing) {
     if (req.method !== "POST") {
@@ -150,6 +183,14 @@ export function handleBlob(req: http.IncomingMessage, res: http.ServerResponse, 
       req.resume();
       return true;
     }
+    if (storeSize() + len > STORE_MAX) {
+      console.log(`[blob] store full: refused ${hex.slice(0, 12)} (${len} B)`);
+      res.writeHead(507);
+      res.end();
+      req.resume();
+      return true;
+    }
+    fs.mkdirSync(DIR, { recursive: true });
     const tmp = path.join(DIR, `.${hex}.${process.pid}.${Math.random().toString(36).slice(2)}`);
     const out = fs.createWriteStream(tmp);
     const hash = crypto.createHash("sha256");
@@ -179,13 +220,14 @@ export function handleBlob(req: http.IncomingMessage, res: http.ServerResponse, 
         console.log(`[blob] rejected ${hex.slice(0, 12)}: content does not match`);
         return fail(400);
       }
+      if (!sessionKeyOk(key)) return fail(410); // the session ended during the upload
       fs.rename(tmp, file(hex), (err) => {
         if (err) return fail(500);
         console.log(`[blob] stored ${hex.slice(0, 12)} (${got} B)`);
         res.writeHead(201);
         res.end();
         try {
-          evict();
+          evict(DIR);
         } catch {
           /* ignore */
         }
