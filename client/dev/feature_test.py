@@ -159,11 +159,110 @@ def t_layout(a, b, v):
               ('PASS' if ok else 'FAIL', nm + ' layout offsets', hex(hwnd), cls.value, tpp, W_, H, L, T, vs), flush=True)
 
 
+FL_DIRS = {'25.2.3.5171': r'C:\Program Files (x86)\Image-Line\FL Studio 2025',
+           '25.1.6.4997': r'C:\Program Files (x86)\Image-Line\FL4997'}
+MASK_FX = 48
+
+
+def plugin_state(p, v, obj, tag):
+    """the slot's plugin state as FL saves it (a preset file), or None"""
+    import os, tempfile
+    path = os.path.join(tempfile.gettempdir(), 'flim_ft_%s_%d.fst' % (tag, p.pid))
+    if os.path.exists(path): os.remove(path)
+    r = p.call(v.SAVEPRESET, p.mkstr(path), MASK_FX, obj, 1) & 0xffffffff
+    if r != 0 or not os.path.exists(path): return None
+    return open(path, 'rb').read()
+
+
+def t_fx(a, b, v):
+    """a mixer effect: replacing the plugin in a slot sends its whole state (plug.state)"""
+    vb = mk.V(b)
+    slot = lambda p, vv: p.q(mixrec(p, 1) + 0x1324)              # insert 1, slot 1
+    preset = FL_DIRS[v.build] + r'\Data\Patches\Plugin presets\Effects\Fruity Delay 3\Chorus.fst'
+    a.call(v.LOADPRESET, a.mkstr(preset), MASK_FX, slot(a, v), 0)
+    check('effect added in A', lambda: a.call(v.HASPLUGIN, slot(a, v)) & 0xff, 1, 3)
+    check('effect plugin in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 1, 15)
+    sa = plugin_state(a, v, slot(a, v), 'a')
+    ok, sb = wait_for(lambda: plugin_state(b, vb, slot(b, vb), 'b'), sa, 10)
+    diff = [i for i in range(min(len(sa or b''), len(sb or b''))) if sa[i] != sb[i]] if sa and isinstance(sb, bytes) else '-'
+    results.append(('effect state identical', ok))
+    print('%-4s %-34s %d bytes%s' % ('PASS' if ok else 'FAIL', 'effect state identical', len(sa or b''),
+          '' if ok else ', differs at %s' % ['%#x: %02x/%02x' % (i, sa[i], sb[i]) for i in diff[:4]] if diff != '-' else ''), flush=True)
+    a.call(v.LOADPRESET, a.mkstr(FL_DIRS[v.build] + r'\Data\System\(delete) effect.fst'), MASK_FX, slot(a, v), 0)
+    check('effect removed in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 0, 15)
+
+
+def t_reorder(a, b, v):
+    """move a channel up the way FL's Alt+Up does (selection + ReorderChannels mode 4)"""
+    before = [n for _, n in mk.chans(a)]
+    if len(before) < 3: results.append(('channel reorder', False)); print('FAIL channel reorder: < 3 channels'); return
+    items = a.q(a.q(a.g(v.CHANLIST)) + 8)
+    objs = [a.q(items + 8 * i) for i in range(len(before))]
+    sel = [a.r(o + v.CH_SELECTED, 1) for o in objs]
+    for i, o in enumerate(objs): a.w(o + v.CH_SELECTED, bytes([1 if i == 2 else 0]))
+    a.call(v.MOVECHAN, a.q(a.g(v.MOVEOBJ)), 4, a.d(a.g(v.MOVEARG)), 1)
+    for o, s in zip(objs, sel): a.w(o + v.CH_SELECTED, s)
+    want = before[:1] + [before[2], before[1]] + before[3:]
+    check('channel reorder in A', lambda: [n for _, n in mk.chans(a)], want, 3)
+    check('channel reorder in B', lambda: [n for _, n in mk.chans(b)], want, 15)
+
+
+def clip_list(p):
+    ca = p.q(arrangement(p) + 0x14)
+    n, data = p.d(ca + 0x14), p.q(ca + 8)
+    return [p.r(data + i * 0x50, 0x50) for i in range(n)]
+
+
+def t_clips(a, b, v):
+    """a pattern clip added to the playlist (clips.set)"""
+    rec = bytearray(0x50)
+    # FLP playlist item: position, pattern base 0x5000, item = base + pattern, length, track (499 - index),
+    # group, -, flags, -, start / end offset (-1 = whole pattern)
+    struct.pack_into('<IHHIHHHHIff', rec, 0, 192, 0x5000, 0x5000 + 1, 384, 499, 0, 0, 0x40, 0, -1.0, -1.0)
+    buf = a.alloc(0x50); a.w(buf, bytes(rec))
+    ca = a.q(arrangement(a) + 0x14)
+    a.cmd('call %x %d %d' % (a.q(a.q(ca) + 8), ca, buf))
+    a.call(v.PLREFRESH, a.q(a.g(v.PLFORM)))
+    check('clip added in A', lambda: len(clip_list(a)), 1, 3)
+    check('clip in B (position, pattern, length, track)', lambda: [c[:14].hex() for c in clip_list(b)], [c[:14].hex() for c in clip_list(a)], 15)
+
+
+def t_sample(a, b, v, fst=None):
+    """A loads a channel preset that uses a sample B doesn't have: B downloads it (plug.state + samples)"""
+    import os, re, tempfile
+    fst = fst or os.environ.get('FLIM_FT_FST')
+    if not fst: print('SKIP sample (set FLIM_FT_FST=<channel .fst using one of your own samples>)'); return
+    log = os.path.join(os.environ['TEMP'], 'flim_engine.log')
+    mark = os.path.getsize(log)
+    def tail():
+        with open(log, encoding='utf-8', errors='replace') as f: f.seek(mark); return f.read()
+    # a new channel with the preset in it: chan.add carries the channel's whole state (a preset over an
+    # existing channel only counts with real user input, or when it brings a new plugin)
+    lst = a.q(a.g(v.CHANLIST)); last = a.d(lst + 0x10)
+    a.call(v.ADDCHAN, 0xFFFFFFFFFFFFFFFF, 0, 1)
+    ch = a.q(a.q(lst + 8) + 8 * last)
+    a.call(v.LOADPRESET, a.mkstr(fst), 32, ch, 0)
+    pat = r'\[%d\] SAMPLES op lists (\d+) samples: (\d+) downloaded, (\d+) missing' % B
+    check('sample downloaded by B', lambda: [m for m in re.findall(pat, tail()) if m[1] != '0'][-1:],
+          [('1', '1', '0')], 30)
+    vb = mk.V(b)
+    chb = b.q(b.q(b.q(b.g(vb.CHANLIST)) + 8) + 8 * last)
+    path = os.path.join(tempfile.gettempdir(), 'flim_ft_ch_%d.fst' % b.pid)
+    def b_uses_download():
+        if os.path.exists(path): os.remove(path)
+        b.call(vb.SAVEPRESET, b.mkstr(path), 32, chb, 1)
+        return os.path.exists(path) and r'Documents\flim\samples'.encode('utf-16-le') in open(path, 'rb').read()
+    check("B's channel uses the downloaded file", b_uses_download, True, 15)
+    a.call(v.DELCHAN, last, 0, 3)
+
+
 STEPS = dict(params=t_params, mixer=t_mixer, channels=t_channels, patterns=t_patterns, song=t_song, patmarks=t_patmarks,
-             notedel=t_notedel, layout=t_layout)
+             notedel=t_notedel, layout=t_layout, fx=t_fx, reorder=t_reorder, clips=t_clips, sample=t_sample)
 
 if __name__ == '__main__':
     for pid in (A, B): fl.inject(pid)
+    for pid, h, c, t in fl.windows([A, B]):          # flim's own boxes ("you're hosting", notes)
+        if c == '#32770': fl.u32.PostMessageW(h, 0x111, 1, 0)
     a, b = fl.Probe(A), fl.Probe(B)
     v = mk.V(a)
     print('FL build', v.build, '| A', A, 'B', B, flush=True)

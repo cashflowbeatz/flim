@@ -301,6 +301,8 @@ server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
   the session may have ended (host left, or 5 minutes without activity).
 - **"All sessions are in use"**: the server's session(s) are taken. Try again later.
 - **"Server password needed"**: the server has `FLIM_PASSWORD` set. Ctrl+click **Host** and enter it.
+- **"Everyone in a session needs the same FL Studio build"**: the host's FL build differs from yours.
+  See [Other FL Studio builds](#other-fl-studio-builds).
 - **Something didn't sync or FL crashed**: please open an issue and attach `%TEMP%\flim_engine.log`.
 
 ---
@@ -313,9 +315,11 @@ update. So flim keeps a table for each FL build it knows. Check yours under **He
 | Build | Status |
 |---|---|
 | **25.2.3.5171** | The main build. Everything is tested on it. |
-| **25.1.6.4997** | Works: the automated feature test passes, as on 25.2.3.5171. Not tested on it yet: plugin state, reordering channels, playlist clips, sample transfer. |
+| **25.1.6.4997** | Works: the automated feature test passes, as on 25.2.3.5171 (knobs, mixer, channels and their order, plugins, patterns and pattern operations, notes, playlist clips, markers, time signatures, sample transfer). |
 
-**Everyone in a session should use the same build.**
+**Everyone in a session needs the same build.** FL Studio can't safely load projects and plugin
+states from a newer FL, and both travel in a session. So if the host's build differs from yours,
+flim doesn't load the host's project: it tells you and leaves the session.
 
 **Your build isn't listed?** `flim.exe` tells you when it starts. If you start FL anyway, flim stays
 off and FL runs as usual: nothing breaks, it just doesn't sync. What you can do:

@@ -7,8 +7,9 @@
 #   -Minimized   start both FLs minimized (they don't take over the screen)
 #   -NoLocalB    B ignores local copies of samples (FLIM_SAMPLE_NOLOCAL): tests sample transfer on one PC
 #   -FlDir <dir> start the FL in that folder instead of flim.ini's (e.g. another FL build)
+#   -FlDirB <dir> B uses this FL instead (mixed-build session; default: same as A)
 param([string]$Url = "localhost:8080", [string]$OwnerKey = "", [string]$Slot = "01", [string]$Password = "test",
-      [switch]$Minimized, [switch]$NoLocalB, [string]$FlDir = "")
+      [switch]$Minimized, [switch]$NoLocalB, [string]$FlDir = "", [string]$FlDirB = "")
 Stop-Process -Name FL64 -Force -ErrorAction SilentlyContinue
 Start-Sleep 2
 $r = cmd /c "$PSScriptRoot\build.bat 2>&1"
@@ -24,5 +25,6 @@ $env:FLIM_NAME = "A"; Start-Process @sp
 Start-Sleep 12
 if ($NoLocalB) { $env:FLIM_SAMPLE_NOLOCAL = "1" }
 $env:FLIM_AUTOCONNECT = "$($Url.TrimEnd('/'))/$Slot"; $env:FLIM_HOST = ""; $env:FLIM_OWNER_KEY = ""
+if ($FlDirB) { $sp.ArgumentList = @("--fl-dir", "`"$FlDirB`"") }
 $env:FLIM_NAME = "B"; Start-Process @sp
 "build ok, launched A (hosts) and B -> $Url/$Slot"

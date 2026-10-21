@@ -290,6 +290,7 @@ static int int_after(const char *p, const char *end, const char *key, int *out);
 static void ws_send(const char *msg);
 static void ws_send_samples(char *msg, const unsigned char *blob, size_t n);
 static void samples_rewrite(unsigned char **d, size_t *n);
+static int flp_other_build(const unsigned char *d, size_t n, char *theirs, char *mine);
 
 typedef struct {
     uint32_t id;
@@ -3459,6 +3460,19 @@ static void on_project_load(const char *m) {
     const char *e = strchr(dk, '"');
     if (!e) return;
     unsigned char *d = b64dec(dk, (size_t)(e - dk), &n);
+    {
+        char theirs[32], mine[32];
+        if (flp_other_build(d, n, theirs, mine)) {
+            logmsg("PROJECT made with FL %s, this is %s: not loaded, leaving the session", theirs, mine);
+            free(d);
+            net_disconnect();
+            net_status(NET_ERR, "Host has another FL build (%s)", theirs);
+            net_alert("Everyone in a session needs the same FL Studio build.\n\n"
+                      "The host has %s, you have %s, so flim left the session. Use the same FL build, "
+                      "or have someone with your build host.", theirs, mine);
+            return;
+        }
+    }
     samples_rewrite(&d, &n);
     if (name[0]) {
         DWORD k = GetEnvironmentVariableW(L"USERPROFILE", dir, MAX_PATH);
@@ -5775,6 +5789,47 @@ static void samples_rewrite(unsigned char **d, size_t *n) {
     free(*d);
     *d = c.o;
     *n = c.n;
+}
+
+// ---- same FL build for everyone ----
+// An older FL asks "continue loading anyway?" in the middle of loading a project or preset saved
+// by a newer FL (25.1: its own Yes / No / Get latest version box), and "Yes" there, inside a load
+// flim makes, crashes FL (25.1.6.4997: a double free right after it; FL's own File > Open
+// survives). Marking the data with the older version doesn't help: FL then calls the newer data
+// invalid. Projects go leader -> member, but plugin / channel states go both ways, so a session
+// needs one FL build. The leader's project carries the leader's (FLP event 199): a member with a
+// different build doesn't load it, says why and leaves.
+#define EV_FL_VERSION 199
+
+// a.b.c.d compared numerically: <0, 0, >0
+static int ver_cmp(const char *x, const char *y) {
+    int i;
+    for (i = 0; i < 4; i++) {
+        long a = strtol(x, (char **)&x, 10), b = strtol(y, (char **)&y, 10);
+        if (a != b) return a < b ? -1 : 1;
+        if (*x == '.') x++;
+        if (*y == '.') y++;
+    }
+    return 0;
+}
+
+static int version_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
+    char *out = (char *)ctx;
+    (void)at; (void)end;
+    if (id != EV_FL_VERSION) return 1;
+    if (n && !p[n - 1]) n--;
+    if (n > 31) n = 31;
+    memcpy(out, p, n);
+    out[n] = 0;
+    return 0;                                   // found: stop
+}
+
+// The FL version an .flp image was saved with ("" if none). 1 if it isn't this FL's.
+static int flp_other_build(const unsigned char *d, size_t n, char *theirs, char *mine) {
+    theirs[0] = 0;
+    WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL);
+    flp_walk(d, n, version_cb, theirs);
+    return theirs[0] && ver_cmp(theirs, mine) != 0;
 }
 
 // ---- blob store (HTTP) ----
