@@ -6,8 +6,9 @@
 # -Password = the session password.
 #   -Minimized   start both FLs minimized (they don't take over the screen)
 #   -NoLocalB    B ignores local copies of samples (FLIM_SAMPLE_NOLOCAL): tests sample transfer on one PC
+#   -FlDir <dir> start the FL in that folder instead of flim.ini's (e.g. another FL build)
 param([string]$Url = "localhost:8080", [string]$OwnerKey = "", [string]$Slot = "01", [string]$Password = "test",
-      [switch]$Minimized, [switch]$NoLocalB)
+      [switch]$Minimized, [switch]$NoLocalB, [string]$FlDir = "")
 Stop-Process -Name FL64 -Force -ErrorAction SilentlyContinue
 Start-Sleep 2
 $r = cmd /c "$PSScriptRoot\build.bat 2>&1"
@@ -15,11 +16,13 @@ if ($LASTEXITCODE -ne 0) { $r; exit 1 }
 Remove-Item "$env:TEMP\flim_engine.log" -ErrorAction SilentlyContinue
 $exe = "$PSScriptRoot\out\flim.exe"
 $style = if ($Minimized) { "Minimized" } else { "Normal" }
+$sp = @{ FilePath = $exe; WorkingDirectory = (Split-Path $exe); WindowStyle = $style }
+if ($FlDir) { $sp.ArgumentList = @("--fl-dir", "`"$FlDir`"") }
 $env:FLIM_PASSWORD = $Password
 $env:FLIM_AUTOCONNECT = $Url; $env:FLIM_HOST = "1"; $env:FLIM_OWNER_KEY = $OwnerKey
-$env:FLIM_NAME = "A"; Start-Process $exe -WorkingDirectory (Split-Path $exe) -WindowStyle $style
+$env:FLIM_NAME = "A"; Start-Process @sp
 Start-Sleep 12
 if ($NoLocalB) { $env:FLIM_SAMPLE_NOLOCAL = "1" }
 $env:FLIM_AUTOCONNECT = "$($Url.TrimEnd('/'))/$Slot"; $env:FLIM_HOST = ""; $env:FLIM_OWNER_KEY = ""
-$env:FLIM_NAME = "B"; Start-Process $exe -WorkingDirectory (Split-Path $exe) -WindowStyle $style
+$env:FLIM_NAME = "B"; Start-Process @sp
 "build ok, launched A (hosts) and B -> $Url/$Slot"

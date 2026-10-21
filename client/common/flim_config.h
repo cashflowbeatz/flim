@@ -16,7 +16,9 @@
 
 #define FLIM_NAME_MAX  24
 #define FLIM_FL_MAJOR  25                   // FL Studio 2025 = file version 25.x
-#define FLIM_FL_BUILD  L"25.2.3.5171"       // the build the engine's FL addresses were taken from
+// FL builds the engine has an address table for (engine: k_flBuilds; keep both in sync)
+static const wchar_t *const FLIM_FL_BUILDS[] = { L"25.2.3.5171", L"25.1.6.4997" };
+#define FLIM_FL_BUILDS_TEXT L"25.2.3.5171, 25.1.6.4997"
 
 static int flimcfg_path(wchar_t *out, int cap) {
     wchar_t dir[MAX_PATH];

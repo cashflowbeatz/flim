@@ -23,6 +23,9 @@ If the Build Tools are installed somewhere else, change `VCVARS` at the top of `
 | `dev/` | reverse-engineering and test tools (not built or shipped), see [dev/README.md](dev/README.md) |
 
 ## FL build dependency
-The engine calls FL's internal functions and reads its data at addresses found for
-**FL Studio 25.2.3.5171** (`FLIM_FL_BUILD` in `common/flim_config.h`, addresses as `*_VA` defines
-at the top of `engine/flim_engine.c`). Supporting another build means finding those addresses again.
+The engine calls FL's internal functions and reads its data at addresses and object offsets that move
+between FL builds. They live in one table, `k_flBuilds` at the top of `engine/flim_engine.c`, one row
+per supported build (25.2.3.5171, the reference found by hand, and 25.1.6.4997); the engine picks the
+row matching the loaded `FLEngine_x64.dll` and stays off without one. The launcher's list is
+`FLIM_FL_BUILDS` in `common/flim_config.h`. Adding a build: see "Adding an FL build" in
+[dev/README.md](dev/README.md).

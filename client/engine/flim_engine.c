@@ -49,14 +49,186 @@
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "advapi32.lib")
+#pragma comment(lib, "version.lib")
 
 #define FL_MODULE    L"FLEngine_x64.dll"
 #define IMG_BASE     0x400000      // Ghidra image base; runtime addr = module + (VA - IMG_BASE)
-#define REC_RVA      0xb4e910      // f4e910: ProcessRECEvent(eventId, value, flags)
-#define MUTE_RVA     (0x1176be0 - IMG_BASE) // setTrackEnabled(track, enabled: 1/0, -1 toggle)
-#define MIXARR_VA    0x1496718     // global: pointer to mixer track array (stride 0x1474)
-#define MIXCNT_VA    0x14980b8     // global: pointer to mixer track count (int)
-#define MAINFORM_VA  0x1497368     // global: pointer to FL main form pointer
+
+// ---------------- FL builds ----------------
+// Everything flim uses inside FLEngine_x64.dll: function / global addresses (Ghidra VAs, image base
+// IMG_BASE) and the object offsets that differ between builds. One row per supported FL build; the
+// engine picks the row whose version matches the loaded FLEngine_x64.dll (no row = flim stays off).
+// 25.2.3.5171 is the reference, found by hand. Other rows are mapped from it with dev/sigscan.py
+// (function signatures, call sites, function order, globals by their references, offset drift) and
+// then tested in FL.
+typedef struct {
+    const wchar_t *build;
+    int msgbox;            // FL's message box: 1 = wrapper MSGBOX (text, flags, cb) -> MSGBOX_CORE (text, flags, 3, cb);
+                           // 2 = no wrapper: MSGBOX is the core itself (text, flags, cb)
+    uint64_t REC, MUTE, MIXARR, MIXCNT, MAINFORM, SAVEPRESET, LOADPRESET, HASPLUGIN, GETPLUGIN, INTFCLEAR, ADDCHAN, DELCHAN, RESOLVER, CHANLIST, MOVECHAN, MOVEOBJ, MOVEARG, CHANFILT, PATARR, NOTEARR, NOTEDEL, NOTELOCK, GRIDREFRESH, FLPROJ, MAINOBJ, SETPROJ, SAVEPROJ, BUSYBEGIN, BUSYEND, PROJNAME, ARRS, ARRCUR, PLFORM, PLREFRESH, HINT, MIXNAME, MIXCOLOR, UIUPDATE, MIXOBJ, SETROUTE, ROUTEUPD, PATNAME, PATCOLOR, PATREFRESH, PLTRACK, MARKADD, MARKTYPE, DYNSETLEN, MARKREFRESH, MARKSORT, PATLENUPD, PATMARKS, SONGLOCK, MODIFIED, TSNUM, TSDEN, TSSET, TSCTLS, MSGBOX, MSGBOX_CORE, PRFORM, CURPAT;
+    uint32_t CH_SELECTED, CH_GRID, FORM_BUSY, PAT_STRIDE, PLFORM_PATS, PL_MARKSEL, ED_TICKSPERPX, ED_HSCROLL, PR_GRID, PL_GRID, GRID_VSCROLL;
+} FlBuild;
+
+static const FlBuild k_flBuilds[] = {
+    {   // FL Studio 2025 (25.2.3.5171): the reference
+        .build = L"25.2.3.5171", .msgbox = 1,
+        .REC           = 0xf4e910,
+        .MUTE          = 0x1176be0,
+        .MIXARR        = 0x1496718,
+        .MIXCNT        = 0x14980b8,
+        .MAINFORM      = 0x1497368,
+        .SAVEPRESET    = 0xe71f20,
+        .LOADPRESET    = 0xe72110,
+        .HASPLUGIN     = 0x12204f0,
+        .GETPLUGIN     = 0x1222030,
+        .INTFCLEAR     = 0x41a770,
+        .ADDCHAN       = 0xf1ceb0,
+        .DELCHAN       = 0xf1d6c0,
+        .RESOLVER      = 0xf1e370,
+        .CHANLIST      = 0x1498140,
+        .MOVECHAN      = 0xf4a780,
+        .MOVEOBJ       = 0x1497460,
+        .MOVEARG       = 0x1499868,
+        .CHANFILT      = 0x14961d0,
+        .PATARR        = 0x1498920,
+        .NOTEARR       = 0x11cb490,
+        .NOTEDEL       = 0xf665d0,
+        .NOTELOCK      = 0x1497f30,
+        .GRIDREFRESH   = 0x11d04f0,
+        .FLPROJ        = 0x149a508,
+        .MAINOBJ       = 0x1496fb8,
+        .SETPROJ       = 0x10cb1e0,
+        .SAVEPROJ      = 0x10cdf80,
+        .BUSYBEGIN     = 0x10c1e70,
+        .BUSYEND       = 0x10c1ec0,
+        .PROJNAME      = 0x156f2a0,
+        .ARRS          = 0x18209d8,
+        .ARRCUR        = 0x148d1dc,
+        .PLFORM        = 0x14993e8,
+        .PLREFRESH     = 0xd40250,
+        .HINT          = 0x10e49f0,
+        .MIXNAME       = 0x11b9ce0,
+        .MIXCOLOR      = 0x11bcd60,
+        .UIUPDATE      = 0xb69db0,
+        .MIXOBJ        = 0x1498208,
+        .SETROUTE      = 0x119e180,
+        .ROUTEUPD      = 0x119d6d0,
+        .PATNAME       = 0x11cad70,
+        .PATCOLOR      = 0x11cb260,
+        .PATREFRESH    = 0xd9a9e0,
+        .PLTRACK       = 0x11dec90,
+        .MARKADD       = 0xf69960,
+        .MARKTYPE      = 0xf5bf38,
+        .DYNSETLEN     = 0x417fc0,
+        .MARKREFRESH   = 0xd4bc60,
+        .MARKSORT      = 0xf692d0,
+        .PATLENUPD     = 0x11cb550,
+        .PATMARKS      = 0x11ca910,
+        .SONGLOCK      = 0x1499b38,
+        .MODIFIED      = 0x10c7570,
+        .TSNUM         = 0x14997d0,
+        .TSDEN         = 0x1497bd0,
+        .TSSET         = 0x1255160,
+        .TSCTLS        = 0x12552d0,
+        .MSGBOX        = 0xa885e0,
+        .MSGBOX_CORE   = 0xa88560,
+        .PRFORM        = 0x1498380,
+        .CURPAT        = 0x1499de0,
+        .CH_SELECTED   = 0x35c,
+        .CH_GRID       = 0x7bc,
+        .FORM_BUSY     = 0x3344,
+        .PAT_STRIDE    = 0xc0,
+        .PLFORM_PATS   = 0xd00,
+        .PL_MARKSEL    = 0xd58,
+        .ED_TICKSPERPX = 0xaec,
+        .ED_HSCROLL    = 0xafc,
+        .PR_GRID       = 0xc40,
+        .PL_GRID       = 0xcf8,
+        .GRID_VSCROLL  = 0x3fc,
+    },
+    {   // FL Studio 2025 (25.1.6.4997): dev/sigscan.py from 5171, checked by hand where noted
+        .build = L"25.1.6.4997", .msgbox = 2,
+        .REC           = 0xf53b50,
+        .MUTE          = 0x117e3c0,
+        .MIXARR        = 0x149b8c0,
+        .MIXCNT        = 0x149d258,
+        .MAINFORM      = 0x149c510,
+        .SAVEPRESET    = 0xe723a0,
+        .LOADPRESET    = 0xe72590,
+        .HASPLUGIN     = 0x122aef0,
+        .GETPLUGIN     = 0x122ca30,
+        .INTFCLEAR     = 0x41a770,
+        .ADDCHAN       = 0xf1fd70,
+        .DELCHAN       = 0xf20580,
+        .RESOLVER      = 0xf21270,
+        .CHANLIST      = 0x149d2e0,
+        .MOVECHAN      = 0xf4fa00,
+        .MOVEOBJ       = 0x149c610,
+        .MOVEARG       = 0x149e9f0,
+        .CHANFILT      = 0x149b368,
+        .PATARR        = 0x149dab8,
+        .NOTEARR       = 0x11d66a0,
+        .NOTEDEL       = 0xf690d0,
+        .NOTELOCK      = 0x149d0d0,
+        .GRIDREFRESH   = 0x11db2a0,
+        .FLPROJ        = 0x149f690,
+        .MAINOBJ       = 0x149c158,
+        .SETPROJ       = 0x10c88f0,
+        .SAVEPROJ      = 0x10d00e0,
+        .BUSYBEGIN     = 0x10bf5f0,
+        .BUSYEND       = 0x10bf640,
+        .PROJNAME      = 0x1574240,
+        .ARRS          = 0x181ec10,
+        .ARRCUR        = 0x14924e4,
+        .PLFORM        = 0x149e580,
+        .PLREFRESH     = 0xddca90,
+        .HINT          = 0x10ec200,
+        .MIXNAME       = 0x11c5090,
+        .MIXCOLOR      = 0x11c80d0,
+        .UIUPDATE      = 0xbe9880,
+        .MIXOBJ        = 0x149d3a8,
+        .SETROUTE      = 0x11aa090,
+        .ROUTEUPD      = 0x11a95e0,
+        .PATNAME       = 0x11d5fa0,
+        .PATCOLOR      = 0x11d6490,
+        .PATREFRESH    = 0xe3bd20,
+        .PLTRACK       = 0x11e98e0,
+        .MARKADD       = 0xf6c3e0,
+        .MARKTYPE      = 0xf610c8,
+        .DYNSETLEN     = 0x417fc0,
+        .MARKREFRESH   = 0xde84b0,
+        .MARKSORT      = 0xf6bd50,
+        .PATLENUPD     = 0x11d6750,
+        .PATMARKS      = 0x11d5b50,
+        .SONGLOCK      = 0x149ecd0,
+        .MODIFIED      = 0x10c4c80,
+        .TSNUM         = 0x149e960,
+        .TSDEN         = 0x149cd70,
+        .TSSET         = 0x1260b70,
+        .TSCTLS        = 0x1260ce0,
+        .MSGBOX        = 0xa88000,
+        .MSGBOX_CORE   = 0x0,
+        .PRFORM        = 0x149d520,
+        .CURPAT        = 0x149ef68,
+        .CH_SELECTED   = 0x344,
+        .CH_GRID       = 0x78c,
+        .FORM_BUSY     = 0x3004,
+        .PAT_STRIDE    = 0xa4,
+        .PLFORM_PATS   = 0xcf8,
+        .PL_MARKSEL    = 0xd50,
+        .ED_TICKSPERPX = 0xae4,
+        .ED_HSCROLL    = 0xaf4,
+        .PR_GRID       = 0xc38,
+        .PL_GRID       = 0xcf0,
+        .GRID_VSCROLL  = 0x400,
+    },
+};
+static FlBuild g_fl;       // the row in use (engineMain)
+#define REC_RVA      (g_fl.REC - IMG_BASE)   // ProcessRECEvent(eventId, value, flags)
+#define MUTE_RVA (g_fl.MUTE - IMG_BASE) // setTrackEnabled(track, enabled: 1/0, -1 toggle)
+#define MIXARR_VA (g_fl.MIXARR)     // global: pointer to mixer track array (stride 0x1474)
+#define MIXCNT_VA (g_fl.MIXCNT)     // global: pointer to mixer track count (int)
+#define MAINFORM_VA (g_fl.MAINFORM)     // global: pointer to FL main form pointer
 #define MIX_STRIDE   0x1474
 #define MIX_ENABLED  0x18          // byte: 1 = enabled (unmuted)
 
@@ -148,27 +320,27 @@ static HHOOK  g_hook = NULL;
 static HINSTANCE g_hinst = NULL;
 
 // ---- plugin / structure sync (FL functions, Ghidra VAs) ----
-#define SAVEPRESET_VA 0xe71f20     // SavePresetFile(UnicodeString file, mask, obj, flags) -> 0 ok
-#define LOADPRESET_VA 0xe72110     // LoadPresetFile(UnicodeString file, mask, obj, 0) -> 0 ok (replaces plugin)
-#define HASPLUGIN_VA  0x12204f0    // HasPlugin(obj) -> bool
-#define GETPLUGIN_VA  0x1222030    // GetPlugin(obj, &intf) -> plugin type; intf is AddRef'd (must release!)
-#define INTFCLEAR_VA  0x41a770     // Delphi _IntfClear(&intf): nil it and Release
-#define ADDCHAN_VA    0xf1ceb0     // AddChannel(-1, 0, 1) -> new channel obj (appended)
-#define DELCHAN_VA    0xf1d6c0     // DeleteChannel(index, 0, flags); flags 1|2 = no confirmation dialog
+#define SAVEPRESET_VA (g_fl.SAVEPRESET)     // SavePresetFile(UnicodeString file, mask, obj, flags) -> 0 ok
+#define LOADPRESET_VA (g_fl.LOADPRESET)     // LoadPresetFile(UnicodeString file, mask, obj, 0) -> 0 ok (replaces plugin)
+#define HASPLUGIN_VA (g_fl.HASPLUGIN)    // HasPlugin(obj) -> bool
+#define GETPLUGIN_VA (g_fl.GETPLUGIN)    // GetPlugin(obj, &intf) -> plugin type; intf is AddRef'd (must release!)
+#define INTFCLEAR_VA (g_fl.INTFCLEAR)     // Delphi _IntfClear(&intf): nil it and Release
+#define ADDCHAN_VA (g_fl.ADDCHAN)     // AddChannel(-1, 0, 1) -> new channel obj (appended)
+#define DELCHAN_VA (g_fl.DELCHAN)     // DeleteChannel(index, 0, flags); flags 1|2 = no confirmation dialog
 #define DELCHAN_FLAGS 3            // bit 2 = "already confirmed" (FL's menu sets it after its own dialog)
-#define RESOLVER_VA   0xf1e370     // ResolveChannel(index, global, &obj): global 0 = index in the rack's filter group
-#define CHANLIST_VA   0x1498140    // global: pointer to channel list (items +8, count +0x10)
+#define RESOLVER_VA (g_fl.RESOLVER)     // ResolveChannel(index, global, &obj): global 0 = index in the rack's filter group
+#define CHANLIST_VA (g_fl.CHANLIST)    // global: pointer to channel list (items +8, count +0x10)
 #define MIX_SLOTS_OFF 0x1324       // mixer track: 10 effect slot object pointers
-#define MOVECHAN_VA   0xf4a780     // ReorderChannels(**MOVEOBJ, mode, **MOVEARG, flags): FL's Alt+Up/Down + sorts
-#define MOVEOBJ_VA    0x1497460    //   first arg (pointer global, deref twice)
-#define MOVEARG_VA    0x1499868    //   third arg (int, deref twice; -1 seen)
+#define MOVECHAN_VA (g_fl.MOVECHAN)     // ReorderChannels(**MOVEOBJ, mode, **MOVEARG, flags): FL's Alt+Up/Down + sorts
+#define MOVEOBJ_VA (g_fl.MOVEOBJ)    //   first arg (pointer global, deref twice)
+#define MOVEARG_VA (g_fl.MOVEARG)    //   third arg (int, deref twice; -1 seen)
 #define MOVE_UP       4            //   mode 4 = move selected up, 5 = down, 1..3 = sorts
 #define MOVE_FLAGS    1            //   bit 1 = close undo group; bit 2 = take selection from the rack UI (not wanted)
-#define CHANFILT_VA   0x14961d0    // global: channel list of the rack's current filter group (same layout)
-#define CH_SELECTED   0x35c        // channel object: selected byte (what ReorderChannels moves)
+#define CHANFILT_VA (g_fl.CHANFILT)    // global: channel list of the rack's current filter group (same layout)
+#define CH_SELECTED   (g_fl.CH_SELECTED)        // channel object: selected byte (what ReorderChannels moves)
 // ---- notes (per pattern: a flat array of 24-byte records, same layout as FLP event 224) ----
-#define PATARR_VA     0x1498920    // global: pointer to the static pattern table (stride 0xC0)
-#define PAT_STRIDE    0xC0
+#define PATARR_VA (g_fl.PATARR)    // global: pointer to the static pattern table (stride 0xC0)
+#define PAT_STRIDE    (g_fl.PAT_STRIDE)
 #define PAT_NOTES     0x28         // pattern record: note array object (NULL until the pattern has had notes)
 #define MAX_PAT       1000         // FL caps pattern numbers at 999
 #define NOTES_DATA    0x08         // note array: record pointer
@@ -176,29 +348,29 @@ static HINSTANCE g_hinst = NULL;
 #define NOTE_SIZE     24
 #define NOTE_SEL_OFS  0x13         // byte: low bits = note color, bit 0x80 = SELECTED (client-only, never synced)
 #define NOTE_SEL_BIT  0x80
-#define NOTEARR_VA    0x11cb490    // NoteArray(pattern, create) -> note array object
-#define NOTEDEL_VA    0xf665d0     // DeleteNote(arr, index, 0)
+#define NOTEARR_VA (g_fl.NOTEARR)    // NoteArray(pattern, create) -> note array object
+#define NOTEDEL_VA (g_fl.NOTEDEL)     // DeleteNote(arr, index, 0)
 #define NOTEADD_VSLOT 1            // arr->vmt[1](arr, &rec): add a note (vmt[2] fills a default record)
-#define NOTELOCK_VA   0x1497f30    // global: CRITICAL_SECTION* FL holds while editing notes (audio thread reads them)
-#define GRIDREFRESH_VA 0x11d04f0   // RefreshGrid(channel->grid at +0x7bc)
-#define CH_GRID       0x7bc
+#define NOTELOCK_VA (g_fl.NOTELOCK)    // global: CRITICAL_SECTION* FL holds while editing notes (audio thread reads them)
+#define GRIDREFRESH_VA (g_fl.GRIDREFRESH)   // RefreshGrid(channel->grid at +0x7bc)
+#define CH_GRID       (g_fl.CH_GRID)
 #define MASK_CHAN     32           // preset mask for channels (what FL's undo uses)
 #define MASK_FX       48           // preset mask for mixer slots (32 faults on a slot)
 
 // ---- project files (FL functions / globals, Ghidra VAs) ----
-#define FLPROJ_VA     0x149a508    // global -> holder; *(holder + 0x10) = TFLProject object
+#define FLPROJ_VA (g_fl.FLPROJ)    // global -> holder; *(holder + 0x10) = TFLProject object
 #define FLPROJ_LOAD_SLOT (0x38 / 8) // TFLProject vmt +0x38: LoadFile(self, path, flags) -> bool; flags bit 0 = "save changes?" prompt
-#define MAINOBJ_VA    0x1496fb8    // global -> var -> main form object (what FL's own open/save code passes)
-#define FORM_BUSY     0x3344       // main form: busy object, non-NULL while an .flp load runs
-#define SETPROJ_VA    0x10cb1e0    // SetProjectFile(form, path, path, addRecent): title, Ctrl+S target, recent list
-#define SAVEPROJ_VA   0x10cdf80    // SaveProjectTo(path, 0) -> bool: FL's project writer; current name unchanged
-#define BUSYBEGIN_VA  0x10c1e70    // FL's open handler wraps an .flp load in these two
-#define BUSYEND_VA    0x10c1ec0
-#define PROJNAME_VA   0x156f2a0    // UnicodeString global: current project file ('' = untitled)
+#define MAINOBJ_VA (g_fl.MAINOBJ)    // global -> var -> main form object (what FL's own open/save code passes)
+#define FORM_BUSY     (g_fl.FORM_BUSY)       // main form: busy object, non-NULL while an .flp load runs
+#define SETPROJ_VA (g_fl.SETPROJ)    // SetProjectFile(form, path, path, addRecent): title, Ctrl+S target, recent list
+#define SAVEPROJ_VA (g_fl.SAVEPROJ)    // SaveProjectTo(path, 0) -> bool: FL's project writer; current name unchanged
+#define BUSYBEGIN_VA (g_fl.BUSYBEGIN)    // FL's open handler wraps an .flp load in these two
+#define BUSYEND_VA (g_fl.BUSYEND)
+#define PROJNAME_VA (g_fl.PROJNAME)    // UnicodeString global: current project file ('' = untitled)
 #define WM_FL_OPENPROJ 0x566       // FL posts this to its main form to open a project (dialog, browser, drop)
 // ---- playlist clips (current arrangement) ----
-#define ARRS_VA       0x18209d8    // global -> arrangement pointer array (count as int64 at -8)
-#define ARRCUR_VA     0x148d1dc    // int global: current arrangement index
+#define ARRS_VA (g_fl.ARRS)    // global -> arrangement pointer array (count as int64 at -8)
+#define ARRCUR_VA (g_fl.ARRCUR)    // int global: current arrangement index
 #define ARR_CLIPS     0x14         // arrangement: clip array object (same array family as notes)
 #define CLIPS_DATA    0x08
 #define CLIPS_COUNT   0x14
@@ -209,9 +381,9 @@ static HINSTANCE g_hinst = NULL;
 #define CLIP_ID_OFS   0x20         // per-instance clip id (FL renumbers on add)
 #define CLIPADD_VSLOT   1          // arr->vmt[1](arr, &rec) -> index (kept sorted by position)
 #define CLIPPURGE_VSLOT 3          // arr->vmt[3](arr): drop records marked deleted, free their resources
-#define PLFORM_VA     0x14993e8    // global -> var -> playlist form
-#define PLREFRESH_VA  0xd40250     // RefreshPlaylist(form): what FL's clip-properties dialog calls after an edit
-#define HINT_VA       0x10e49f0    // ShowHint(form, UnicodeString text, 0): FL's hint bar (top left)
+#define PLFORM_VA (g_fl.PLFORM)    // global -> var -> playlist form
+#define PLREFRESH_VA (g_fl.PLREFRESH)     // RefreshPlaylist(form): what FL's clip-properties dialog calls after an edit
+#define HINT_VA (g_fl.HINT)    // ShowHint(form, UnicodeString text, 0): FL's hint bar (top left)
 #define PROJ_FX_MASS  3            // this many effects gone in one scan = project close, not a delete
 
 typedef int   (*presetfile_t)(const wchar_t *file, int mask, void *obj, int flags);
@@ -1632,12 +1804,12 @@ static void on_clips_set(const char *m) {
 // applied on the main thread with FL's own setters (the ones its Python API calls). Joins and
 // project loads carry all of this in the .flp, so only live edits travel. No locks (renames
 // are rare); if both sides change the same thing at once, the leader's value wins.
-#define MIXNAME_VA    0x11b9ce0    // SetMixerTrackName(track, name, 1): also renames linked playlist tracks
-#define MIXCOLOR_VA   0x11bcd60    // SetMixerTrackColor(track record, color)
-#define UIUPDATE_VA   0xb69db0     // UIUpdate(what, 0); 0x18 = mixer (what FL calls after a mixer color)
-#define MIXOBJ_VA     0x1498208    // global -> var -> mixer object (routing calls take it)
-#define SETROUTE_VA   0x119e180    // SetRoute(mixer, src, dst, on, 1) -> int
-#define ROUTEUPD_VA   0x119d6d0    // RoutingChanged(mixer): after route / send level edits
+#define MIXNAME_VA (g_fl.MIXNAME)    // SetMixerTrackName(track, name, 1): also renames linked playlist tracks
+#define MIXCOLOR_VA (g_fl.MIXCOLOR)    // SetMixerTrackColor(track record, color)
+#define UIUPDATE_VA (g_fl.UIUPDATE)     // UIUpdate(what, 0); 0x18 = mixer (what FL calls after a mixer color)
+#define MIXOBJ_VA (g_fl.MIXOBJ)    // global -> var -> mixer object (routing calls take it)
+#define SETROUTE_VA (g_fl.SETROUTE)    // SetRoute(mixer, src, dst, on, 1) -> int
+#define ROUTEUPD_VA (g_fl.ROUTEUPD)    // RoutingChanged(mixer): after route / send level edits
 #define MIX_NAME      0x0c         // mixer track: UnicodeString name ('' = "Insert N")
 #define MIX_COLOR     0x04
 #define MIX_ROUTE     0x2e4        // + dst*8: int send level (12800 = 100%); +4: byte, 1 = routed
@@ -1649,37 +1821,37 @@ static void on_clips_set(const char *m) {
 #define PAT_NAME      0x00         // pattern record: UnicodeString name ('' = "Pattern N")
 #define PAT_COLOR     0x08
 #define PAT_LENGTH    0x10         // int, -1 = automatic
-#define PATNAME_VA    0x11cad70    // SetPatternName(pattern, name)
-#define PATCOLOR_VA   0x11cb260    // SetPatternColor(pattern, color): also sets the "custom color" flag
-#define PATREFRESH_VA 0xd9a9e0     // what FL calls on (playlist form +0xd00) after a pattern rename
-#define PLFORM_PATS   0xd00
+#define PATNAME_VA (g_fl.PATNAME)    // SetPatternName(pattern, name)
+#define PATCOLOR_VA (g_fl.PATCOLOR)    // SetPatternColor(pattern, color): also sets the "custom color" flag
+#define PATREFRESH_VA (g_fl.PATREFRESH)     // what FL calls on (playlist form +0xd00) after a pattern rename
+#define PLFORM_PATS   (g_fl.PLFORM_PATS)
 #define PL_TRK_STRIDE 0x114        // arrangement object: playlist track t (1..500) at + t*0x114
 #define PL_TRK_NAME   0x24
 #define PL_TRK_COLOR  0x2c
 #define PL_TRK_MAX    500
-#define PLTRACK_VA    0x11dec90    // SetPlaylistTrack(arrangement, track, name, color)
+#define PLTRACK_VA (g_fl.PLTRACK)    // SetPlaylistTrack(arrangement, track, name, color)
 // playlist markers (per arrangement) and the project time signature
 #define ARR_MARKERS   0x21c48      // arrangement object: dynamic array of marker records (stride 0x34)
 #define MARK_SIZE     0x34         // +0 position, +4 action (8 = time signature), +8 UnicodeString name,
 #define MARK_TAIL     0x10         //   +0x10.. plain data (+0x10 numerator, +0x11 denominator)
 #define MARK_MAX      4096
-#define MARKADD_VA    0xf69960     // MarkerListAdd(&list, pos, name, action, num, den): appends a record
-#define MARKTYPE_VA   0xf5bf38     // global -> RTTI of the marker record array (for DynArraySetLength)
-#define DYNSETLEN_VA  0x417fc0     // Delphi DynArraySetLength(&arr, typeinfo, 1, newLength)
-#define MARKREFRESH_VA 0xd4bc60    // MarkersChanged(playlist form): sort, redraw, time signature from markers
-#define PL_MARKSEL    0xd58        // playlist form: index of the marker being edited (-1 = none)
+#define MARKADD_VA (g_fl.MARKADD)     // MarkerListAdd(&list, pos, name, action, num, den): appends a record
+#define MARKTYPE_VA (g_fl.MARKTYPE)     // global -> RTTI of the marker record array (for DynArraySetLength)
+#define DYNSETLEN_VA (g_fl.DYNSETLEN)     // Delphi DynArraySetLength(&arr, typeinfo, 1, newLength)
+#define MARKREFRESH_VA (g_fl.MARKREFRESH)    // MarkersChanged(playlist form): sort, redraw, time signature from markers
+#define PL_MARKSEL    (g_fl.PL_MARKSEL)        // playlist form: index of the marker being edited (-1 = none)
 // pattern markers (piano roll): same records, one list per pattern; a pattern's own time signature
 // (pattern menu > Time signature) is an action-8 marker at 0 in this list
 #define PAT_MARKERS   0x30         // pattern record: dynamic array of marker records
-#define MARKSORT_VA   0xf692d0     // MarkerListSort(&list): sort + number them (builds the pattern's +0x38 table)
-#define PATLENUPD_VA  0x11cb550    // UpdatePatternLength(pattern, 0): bar length from the pattern's time signature
-#define PATMARKS_VA   0x11ca910    // PatternMarkersChanged(pattern record): redraws the editors showing them
-#define SONGLOCK_VA   0x1499b38    // global: CRITICAL_SECTION* FL holds while editing markers / time signature
-#define MODIFIED_VA   0x10c7570    // SetModified(1): project changed
-#define TSNUM_VA      0x14997d0    // global -> int: project time signature numerator
-#define TSDEN_VA      0x1497bd0    //                                       denominator
-#define TSSET_VA      0x1255160    // TimeSigFromControls(main form): what the toolbar's time settings call
-#define TSCTLS_VA     0x12552d0    // TimeSigToControls(main form): controls from the two globals
+#define MARKSORT_VA (g_fl.MARKSORT)     // MarkerListSort(&list): sort + number them (builds the pattern's +0x38 table)
+#define PATLENUPD_VA (g_fl.PATLENUPD)    // UpdatePatternLength(pattern, 0): bar length from the pattern's time signature
+#define PATMARKS_VA (g_fl.PATMARKS)    // PatternMarkersChanged(pattern record): redraws the editors showing them
+#define SONGLOCK_VA (g_fl.SONGLOCK)    // global: CRITICAL_SECTION* FL holds while editing markers / time signature
+#define MODIFIED_VA (g_fl.MODIFIED)    // SetModified(1): project changed
+#define TSNUM_VA (g_fl.TSNUM)    // global -> int: project time signature numerator
+#define TSDEN_VA (g_fl.TSDEN)    //                                       denominator
+#define TSSET_VA (g_fl.TSSET)    // TimeSigFromControls(main form): what the toolbar's time settings call
+#define TSCTLS_VA (g_fl.TSCTLS)    // TimeSigToControls(main form): controls from the two globals
 #define META_ARR_MAX  8
 #define META_MAX      (META_ARR_MAX * 512)
 #define META_SCAN_MS  150
@@ -2984,7 +3156,7 @@ static void handle_msg(const char *m);
 
 static int closing_now(void) { return g_closingUntil && (LONG)(GetTickCount() - g_closingUntil) < 0; }
 
-static void fl_ustr(uint32_t va, wchar_t *out, int cap);
+static void fl_ustr(uint64_t va, wchar_t *out, int cap);
 static wchar_t g_projNameAtBegin[MAX_PATH];     // FL's project file when the project change began
 
 static void proj_begin(const char *why) {
@@ -3013,7 +3185,7 @@ static int fl_loading(void) {
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
 // Copy of one of FL's UnicodeString globals ('' if empty).
-static void fl_ustr(uint32_t va, wchar_t *out, int cap) {
+static void fl_ustr(uint64_t va, wchar_t *out, int cap) {
     out[0] = 0;
     __try {
         const wchar_t *s = *(const wchar_t **)(g_flBase + (va - IMG_BASE));
@@ -3366,10 +3538,12 @@ static const int PATOP_SLOT[PATOP_N] = {
     0x100,      // SplitByChannel(pats[])
 };
 #define PATOP_INSERT  4            // the one slot that takes a single pattern number
-#define MSGBOX_VA     0xa885e0     // FL's message box (text, flags, callback) -> button id (12 bytes, detoured)
-#define MSGBOX_CORE_VA 0xa88560    //   what it calls: (text, flags, 3, callback)
+#define MSGBOX_VA     (g_fl.MSGBOX)        // FL's message box (text, flags, callback) -> button id (detoured)
+#define MSGBOX_CORE_VA (g_fl.MSGBOX_CORE)  //   25.2: what it calls: (text, flags, 3, callback)
 typedef uint64_t (*patop_t)(void *self, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e);
 typedef int (*msgcore_t)(void *text, uint32_t flags, uint8_t kind, void *cb);
+typedef int (*msgbox_t)(void *text, uint32_t flags, void *cb);
+static msgbox_t g_mbOrig = NULL;          // 25.1: FL's message box, through a trampoline
 static patop_t g_patOrig[PATOP_N];
 static volatile LONG g_patRemote = 0;     // replaying a peer's op: don't send it back
 static volatile LONG g_mbAuto = 0;        // main thread: FL message boxes are answered without showing
@@ -3382,6 +3556,7 @@ static int msgbox_detour(void *text, uint32_t flags, void *cb) {
         logmsg("PATTERN op: answered FL's dialog (flags 0x%x)", flags);
         return (t == MB_YESNO || t == MB_YESNOCANCEL) ? IDYES : IDOK;
     }
+    if (g_mbOrig) return g_mbOrig(text, flags, cb);
     return ((msgcore_t)(g_flBase + (MSGBOX_CORE_VA - IMG_BASE)))(text, flags, 3, cb);
 }
 
@@ -3437,10 +3612,24 @@ static void patops_install(void) {
     char *proj = (char *)fl_project();
     if (!proj) { logmsg("PATTERN ops: no project object, not hooked"); return; }
     vmt = *(void ***)proj;
-    // the detour replaces the whole function: check it is the 12-byte prologue we know
-    if (memcmp(mb, "\x48\x83\xec\x28\xb0\x03\x4d\x89\xc1\x41\x89\xc0", 12) != 0) {
+    // 25.2: the detour replaces the whole 12-byte wrapper. 25.1 has no wrapper: the detour goes over
+    // the core's first 12 bytes (push r13 / rdi / rsi / rbx; sub rsp, 0x38; mov rbx, rcx - nothing
+    // position-dependent), which run from a trampoline that jumps back behind them.
+    // Either way: only over the exact bytes we know.
+    if (memcmp(mb, g_fl.msgbox == 2 ? "\x41\x55\x57\x56\x53\x48\x83\xec\x38\x48\x89\xcb"
+                                    : "\x48\x83\xec\x28\xb0\x03\x4d\x89\xc1\x41\x89\xc0", 12) != 0) {
         logmsg("PATTERN ops: FL's message box looks different, not hooked");
         return;
+    }
+    if (g_fl.msgbox == 2 && !g_mbOrig) {
+        unsigned char *t = (unsigned char *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        void *back = mb + 12;
+        if (!t) { logmsg("PATTERN ops: no trampoline memory, not hooked"); return; }
+        memcpy(t, mb, 12);
+        memcpy(t + 12, "\xFF\x25\x00\x00\x00\x00", 6);      // jmp [rip+0]
+        memcpy(t + 18, &back, 8);
+        FlushInstructionCache(GetCurrentProcess(), t, 26);
+        g_mbOrig = (msgbox_t)t;
     }
     if (!VirtualProtect(vmt + 0xd8 / 8, 8 * PATOP_N, PAGE_EXECUTE_READWRITE, &old)) { logmsg("PATTERN ops: vmt not writable"); return; }
     for (k = 0; k < PATOP_N; k++) {
@@ -3937,7 +4126,7 @@ static int focus_label(char *out, int cap) {
         int pat = 0;
         wchar_t nm[64] = L"";
         __try {
-            pat = **(int **)(g_flBase + (0x1499de0 - IMG_BASE));          // current pattern (what the piano roll edits)
+            pat = **(int **)(g_flBase + (g_fl.CURPAT - IMG_BASE));        // current pattern (what the piano roll edits)
             if (pat >= 1 && pat < MAX_PAT) {
                 const wchar_t *n = *(const wchar_t **)(pat_rec(pat) + PAT_NAME);
                 int k = ustr_len(n);
@@ -4021,15 +4210,15 @@ static void focus_summary(char *out, int cap, const char *sep) {
 // whatever their zoom, scroll or window size. Each peer is shown as a small arrow with their name
 // on top of our editor when it shows the same pattern / arrangement: click-through windows owned
 // by FL's main form, hidden when something else covers that point of the editor.
-#define PRFORM_VA     0x1498380    // global -> var -> piano roll form (NULL until first opened)
-#define CURPAT_VA     0x1499de0    // global -> int: current pattern (what the piano roll edits)
+#define PRFORM_VA (g_fl.PRFORM)    // global -> var -> piano roll form (NULL until first opened)
+#define CURPAT_VA (g_fl.CURPAT)    // global -> int: current pattern (what the piano roll edits)
 #define ED_HWND       0x45c        // editor form: window handle
-#define ED_TICKSPERPX 0xaec        //   double: ticks per pixel (horizontal zoom)
-#define ED_HSCROLL    0xafc        //   int: horizontal scroll, pixels
-#define PR_GRID       0xc40        // piano roll form: TEventPanel_PR (note grid)
-#define PL_GRID       0xcf8        // playlist form: TEventPanel_AU (clip grid)
+#define ED_TICKSPERPX (g_fl.ED_TICKSPERPX)        //   double: ticks per pixel (horizontal zoom)
+#define ED_HSCROLL    (g_fl.ED_HSCROLL)        //   int: horizontal scroll, pixels
+#define PR_GRID       (g_fl.PR_GRID)        // piano roll form: TEventPanel_PR (note grid)
+#define PL_GRID       (g_fl.PL_GRID)        // playlist form: TEventPanel_AU (clip grid)
 #define CTL_BOUNDS    0x90         // control: Left, Top, Width, Height in its form's client area
-#define GRID_VSCROLL  0x3fc        // grid panel: vertical scroll, pixels
+#define GRID_VSCROLL  (g_fl.GRID_VSCROLL)        // grid panel: vertical scroll, pixels
 #define PR_TOPKEY     0x418        // piano roll grid: y = (topkey - key) * keyh - vscroll
 #define PR_KEYH       0x520
 #define TRK_TOP       0xb4         // playlist track (arrangement + t * 0x114): top y and height, pixels
@@ -6265,6 +6454,26 @@ static DWORD WINAPI engineMain(LPVOID p) {
     int tries;
     for (tries = 0; tries < 600 && !fl; tries++) { fl = GetModuleHandleW(FL_MODULE); if (!fl) Sleep(50); }
     if (!fl) { logmsg("FLEngine module not found"); return 0; }
+    {   // which FL build: its row in k_flBuilds, or nothing (flim stays off, FL runs as usual)
+        wchar_t path[MAX_PATH], ver[64] = L"?";
+        DWORD h = 0, n;
+        int i;
+        GetModuleFileNameW(fl, path, MAX_PATH);
+        n = GetFileVersionInfoSizeW(path, &h);
+        if (n) {
+            void *buf = malloc(n);
+            VS_FIXEDFILEINFO *fi = NULL;
+            UINT len = 0;
+            if (buf && GetFileVersionInfoW(path, 0, n, buf) && VerQueryValueW(buf, L"\\", (void **)&fi, &len) && fi)
+                swprintf_s(ver, 64, L"%u.%u.%u.%u", HIWORD(fi->dwFileVersionMS), LOWORD(fi->dwFileVersionMS),
+                           HIWORD(fi->dwFileVersionLS), LOWORD(fi->dwFileVersionLS));
+            free(buf);
+        }
+        for (i = 0; i < (int)(sizeof(k_flBuilds) / sizeof(k_flBuilds[0])); i++)
+            if (wcscmp(k_flBuilds[i].build, ver) == 0) g_fl = k_flBuilds[i];
+        if (!g_fl.build) { logmsg("FL build %S is not supported: flim stays off", ver); return 0; }
+        logmsg("FL build %S: using its address table", ver);
+    }
     g_flBase = (char *)fl;
     g_rec = (rec_t)(g_flBase + REC_RVA);
     g_setEnabled = (setenabled_t)(g_flBase + MUTE_RVA);

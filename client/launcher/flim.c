@@ -157,14 +157,19 @@ static int launch(const wchar_t *flDir) {
 
     wcscpy_s(dirCopy, MAX_PATH * 2, flDir);
     check_fl_dir(dirCopy, why, 256, ver, 64);
-    if (wcscmp(ver, FLIM_FL_BUILD) != 0) {
-        wchar_t msg[768];
-        swprintf_s(msg, 768,
-            L"This FL Studio is version %s, but flim was built against %s.\n\n"
-            L"flim calls into FL at fixed addresses that change between FL builds, so with a "
-            L"different build FL will most likely crash or misbehave.\n\nStart anyway?",
-            ver, FLIM_FL_BUILD);
-        if (MessageBoxW(NULL, msg, L"flim", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return 1;
+    {
+        int i, known = 0;
+        for (i = 0; i < (int)(sizeof(FLIM_FL_BUILDS) / sizeof(FLIM_FL_BUILDS[0])); i++)
+            if (wcscmp(ver, FLIM_FL_BUILDS[i]) == 0) known = 1;
+        if (!known) {
+            wchar_t msg[768];
+            swprintf_s(msg, 768,
+                L"This FL Studio is version %s. flim supports these builds: %s.\n\n"
+                L"flim needs to know where things are inside each FL build, so with this one it stays "
+                L"off and FL runs as usual.\n\nStart FL Studio anyway?",
+                ver, FLIM_FL_BUILDS_TEXT);
+            if (MessageBoxW(NULL, msg, L"flim", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return 1;
+        }
     }
     swprintf_s(fl, MAX_PATH * 2, L"%s\\FL64.exe", flDir);
 
@@ -213,10 +218,13 @@ static int launch(const wchar_t *flDir) {
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
     int argc = 0, i, setup = 0;
     wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    wchar_t dir[MAX_PATH * 2];
+    wchar_t dir[MAX_PATH * 2], flDir[MAX_PATH * 2] = L"";
     (void)prev; (void)cmd; (void)show;
-    for (i = 1; i < argc; i++)
+    for (i = 1; i < argc; i++) {
         if (_wcsicmp(argv[i], L"--setup") == 0 || _wcsicmp(argv[i], L"/setup") == 0) setup = 1;
+        // dev / tests: start the FL in another folder this once (flim.ini keeps its own)
+        else if (_wcsicmp(argv[i], L"--fl-dir") == 0 && i + 1 < argc) wcscpy_s(flDir, MAX_PATH * 2, argv[++i]);
+    }
     LocalFree(argv);
 
     SetProcessDPIAware();
@@ -225,6 +233,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
         if (DialogBoxParamW(inst, MAKEINTRESOURCEW(IDD_SETUP), NULL, setup_proc, 0) != IDOK) return 1;
     }
     CoUninitialize();
+    if (flDir[0]) return launch(flDir);
     flimcfg_get(L"fl_dir", dir, MAX_PATH * 2);
     return launch(dir);
 }

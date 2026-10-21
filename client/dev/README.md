@@ -1,7 +1,8 @@
 # client/dev: reverse-engineering and test tools
 
 Not part of the flim build (`build.bat` ignores this folder) and never shipped. These are what the
-engine's `*_VA` addresses were found and checked with, for FL Studio 25.2.3.5171.
+engine's FL addresses were found and checked with (25.2.3.5171 by hand), and how other FL builds
+are mapped and tested.
 
 Python 3 with `python -m pip install --user capstone pefile numpy`.
 
@@ -13,7 +14,21 @@ Python 3 with `python -m pip install --user capstone pefile numpy`.
 | `mk.py` | helpers on top of `fl.py` for the two-FL test session (`A`, `B` = leader/member pids from the engine log): markers, time signature, channels, patterns, pattern ops, pattern markers (`pmarks`, `pr_add_marker`), opening FL windows without input (`show(p, 3)` = piano roll). |
 | `flp.py`, `tlv.py`, `paths.py` | parse FLP / .fst events, Image-Line's tag/length/value plugin data, and list sample paths inside plugin states. |
 | `survey.py` | which factory presets store sample paths in their plugin data, and in what layout. |
+| `sigscan.py` | maps every address in the engine's table from one FL build to another, statically: function signatures (call targets and RIP-relative operands wildcarded; level 2 also offsets), call sites, function order between matched neighbours (Delphi keeps a unit's functions in order), globals by matching the code that references them (majority vote), plus a similarity score per function. `--offsets` pairs ~25000 functions by offset-blind signatures and reports what each of flim's struct offsets / strides became. Calls landing in VMProtect's call stubs are ignored. |
+| `flbuild.py` | the engine's `k_flBuilds` table for the tools (plus the few addresses only the tools use); `build(pid)` = the row of an FL started by `restart_test.ps1`. |
+| `feature_test.py` | two-FL feature test, any supported build: changes things in A through FL's own functions (knobs, mixer, channels, patterns + pattern ops incl. the message box hook, time signatures, markers, playlist tracks, note delete, editor layout offsets) and waits for B to match. `python feature_test.py [step ...]`. |
 | `harness/t_samples.c` | offline test of the plugin-data sample path code (includes the engine source). `harness\build.bat`, then `t_samples.exe` -> `OK`. |
+
+## Adding an FL build
+1. `py -3.11 sigscan.py <reference FLEngine_x64.dll> <new FLEngine_x64.dll> ..\engine\flim_engine.c --json out.json`.
+   Every address should come out `confirmed` / `unique` (functions: similarity near 1.00; data: one
+   vote winner). Look at the rest by hand (the 25.1 message box had a different shape: no wrapper).
+2. `py -3.11 sigscan.py --offsets <ref> <new> ..\engine\flim_engine.c`: offsets marked `MOVED?` with a
+   clear majority moved; check small / ambiguous ones inside the mapped functions themselves. Record
+   sizes show up as changed multipliers (pattern record 0xC0 -> 0xA4 in 25.1).
+3. Add a row to `k_flBuilds` (engine) and the build to `FLIM_FL_BUILDS` (launcher), rebuild.
+4. `restart_test.ps1 -Minimized -FlDir "<that FL's folder>"`, then `python feature_test.py`: all PASS,
+   and the same run on the reference build for comparison.
 
 ## Typical session
 1. Start the server (`cd server && npm start`), then `client\restart_test.ps1 -Minimized` (add

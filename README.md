@@ -8,7 +8,7 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 > other people's selection. See [What's synced](#whats-synced) for the full list.
 
 > ⚠️ **Unofficial and experimental.** flim is not made by, affiliated with or endorsed by Image-Line.
-> It works by running extra code inside FL Studio's process, and it only supports **one exact FL build**
+> It works by running extra code inside FL Studio's process, and it only supports **specific FL builds**
 > (see [Requirements](#requirements)). It can crash FL, so save often. flim never overwrites your
 > original `.flp` files (see [Sessions](#sessions)).
 
@@ -19,7 +19,8 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 **Try flim with a friend right now, no server needed.** There is a public test server at
 **`flim.fly.dev`** with 8 session slots.
 
-1. You both need **FL Studio 2025, build 25.2.3.5171** (Help > About) on Windows 10/11.
+1. You both need **FL Studio 2025, build 25.2.3.5171** (Help > About) on Windows 10/11. Different
+   build? See [Other FL Studio builds](#other-fl-studio-builds).
 2. Download `flim-client-win64.zip` from the [latest release](../../releases/latest), unzip it, and run
    **`flim.exe`**. The first time, it asks for your FL Studio folder and a name.
 3. **One of you hosts:** in FL's top toolbar (next to the CPU / memory meters) click **Host**. The
@@ -106,9 +107,8 @@ at the same pattern or arrangement. The arrows can't be clicked and never get in
 
 ## Requirements
 
-- **Client:** Windows 10 or 11 (64-bit) and **FL Studio 2025, build 25.2.3.5171 exactly** (Help → About).
-  The engine calls into FL at fixed internal addresses, and those change with every FL build. With any
-  other build, flim warns you before starting and FL will most likely crash.
+- **Client:** Windows 10 or 11 (64-bit) and **FL Studio 2025, build 25.2.3.5171** (Help → About).
+  Have a different build? See [Other FL Studio builds](#other-fl-studio-builds).
 - **Server:** any machine with Node.js 20 or newer (Windows, Linux or macOS) that everyone can reach.
 
 ---
@@ -289,8 +289,8 @@ server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
 ```
 
 ## Troubleshooting
-- **"This FL Studio is version X, but flim was built against 25.2.3.5171"**: your FL build is different.
-  See [Requirements](#requirements).
+- **"This FL Studio is version X. flim supports these builds: ..."**: your FL build isn't supported yet.
+  See [Other FL Studio builds](#other-fl-studio-builds).
 - **"Can't connect: server not found"** or **"nothing answers at that address"**: check the address, that
   the server is running, and (over the internet) that the port is forwarded.
 - **"Can't connect: secure connection failed"**: you typed a bare host name or `wss://`, but the server
@@ -302,6 +302,28 @@ server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
 - **"All sessions are in use"**: the server's session(s) are taken. Try again later.
 - **"Server password needed"**: the server has `FLIM_PASSWORD` set. Ctrl+click **Host** and enter it.
 - **Something didn't sync or FL crashed**: please open an issue and attach `%TEMP%\flim_engine.log`.
+
+---
+
+## Other FL Studio builds
+
+flim calls FL Studio's internal functions, and where those sit inside FL changes with every FL
+update. So flim keeps a table for each FL build it knows. Check yours under **Help → About**.
+
+| Build | Status |
+|---|---|
+| **25.2.3.5171** | The main build. Everything is tested on it. |
+| **25.1.6.4997** | Works: the automated feature test passes, as on 25.2.3.5171. Not tested on it yet: plugin state, reordering channels, playlist clips, sample transfer. |
+
+**Everyone in a session should use the same build.**
+
+**Your build isn't listed?** `flim.exe` tells you when it starts. If you start FL anyway, flim stays
+off and FL runs as usual: nothing breaks, it just doesn't sync. What you can do:
+1. **Ask for it:** [open an issue](../../issues) with your exact build number (Help → About). Adding
+   a build means mapping flim's table onto it and testing it, which is mostly automated.
+2. **Add it yourself:** the tools in `client/dev/` map the table from 25.2.3.5171 onto another build
+   and test the result. See "Adding an FL build" in [client/dev/README.md](client/dev/README.md).
+3. **Use 25.2.3.5171** if you have it installed.
 
 ---
 
