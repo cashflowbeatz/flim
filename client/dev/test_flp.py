@@ -1,7 +1,7 @@
 import struct
 import unittest
 
-from flp import data_bounds, events
+from flp import data_bounds, events, event_spans, rewrite_payloads
 
 
 def image(stream, header=b'\0' * 6, trailer=b''):
@@ -54,6 +54,36 @@ class FlpTests(unittest.TestCase):
                      image(b'')[:18] + b'\xff' * 4):
             with self.subTest(data=data.hex()), self.assertRaises(ValueError):
                 events(data)
+
+    def test_rewrite_preserves_extended_ids_header_and_trailing_bytes(self):
+        raw = image(b'\xac\x01\x01\x00\xc0\x04F\0L\0\xc4\x04X\0\0\0\x01\x2a',
+                    header=b'custom-header', trailer=b'FLdt-not-another-event\0')
+        replacement = ('longer sample path.wav\0').encode('utf-16-le')
+        changed = rewrite_payloads(raw, {1: replacement})
+        self.assertEqual(events(changed), [(0xc0000101, b'F\0L\0'), (196, replacement), (1, b'*')])
+        self.assertEqual(raw[:21], changed[:21])
+        self.assertTrue(changed.endswith(b'FLdt-not-another-event\0'))
+        self.assertEqual(changed.count(b'\xac\x01\x01\x00\xc0'), 1)
+
+    def test_rewrite_extended_variable_payload_and_length_boundaries(self):
+        raw = image(b'\xac\x01\x01\x00\xc0\0\xc4\0')
+        replacement = b'v' * 129
+        changed = rewrite_payloads(raw, {0: replacement})
+        self.assertEqual(events(changed), [(0xc0000101, replacement), (196, b'')])
+        self.assertIn(b'\xac\x01\x01\x00\xc0\x81\x01', changed)
+        self.assertEqual(rewrite_payloads(raw, {}), raw)
+
+    def test_rewrite_rejects_unknown_ordinal_and_fixed_payload(self):
+        raw = image(b'\x01\x2a\xc4\0')
+        for replacements in ({2: b'x'}, {-1: b'x'}, {0: b'x'}, {1: 'text'}):
+            with self.subTest(replacements=replacements), self.assertRaises(ValueError):
+                rewrite_payloads(raw, replacements)
+
+    def test_rewrite_validates_whole_stream_and_spans_match_payloads(self):
+        raw = image(b'\xc4\x04X\0\0\0\xac\x01\x01\x00\xc0\x02Y\0')
+        self.assertEqual([(event, raw[p:end]) for event, _, p, end in event_spans(raw)], events(raw))
+        with self.assertRaises(ValueError):
+            rewrite_payloads(image(b'\xc4\0\x80\0'), {0: b'x'})
 
 
 if __name__ == '__main__':

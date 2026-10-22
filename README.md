@@ -28,6 +28,12 @@ The [upstream source audit](server/AUDIT.txt) documents fixes for lock expiry, h
 replacement, ambiguous protocol fields and invalid server settings. Run this fork's revised server
 to receive those fixes; the upstream public server has not been updated by these local changes.
 
+An optional [file companion](client/files/README.txt) prepares saved projects and samples through a
+dedicated Syncthing folder. It verifies complete snapshots, warms flim's sample cache and creates a
+separate local FLP with standard sample paths rewritten. Python 3.10+ is required. It preserves the
+exact-build requirement and live session protocol; plugin-specific asset paths may need relinking.
+See [architecture and observed tests](client/files/ARCHITECTURE.txt).
+
 ---
 
 ## ! PUBLIC TEST !

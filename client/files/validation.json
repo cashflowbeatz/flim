@@ -1,0 +1,209 @@
+{
+  "date": "2026-10-22",
+  "source_tag": "v2.1.7",
+  "source_commit": "d6d0181f7d466381c4b39ec8fd944c364f939b32",
+  "syncthing_executable": {
+    "version": "v2.1.7 Hafnium Hornet; go1.27.3 windows-amd64",
+    "bytes": 34802944,
+    "sha256": "cd9aea20afda2b9bdba5aff2e6ac964ed5c2e741ed4ceb48ad9e1be096ca7891"
+  },
+  "rea_ghidra": {
+    "provider_version": "12.1.4",
+    "opened_target": true,
+    "completed_decompilation": false,
+    "queries": 2,
+    "result": "provider_timeout",
+    "each_timeout_ms": 330000,
+    "closed": true,
+    "retained_evidence_records": 0,
+    "doctor": "Explicit Ghidra + Codex scope healthy; overall environment includes unrelated missing providers/registrations"
+  },
+  "unit_tests": [
+    {
+      "command": "python -m unittest discover -s client/files -p test_companion.py -v",
+      "passed": 28,
+      "failed": 0
+    },
+    {
+      "command": "python -m unittest discover -s client/dev -p test_*.py -v",
+      "passed": 52,
+      "failed": 0
+    }
+  ],
+  "syncthing_loopback": {
+    "syncthing_sha256": "cd9aea20afda2b9bdba5aff2e6ac964ed5c2e741ed4ceb48ad9e1be096ca7891",
+    "isolation": "two fresh homes, loopback-only peers and APIs; discovery/relay/NAT disabled",
+    "checks": [
+      {
+        "check": "two isolated daemon APIs healthy; only test folder and explicit loopback listeners",
+        "passed": true
+      },
+      {
+        "check": "explicit loopback peers paired",
+        "passed": true
+      },
+      {
+        "check": "manifest-first transfer remains waiting without installing files",
+        "passed": true,
+        "build": "26.1.7.5654"
+      },
+      {
+        "check": "actual Syncthing object transfer, verified cache and rewritten private FLP",
+        "passed": true,
+        "build": "26.1.7.5654",
+        "snapshot": "fef0a67a5e866fd18a3d2eb99df9ca7693d584603fe2c53858cafdca8c759fed",
+        "assets": 1
+      },
+      {
+        "check": "repeated prepare reuses verified copy and preserves an edited project",
+        "passed": true,
+        "build": "26.1.7.5654"
+      },
+      {
+        "check": "exact-build mismatch rejected before cache install",
+        "passed": true,
+        "build": "26.1.7.5654"
+      },
+      {
+        "check": "manifest-first transfer remains waiting without installing files",
+        "passed": true,
+        "build": "25.2.5.5319"
+      },
+      {
+        "check": "actual Syncthing object transfer, verified cache and rewritten private FLP",
+        "passed": true,
+        "build": "25.2.5.5319",
+        "snapshot": "e0d3fd8c3cdd2b00ff6cc70fa90b5e6e48b839f45bf298e5571656c3819fc8ee",
+        "assets": 1
+      },
+      {
+        "check": "repeated prepare reuses verified copy and preserves an edited project",
+        "passed": true,
+        "build": "25.2.5.5319"
+      },
+      {
+        "check": "exact-build mismatch rejected before cache install",
+        "passed": true,
+        "build": "25.2.5.5319"
+      }
+    ],
+    "fixture": "syncthing-fixture-42c3df292605",
+    "passed": true,
+    "owned_processes": [
+      {
+        "label": "B",
+        "pid": 74884,
+        "exited": true
+      },
+      {
+        "label": "A",
+        "pid": 111856,
+        "exited": true
+      }
+    ]
+  },
+  "live_fl": [
+    {
+      "build": "26.1.7.5654",
+      "checks": [
+        {
+          "check": "companion prepared native cache using the original sample basename",
+          "passed": true
+        },
+        {
+          "check": "receiver with local-source lookup disabled used cache: 0 downloaded, 0 missing",
+          "passed": true
+        },
+        {
+          "check": "full FL-saved project published and prepared without changing the source",
+          "passed": true
+        },
+        {
+          "check": "prepared full project opened in matching FL; saved sampler points to verified cache",
+          "passed": true
+        }
+      ],
+      "fixture": "syncthing-fl-26.1.7.5654-c74c1c",
+      "snapshot": "fc8bbbdd94e274b96df76b2fffe6abfeccf82fb6c27151a81772b0c60e27029f",
+      "passed": true
+    },
+    {
+      "build": "25.2.5.5319",
+      "checks": [
+        {
+          "check": "companion prepared native cache using the original sample basename",
+          "passed": true
+        },
+        {
+          "check": "receiver with local-source lookup disabled used cache: 0 downloaded, 0 missing",
+          "passed": true
+        },
+        {
+          "check": "full FL-saved project published and prepared without changing the source",
+          "passed": true
+        },
+        {
+          "check": "prepared full project opened in matching FL; saved sampler points to verified cache",
+          "passed": true
+        }
+      ],
+      "fixture": "syncthing-fl-25.2.5.5319-5b30e3",
+      "snapshot": "2be1bb68f6ddf6b0e0cd7d95283df9cb65c35d9bccad4d1483e9f46223d8a7c9",
+      "passed": true
+    }
+  ],
+  "native_binaries_changed": false,
+  "personal_syncthing_settings_changed": false,
+  "test_owned_processes_stopped": true,
+  "source_sha256_normalized_lf": {
+    "client/files/companion.py": "2ec433844910f3705d17acdf4008020266a54da4327703b02fbe9f95e10bb372",
+    "client/files/test_companion.py": "0e5a43ae3945be536b43c1ed8f60018ed7b2965cfda08ee7fc784cc15e96dfa4",
+    "client/dev/flp.py": "24dad9ff08e16a2a6a13e2afc41eaa5aa2e3f441e59f72daf6875e558c0336d0",
+    "client/dev/test_flp.py": "addb836e7968c5e6baa44a41bc333f12f641329de3242693c13adfc641fb62f7"
+  },
+  "logs": [
+    {
+      "log": "syncthing-runtime.json",
+      "sha256": "f85fd7d39f7b9bd6a910c19a5967d4ac8b5791deb94cc523d41bc5d0f932d6cb"
+    },
+    {
+      "log": "syncthing-fl-26.1.7.5654.json",
+      "sha256": "1eee1fe7ef7a1c60004cec3fa39e1a48cc54cbde959fbf38e6f08396fecaed52"
+    },
+    {
+      "log": "syncthing-fl-25.2.5.5319.json",
+      "sha256": "08956c4296ef76ebd18a5a29b804d7c099b8721ca4484d010aed8f923b740d3a"
+    },
+    {
+      "log": "syncthing-fl-engine.log",
+      "sha256": "7f4ea9038683938fceeac2f941f1fe4eb6381202ce4f1b6109820c413ff87994"
+    },
+    {
+      "log": "syncthing-rea-evidence.json",
+      "sha256": "b10401d1cf0a16e1fee1be6b815d1d09c3560346ca65e9d6473dbc29816d9602"
+    },
+    {
+      "log": "syncthing-ghidra-snapshot.json",
+      "sha256": "babe27568310d8d8faa122584bcb6a890fcdb8f2849fd90d2c311bce6a1cde49"
+    },
+    {
+      "log": "syncthing_runtime_test.py",
+      "sha256": "817c74e1dbe0455ea23aff87ca3ae90b652391c2c2a2842b5dfcfd251d492249"
+    },
+    {
+      "log": "syncthing_fl_test.py",
+      "sha256": "41c2ca3ce6165610fae85f4ede48305329374bf682b29628ae9fc1b1e73e000c"
+    },
+    {
+      "log": "syncthing-source-findings.txt",
+      "sha256": "e3ef19e1001aab87a7adddb13216c733b302eae2628481ff5ac893dc463cfa03"
+    }
+  ],
+  "limits": [
+    "no measured latency/audio performance improvement",
+    "loopback peers only; cross-NAT testing remains",
+    "standard event196 paths and explicit extra samples only; plugin-specific references may need relinking",
+    "no FLP merge, no FL26-to-FL25 conversion, no automatic opening",
+    "sender uploads and live project.load continue using flim relay"
+  ]
+}
