@@ -246,6 +246,92 @@ static const FlBuild k_flBuilds[] = {
         .PATOP_INSERT_SLOT = 0xf8,
         .PATOP_SPLIT_SLOT = 0x100,
     },
+    {   // FL Studio 25.2.5.5319: see dev/compatibility/
+        .build = L"25.2.5.5319", .msgbox = 1,
+        .REC                   = 0xf53fe0,
+        .MUTE                  = 0x117f050,
+        .MIXARR                = 0x14a7eb0,
+        .MIXCNT                = 0x14a9850,
+        .MAINFORM              = 0x14a8b00,
+        .SAVEPRESET            = 0xe78dc0,
+        .LOADPRESET            = 0xe78fb0,
+        .HASPLUGIN             = 0x12297e0,
+        .GETPLUGIN             = 0x122b320,
+        .INTFCLEAR             = 0x41a770,
+        .ADDCHAN               = 0xf215e0,
+        .DELCHAN               = 0xf21df0,
+        .RESOLVER              = 0xf22ac0,
+        .CHANLIST              = 0x14a98d8,
+        .MOVECHAN              = 0xf4fe10,
+        .MOVEOBJ               = 0x14a8bf8,
+        .MOVEARG               = 0x14ab008,
+        .CHANFILT              = 0x14a7968,
+        .PATARR                = 0x14aa0c8,
+        .NOTEARR               = 0x11d4080,
+        .NOTEDEL               = 0xf6d7d0,
+        .NOTELOCK              = 0x14a96c8,
+        .GRIDREFRESH           = 0x11d90e0,
+        .FLPROJ                = 0x14abca8,
+        .MAINOBJ               = 0x14a8750,
+        .SETPROJ               = 0x10d2c90,
+        .SAVEPROJ              = 0x10d5a60,
+        .BUSYBEGIN             = 0x10c9860,
+        .BUSYEND               = 0x10c98b0,
+        .PROJNAME              = 0x15812a0,
+        .ARRS                  = 0x18329d8,
+        .ARRCUR                = 0x149e8b4,
+        .PLFORM                = 0x14aab88,
+        .PLREFRESH             = 0xd45d90,
+        .HINT                  = 0x10ec570,
+        .MIXNAME               = 0x11c2810,
+        .MIXCOLOR              = 0x11c58a0,
+        .UIUPDATE              = 0xb6a1d0,
+        .MIXOBJ                = 0x14a99a0,
+        .SETROUTE              = 0x11a67f0,
+        .ROUTEUPD              = 0x11a5d20,
+        .PATNAME               = 0x11d3960,
+        .PATCOLOR              = 0x11d3e50,
+        .PATREFRESH            = 0xda0a70,
+        .PLTRACK               = 0x11e7940,
+        .MARKADD               = 0xf70ba0,
+        .MARKTYPE              = 0xf61698,
+        .DYNSETLEN             = 0x417fc0,
+        .MARKREFRESH           = 0xd51810,
+        .MARKSORT              = 0xf70510,
+        .PATLENUPD             = 0x11d4140,
+        .PATMARKS              = 0x11d3500,
+        .SONGLOCK              = 0x14ab2d8,
+        .MODIFIED              = 0x10cefa0,
+        .TSNUM                 = 0x14aaf70,
+        .TSDEN                 = 0x14a9368,
+        .TSSET                 = 0x125e4c0,
+        .TSCTLS                = 0x125e630,
+        .MSGBOX                = 0xa88770,
+        .MSGBOX_CORE           = 0xa886f0,
+        .PRFORM                = 0x14a9b20,
+        .CURPAT                = 0x14ab580,
+        .CH_SELECTED           = 0x35c,
+        .CH_GRID               = 0x7bc,
+        .FORM_BUSY             = 0x334c,
+        .PAT_STRIDE            = 0xc0,
+        .PLFORM_PATS           = 0xd0c,
+        .PL_MARKSEL            = 0xd64,
+        .ED_TICKSPERPX         = 0xaec,
+        .ED_HSCROLL            = 0xafc,
+        .PR_GRID               = 0xc40,
+        .PL_GRID               = 0xd04,
+        .GRID_VSCROLL          = 0x3fc,
+        .MIX_STRIDE            = 0x1474,
+        .MIX_SLOTS_OFF         = 0x1324,
+        .MIX_ROUTE             = 0x2e4,
+        .FLPROJ_LOAD_SLOT      = 0x38,
+        .PATOP_CLONE_SLOT      = 0xd8,
+        .PATOP_DELETE_SLOT     = 0xe0,
+        .PATOP_REARRANGE_SLOT  = 0xe8,
+        .PATOP_EDIT_SLOT       = 0xf0,
+        .PATOP_INSERT_SLOT     = 0xf8,
+        .PATOP_SPLIT_SLOT      = 0x100,
+    },
 #ifdef FLIM_EXPERIMENTAL_FL26
     {   // FL Studio 26.1.6.5639: experimental mapping; see dev/compatibility/
         .build = L"26.1.6.5639", .msgbox = 1,
@@ -333,6 +419,92 @@ static const FlBuild k_flBuilds[] = {
         .PATOP_INSERT_SLOT = 0x118,
         .PATOP_SPLIT_SLOT = 0x120,
     },
+    {   // FL Studio 26.1.7.5654: experimental mapping; see dev/compatibility/
+        .build = L"26.1.7.5654", .msgbox = 1,
+        .REC                 = 0x1046a70,
+        .MUTE                = 0x127b9b0,
+        .MIXARR              = 0x15e06a0,
+        .MIXCNT              = 0x15e2198,
+        .MAINFORM            = 0x15e13b8,
+        .SAVEPRESET          = 0xf54570,
+        .LOADPRESET          = 0xf54760,
+        .HASPLUGIN           = 0x132f7c0,
+        .GETPLUGIN           = 0x1331380,
+        .INTFCLEAR           = 0x41a770,
+        .ADDCHAN             = 0x1004230,
+        .DELCHAN             = 0x1004a60,
+        .RESOLVER            = 0x1005770,
+        .CHANLIST            = 0x15e2218,
+        .MOVECHAN            = 0x1042800,
+        .MOVEOBJ             = 0x15e14a0,
+        .MOVEARG             = 0x15e3a60,
+        .CHANFILT            = 0x15e0128,
+        .PATARR              = 0x15e2aa0,
+        .NOTEARR             = 0x12d16e0,
+        .NOTEDEL             = 0x10603b0,
+        .NOTELOCK            = 0x15e2008,
+        .GRIDREFRESH         = 0x12d6900,
+        .FLPROJ              = 0x15e4790,
+        .MAINOBJ             = 0x15e0ff8,
+        .SETPROJ             = 0x11d9380,
+        .SAVEPROJ            = 0x11dbe10,
+        .BUSYBEGIN           = 0x11cf9f0,
+        .BUSYEND             = 0x11cfa40,
+        .PROJNAME            = 0x16bcc98,
+        .ARRS                = 0x196eb60,
+        .ARRCUR              = 0x15d65f0,
+        .PLFORM              = 0x15e35c8,
+        .PLREFRESH           = 0xe47c70,
+        .HINT                = 0x11f16f0,
+        .MIXNAME             = 0x12be6f0,
+        .MIXCOLOR            = 0x12c17e0,
+        .UIUPDATE            = 0xbd68e0,
+        .MIXOBJ              = 0x15e22d8,
+        .SETROUTE            = 0x12a33c0,
+        .ROUTEUPD            = 0x12a28f0,
+        .PATNAME             = 0x12d0fc0,
+        .PATCOLOR            = 0x12d14b0,
+        .PATREFRESH          = 0xea7ae0,
+        .PLTRACK             = 0x12e60f0,
+        .MARKADD             = 0x10637c0,
+        .MARKTYPE            = 0x1054280,
+        .DYNSETLEN           = 0x417fc0,
+        .MARKREFRESH         = 0xe53810,
+        .MARKSORT            = 0x1063130,
+        .PATLENUPD           = 0x12d17a0,
+        .PATMARKS            = 0x12d0b60,
+        .SONGLOCK            = 0x15e3d40,
+        .MODIFIED            = 0x11d5530,
+        .TSNUM               = 0x15e39c0,
+        .TSDEN               = 0x15e1c70,
+        .TSSET               = 0x13656a0,
+        .TSCTLS              = 0x1365810,
+        .MSGBOX              = 0x9635b0,
+        .MSGBOX_CORE         = 0x963520,
+        .PRFORM              = 0x15e2478,
+        .CURPAT              = 0x15e4018,
+        .CH_SELECTED         = 0x32c,
+        .CH_GRID             = 0x7ac,
+        .FORM_BUSY           = 0x34d4,
+        .PAT_STRIDE          = 0xc0,
+        .PLFORM_PATS         = 0xd34,
+        .PL_MARKSEL          = 0xd8c,
+        .ED_TICKSPERPX       = 0xb04,
+        .ED_HSCROLL          = 0xb14,
+        .PR_GRID             = 0xc68,
+        .PL_GRID             = 0xd2c,
+        .GRID_VSCROLL        = 0x3fc,
+        .MIX_STRIDE          = 0x1478,
+        .MIX_SLOTS_OFF       = 0x134c,
+        .MIX_ROUTE           = 0x394,
+        .FLPROJ_LOAD_SLOT    = 0x40,
+        .PATOP_CLONE_SLOT    = 0xe8,
+        .PATOP_DELETE_SLOT   = 0xf8,
+        .PATOP_REARRANGE_SLOT= 0x108,
+        .PATOP_EDIT_SLOT     = 0x110,
+        .PATOP_INSERT_SLOT   = 0x118,
+        .PATOP_SPLIT_SLOT    = 0x120,
+    },
 #endif
 };
 static FlBuild g_fl;       // the row in use (engineMain)
@@ -402,7 +574,8 @@ static int int_after(const char *p, const char *end, const char *key, int *out);
 static void ws_send(const char *msg);
 static void ws_send_samples(char *msg, const unsigned char *blob, size_t n);
 static void samples_rewrite(unsigned char **d, size_t *n);
-static int flp_other_build(const unsigned char *d, size_t n, char *theirs, char *mine);
+typedef enum { FLP_BUILD_INVALID = -1, FLP_BUILD_MATCH, FLP_BUILD_MISMATCH } FlpBuildCheck;
+static FlpBuildCheck flp_check_build(const unsigned char *d, size_t n, char *theirs, char *mine);
 
 typedef struct {
     uint32_t id;
@@ -3598,7 +3771,18 @@ static void on_project_load(const char *m) {
     unsigned char *d = b64dec(dk, (size_t)(e - dk), &n);
     {
         char theirs[32], mine[32];
-        if (flp_other_build(d, n, theirs, mine)) {
+        FlpBuildCheck check = flp_check_build(d, n, theirs, mine);
+        if (check == FLP_BUILD_INVALID) {
+            logmsg("PROJECT has an invalid or unverifiable FL build: not loaded, leaving the session");
+            free(d);
+            net_disconnect();
+            net_status(NET_ERR, "Host project build could not be verified");
+            net_alert("The host sent an invalid project snapshot, or its FL Studio build could not be verified.\n\n"
+                      "flim left the session without loading it. Everyone in a session needs the same exact "
+                      "FL Studio build. Have the host save the project again before reconnecting.");
+            return;
+        }
+        if (check == FLP_BUILD_MISMATCH) {
             logmsg("PROJECT made with FL %s, this is %s: not loaded, leaving the session", theirs, mine);
             free(d);
             net_disconnect();
@@ -5972,23 +6156,47 @@ static int ver_cmp(const char *x, const char *y) {
     return 0;
 }
 
+typedef struct { char version[32]; int seen, invalid; } FlpVersion;
+
+static int valid_fl_version(const char *v) {
+    int part;
+    for (part = 0; part < 4; part++) {
+        unsigned int value = 0;
+        if (*v < '0' || *v > '9') return 0;
+        do {
+            value = value * 10 + (unsigned int)(*v++ - '0');
+            if (value > 65535) return 0;
+        } while (*v >= '0' && *v <= '9');
+        if (part < 3) { if (*v++ != '.') return 0; }
+        else if (*v) return 0;
+    }
+    return 1;
+}
+
 static int version_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, size_t at, size_t end) {
-    char *out = (char *)ctx;
+    FlpVersion *state = (FlpVersion *)ctx;
+    char version[32];
     (void)at; (void)end;
     if (id != EV_FL_VERSION) return 1;
     if (n && !p[n - 1]) n--;
-    if (n > 31) n = 31;
-    memcpy(out, p, n);
-    out[n] = 0;
-    return 0;                                   // found: stop
+    if (!n || n >= sizeof(version) || memchr(p, 0, n)) { state->invalid = 1; return 1; }
+    memcpy(version, p, n);
+    version[n] = 0;
+    if (!valid_fl_version(version)) { state->invalid = 1; return 1; }
+    if (state->seen && ver_cmp(state->version, version)) state->invalid = 1;
+    else strcpy_s(state->version, sizeof(state->version), version);
+    state->seen = 1;
+    return 1;                                   // conflicting later versions must also be checked
 }
 
-// The FL version an .flp image was saved with ("" if none). 1 if it isn't this FL's.
-static int flp_other_build(const unsigned char *d, size_t n, char *theirs, char *mine) {
-    theirs[0] = 0;
-    WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL);
-    flp_walk(d, n, version_cb, theirs);
-    return theirs[0] && ver_cmp(theirs, mine) != 0;
+static FlpBuildCheck flp_check_build(const unsigned char *d, size_t n, char *theirs, char *mine) {
+    FlpVersion state = {0};
+    theirs[0] = mine[0] = 0;
+    if (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || !valid_fl_version(mine))
+        return FLP_BUILD_INVALID;
+    if (!d || !flp_walk(d, n, version_cb, &state) || !state.seen || state.invalid) return FLP_BUILD_INVALID;
+    strcpy_s(theirs, 32, state.version);
+    return ver_cmp(theirs, mine) ? FLP_BUILD_MISMATCH : FLP_BUILD_MATCH;
 }
 
 // ---- blob store (HTTP) ----

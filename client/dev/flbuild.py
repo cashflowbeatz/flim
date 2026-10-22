@@ -12,8 +12,10 @@ TOOLS = {
     '25.2.3.5171': dict(FORMADDMARK=0xd4c810,      # editor form: add marker (form, pos, name, action, num, den)
                         PL_MARKERS=0xd50),         # playlist form: marker list being shown
     '25.1.6.4997': dict(FORMADDMARK=0xde9050, PL_MARKERS=0xd48),
+    '25.2.5.5319': dict(FORMADDMARK=0xd523c0, PL_MARKERS=0xd5c),
     # Static candidates for the compile-gated experimental engine; not a support declaration.
     '26.1.6.5639': dict(FORMADDMARK=0xe545b0, PL_MARKERS=0xd84),
+    '26.1.7.5654': dict(FORMADDMARK=0xe543b0, PL_MARKERS=0xd84),
 }
 
 

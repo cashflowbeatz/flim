@@ -1,10 +1,62 @@
-# FL 26 port: validation record
+# FL 25 and FL 26 compatibility validation
 
-The opt-in table targets **FL Studio 26.1.6.5639, Windows x64**. It is an experimental port,
-not a promise of compatibility with other FL 26 builds. Build both launcher and engine with
-`FLIM_EXPERIMENTAL_FL26=1` using `client/build.bat`.
+One experimental Windows x64 client supports all five exact builds below. Build both launcher
+and engine with `FLIM_EXPERIMENTAL_FL26=1` using `client/build.bat`; output goes to
+`client/out-experimental`. The default build includes the three FL 25 tables in `client/out`.
 
-## Target and reference
+| FL build | Validation in this fork |
+|---|---|
+| **26.1.7.5654** | Current installation: 31/31 runtime checks passed |
+| **25.2.5.5319** | Current installation: 31/31 runtime checks passed with the same client binaries |
+| 26.1.6.5639 | Table retained; earlier client passed 31/31 checks and 12/12 repeated effect checks before FL was updated |
+| 25.2.3.5171 | Original reference table retained; synthetic hook checks passed |
+| 25.1.6.4997 | Original upstream table retained; synthetic hook checks passed |
+
+**Everyone in a session must use the same exact FL build.** The receiver validates the full FLP
+stream and every version event before rewriting sample paths, writing a project or calling FL's
+loader. Missing, malformed and conflicting versions are rejected, as are valid different builds.
+The relay forwards opaque operations and does not negotiate FL project compatibility.
+
+## Current builds
+
+Both installed executables and engines passed Authenticode validation. Exact launcher identities,
+client hashes and runtime checks are in [the current runtime record](25-26-runtime.json).
+
+| Engine | SHA-256 |
+|---|---|
+| 26.1.7.5654 | `6d9c5ab09c1d5594012ac2c31cf9ed08e73f42164ed0964cccae10a95d9b8e02` |
+| 25.2.5.5319 | `1b7e2381f2853ee590bff74429fb8aa5540d33a5b33c0c5e41ec01c03fe0c7ac` |
+
+[FL 25.2.5 static evidence](25.2.5.5319-static.json) records all 62 addresses and reviewed calling
+conventions. Four fields moved from the reference: busy pointer `3344 -> 334c`, playlist patterns
+`d00 -> d0c`, selected marker `d58 -> d64` and playlist grid `cf8 -> d04`. All seven project virtual
+method slots remain unchanged. Marker and editor fields were checked in their actual handlers.
+
+[FL 26.1.7 static evidence](26.1.7.5654-static.json) records all 62 addresses, 21 layout fields,
+virtual methods and focused ABI reviews. A misleading signature selected `0xf51fd0` for `SETPROJ`;
+callers, arguments and string assignments establish `0x11d9380`. The new build retains the
+previously verified FL 26 layouts described below. Aggregate operand counts alone were not
+treated as proof of a field's object identity.
+
+Two disposable same-build pairs used one experimental client and a loopback-only relay. Both
+project joins returned `1` from FL's loader and settled before feature checks. All four test
+processes and the relay were stopped using their recorded PID, start time and executable path.
+Each build passed **31/31** checks covering the feature categories described below. Sample tests
+used fresh 8,864-byte synthetic WAVs, forced B to download and verified downloaded content by SHA-256.
+
+The updated project gate passed **120 normal and 184 experimental checks**, including all build
+pairs, truncated inputs, invalid versions and conflicting duplicate versions. Mocked launcher
+tests passed 11 normal and 13 experimental scenarios; synthetic VMT tests covered all five rows.
+All 48 Python tests, buffer/FLP/plugin-race/sample/launcher harnesses and 231 activity reference
+comparisons passed. Normal and experimental client builds succeeded.
+
+## Earlier FL 26 investigation
+
+The following analysis and runtime results refer to **26.1.6.5639** and earlier client hashes,
+before the installed FL update. They are retained as historical evidence and are not attributed
+to the updated engine hash. See [the earlier runtime record](26.1.6.5639-runtime.json).
+
+### Earlier target and reference
 
 | Image | Version | SHA-256 |
 |---|---|---|
@@ -17,7 +69,7 @@ The reference was extracted without running the signed Image-Line installer from
 Both engines and the target launcher passed Authenticode validation. Neither the installer,
 proprietary binaries, nor decompiled source belong in this repository or client distribution.
 
-## What changed between builds
+### What changed between the original builds
 
 The [static layout record](26.1.6.5639-layout.json) records each observation and its limits.
 Automatic signatures alone were insufficient: a short prologue falsely selected `0xf52060`
@@ -45,7 +97,7 @@ The bootstrap's engine-name initialization was also analysed with Ghidra, eviden
 `ev_a0f99257f525c7415754b1c54ee12a0b6b99f39561eb2a2cebd5cc86b84eed5b`.
 Managed companion inspection was partial because the provider reached its representation budget.
 
-## Runtime checks
+### Earlier runtime checks
 
 Tests used two separately launched disposable FL 26 instances, an experimental client build,
 and a loopback-only relay. The user's pre-existing FL process was not injected or modified.
@@ -78,7 +130,7 @@ through FL's configured shared-data root so downloaded samples can be shared aga
 - Kontakt/compressed or encrypted embedded samples remain unsupported upstream behavior.
 - Cross-version FL project compatibility is not established; use the same exact FL build.
 - Docker image building and a deployed Cloudflare Tunnel were not tested here.
-- Existing FL 25 tables passed synthetic hook tests; installed FL 25.2.5.5319 is not supported
-  merely because it shares the FL 25 name.
+- The original FL 25.2.3.5171 and 25.1.6.4997 tables were retained and passed synthetic hook
+  checks. They were not rerun live after this update. Other patch builds need their own tables.
 
 Use disposable project copies for friend testing. The code does not patch installed FL files.

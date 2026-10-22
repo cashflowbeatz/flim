@@ -91,10 +91,17 @@ static void reset(void) {
 }
 
 int main(void) {
-    reset();
-    assert(launch(L"C:\\FL") == 0);
-    assert(creation_flags == CREATE_SUSPENDED && allocations == 1 && remote_threads == 1);
-    assert(resumed == 1 && !terminated && released == 1 && closed == 3);
+    size_t i;
+    for (i = 0; i < sizeof(FLIM_FL_BUILDS) / sizeof(FLIM_FL_BUILDS[0]); i++) {
+        unsigned int a, b, c, d;
+        reset();
+        assert(swscanf_s(FLIM_FL_BUILDS[i], L"%u.%u.%u.%u", &a, &b, &c, &d) == 4);
+        test_version.dwFileVersionMS = (a << 16) | b;
+        test_version.dwFileVersionLS = (c << 16) | d;
+        assert(launch(L"C:\\FL") == 0);
+        assert(creation_flags == CREATE_SUSPENDED && allocations == 1 && remote_threads == 1);
+        assert(resumed == 1 && !terminated && released == 1 && closed == 3);
+    }
 
     reset(); long_module_path = 1;
     assert(launch(L"C:\\FL") == 1);
@@ -125,10 +132,10 @@ int main(void) {
     assert(resumed == 1 && terminated == 1 && released == 1 && closed == 3);
 
     reset();
-    test_version.dwFileVersionMS = (26u << 16) | 1u;
-    test_version.dwFileVersionLS = (6u << 16) | 5639u;
+    test_version.dwFileVersionMS = (26u << 16) | 99u;
+    test_version.dwFileVersionLS = (99u << 16) | 65535u;
     assert(launch(L"C:\\FL") == 0);
     assert(!creation_flags && !allocations && !remote_threads && !resumed && !terminated && closed == 2);
-    puts("Launcher process handling: OK (9 scenarios, mocked Win32 APIs)");
+    printf("Launcher process handling: OK (%zu known builds + 8 failure/fallback scenarios, mocked Win32 APIs)\n", i);
     return 0;
 }

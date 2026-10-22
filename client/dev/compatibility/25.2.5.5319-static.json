@@ -1,0 +1,2920 @@
+{
+  "schema_version": 1,
+  "status": "manually_reviewed_static_candidates",
+  "runtime_validated": false,
+  "analysis_image_base": "0x400000",
+  "method": "Exact-version/hash PE comparison with sigscan unique signatures, incoming callers and function-order anchors; explicit-target Capstone disassembly and Delphi published-method / RTTI context. Static analysis only.",
+  "reference": {
+    "file_version": "25.2.3.5171",
+    "sha256": "54eff612a64c9eb047ee63f44204cc42678affdc270c64733bf997ecc0dccd35",
+    "size_bytes": 51069232,
+    "image_base": "0x400000",
+    "machine": "AMD64"
+  },
+  "target": {
+    "file_version": "25.2.5.5319",
+    "sha256": "1b7e2381f2853ee590bff74429fb8aa5540d33a5b33c0c5e41ec01c03fe0c7ac",
+    "size_bytes": 51142960,
+    "image_base": "0x400000",
+    "machine": "AMD64"
+  },
+  "source_table_sha256_at_mapping": "0812e1ec672171d310977aa53bc02e365afc10905a80ef3af3fe4eba3f6802a4",
+  "address_summary": {
+    "total": 62,
+    "expected_total": 62,
+    "counts": {
+      "confirmed": 40,
+      "unique": 22
+    },
+    "unresolved": [],
+    "missing": [],
+    "unexpected": [],
+    "duplicate": [],
+    "complete": true
+  },
+  "address_candidates": [
+    {
+      "name": "REC_RVA",
+      "old": "0xf4e910",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf53fe0",
+      "how": "sig L1 29B; callers: 160 sites, 48 matched, top 0xf53fe0 x48; position 1/2 between anchors; similarity 1.00",
+      "comment": "ProcessRECEvent(eventId, value, flags)"
+    },
+    {
+      "name": "MUTE_RVA",
+      "old": "0x1176be0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x117f050",
+      "how": "sig L1 28B; callers: 8 sites, 8 matched, top 0x117f050 x8; position 1/2 between anchors; similarity 1.00",
+      "comment": "setTrackEnabled(track, enabled: 1/0, -1 toggle)"
+    },
+    {
+      "name": "MIXARR_VA",
+      "old": "0x1496718",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a7eb0",
+      "how": "949 refs, 48 sigs, votes {'0x14a7eb0': 38}",
+      "comment": "global: pointer to mixer track array (stride 0x1474)"
+    },
+    {
+      "name": "MIXCNT_VA",
+      "old": "0x14980b8",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a9850",
+      "how": "228 refs, 23 sigs, votes {'0x14a9850': 21}",
+      "comment": "global: pointer to mixer track count (int)"
+    },
+    {
+      "name": "MAINFORM_VA",
+      "old": "0x1497368",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a8b00",
+      "how": "561 refs, 60 sigs, votes {'0x14a8b00': 35}",
+      "comment": "global: pointer to FL main form pointer"
+    },
+    {
+      "name": "SAVEPRESET_VA",
+      "old": "0xe71f20",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xe78dc0",
+      "how": "sig L1 24B; callers: 22 sites, 15 matched, top 0xe78dc0 x15; position 1/2 between anchors; similarity 1.00",
+      "comment": "SavePresetFile(UnicodeString file, mask, obj, flags) -> 0 ok"
+    },
+    {
+      "name": "LOADPRESET_VA",
+      "old": "0xe72110",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xe78fb0",
+      "how": "sig L1 24B; callers: 21 sites, 16 matched, top 0xe78fb0 x16; position 2/3 between anchors; similarity 1.00",
+      "comment": "LoadPresetFile(UnicodeString file, mask, obj, 0) -> 0 ok (replaces plugin)"
+    },
+    {
+      "name": "HASPLUGIN_VA",
+      "old": "0x12204f0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x12297e0",
+      "how": "sig L1 27B; callers: 84 sites, 42 matched, top 0x12297e0 x42; position 1/2 between anchors; similarity 1.00",
+      "comment": "HasPlugin(obj) -> bool"
+    },
+    {
+      "name": "GETPLUGIN_VA",
+      "old": "0x1222030",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x122b320",
+      "how": "sig L1 25B; callers: 128 sites, 41 matched, top 0x122b320 x41; position 1/2 between anchors; similarity 1.00",
+      "comment": "GetPlugin(obj, &intf) -> plugin type; intf is AddRef'd (must release!)"
+    },
+    {
+      "name": "INTFCLEAR_VA",
+      "old": "0x41a770",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x41a770",
+      "how": "sig L1 25B; callers: 3917 sites, 36 matched, top 0x41a770 x36; position 1/2 between anchors; similarity 1.00",
+      "comment": "Delphi _IntfClear(&intf): nil it and Release"
+    },
+    {
+      "name": "ADDCHAN_VA",
+      "old": "0xf1ceb0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf215e0",
+      "how": "sig L1 24B; callers: 27 sites, 11 matched, top 0xf215e0 x11; position 1/2 between anchors; similarity 1.00",
+      "comment": "AddChannel(-1, 0, 1) -> new channel obj (appended)"
+    },
+    {
+      "name": "DELCHAN_VA",
+      "old": "0xf1d6c0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf21df0",
+      "how": "sig L1 28B; callers: 36 sites, 17 matched, top 0xf21df0 x17; position 1/2 between anchors; similarity 1.00",
+      "comment": "DeleteChannel(index, 0, flags); flags 1|2 = no confirmation dialog"
+    },
+    {
+      "name": "RESOLVER_VA",
+      "old": "0xf1e370",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf22ac0",
+      "how": "sig L1 24B; callers: 54 sites, 42 matched, top 0xf22ac0 x42; position 1/2 between anchors; similarity 1.00",
+      "comment": "ResolveChannel(index, global, &obj): global 0 = index in the rack's filter group"
+    },
+    {
+      "name": "CHANLIST_VA",
+      "old": "0x1498140",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a98d8",
+      "how": "1444 refs, 58 sigs, votes {'0x14a98d8': 38}",
+      "comment": "global: pointer to channel list (items +8, count +0x10)"
+    },
+    {
+      "name": "MOVECHAN_VA",
+      "old": "0xf4a780",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf4fe10",
+      "how": "sig L1 26B; callers: 7 sites, 2 matched, top 0xf4fe10 x2; position 1/2 between anchors; similarity 1.00",
+      "comment": "ReorderChannels(**MOVEOBJ, mode, **MOVEARG, flags): FL's Alt+Up/Down + sorts"
+    },
+    {
+      "name": "MOVEOBJ_VA",
+      "old": "0x1497460",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a8bf8",
+      "how": "396 refs, 54 sigs, votes {'0x14a8bf8': 28}",
+      "comment": "first arg (pointer global, deref twice)"
+    },
+    {
+      "name": "MOVEARG_VA",
+      "old": "0x1499868",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14ab008",
+      "how": "48 refs, 46 sigs, votes {'0x14ab008': 41}",
+      "comment": "third arg (int, deref twice; -1 seen)"
+    },
+    {
+      "name": "CHANFILT_VA",
+      "old": "0x14961d0",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a7968",
+      "how": "171 refs, 58 sigs, votes {'0x14a7968': 54}",
+      "comment": "global: channel list of the rack's current filter group (same layout)"
+    },
+    {
+      "name": "PATARR_VA",
+      "old": "0x1498920",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14aa0c8",
+      "how": "364 refs, 57 sigs, votes {'0x14aa0c8': 42}",
+      "comment": "global: pointer to the static pattern table (stride 0xC0)"
+    },
+    {
+      "name": "NOTEARR_VA",
+      "old": "0x11cb490",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11d4080",
+      "how": "sig L1 41B; callers: 57 sites, 38 matched, top 0x11d4080 x38; position 1/2 between anchors; similarity 1.00",
+      "comment": "NoteArray(pattern, create) -> note array object"
+    },
+    {
+      "name": "NOTEDEL_VA",
+      "old": "0xf665d0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf6d7d0",
+      "how": "sig L1 26B; callers: 11 sites, 5 matched, top 0xf6d7d0 x5; position 1/2 between anchors; similarity 1.00",
+      "comment": "DeleteNote(arr, index, 0)"
+    },
+    {
+      "name": "NOTELOCK_VA",
+      "old": "0x1497f30",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a96c8",
+      "how": "334 refs, 54 sigs, votes {'0x14a96c8': 43}",
+      "comment": "global: CRITICAL_SECTION* FL holds while editing notes (audio thread reads them)"
+    },
+    {
+      "name": "GRIDREFRESH_VA",
+      "old": "0x11d04f0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11d90e0",
+      "how": "sig L1 46B; callers: 6 sites, 5 matched, top 0x11d90e0 x5; position 1/2 between anchors; similarity 1.00",
+      "comment": "RefreshGrid(channel->grid at +0x7bc)"
+    },
+    {
+      "name": "FLPROJ_VA",
+      "old": "0x149a508",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14abca8",
+      "how": "1477 refs, 57 sigs, votes {'0x14abca8': 50}",
+      "comment": "global -> holder; *(holder + 0x10) = TFLProject object"
+    },
+    {
+      "name": "MAINOBJ_VA",
+      "old": "0x1496fb8",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a8750",
+      "how": "1009 refs, 50 sigs, votes {'0x14a8750': 35}",
+      "comment": "global -> var -> main form object (what FL's own open/save code passes)"
+    },
+    {
+      "name": "SETPROJ_VA",
+      "old": "0x10cb1e0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x10d2c90",
+      "how": "sig L1 25B; callers: 12 sites, 7 matched, top 0x10d2c90 x7; position 2/3 between anchors; similarity 1.00",
+      "comment": "SetProjectFile(form, path, path, addRecent): title, Ctrl+S target, recent list"
+    },
+    {
+      "name": "SAVEPROJ_VA",
+      "old": "0x10cdf80",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x10d5a60",
+      "how": "sig L1 24B; callers: 5 sites, 3 matched, top 0x10d5a60 x3; position 3/4 between anchors; similarity 0.78",
+      "comment": "SaveProjectTo(path, 0) -> bool: FL's project writer; current name unchanged"
+    },
+    {
+      "name": "BUSYBEGIN_VA",
+      "old": "0x10c1e70",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x10c9860",
+      "how": "sig L2 40B; callers: 5 sites, 3 matched, top 0x10c9860 x3; position 3/5 between anchors; similarity 1.00",
+      "comment": "FL's open handler wraps an .flp load in these two"
+    },
+    {
+      "name": "BUSYEND_VA",
+      "old": "0x10c1ec0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x10c98b0",
+      "how": "sig L2 44B; callers: 6 sites, 4 matched, top 0x10c98b0 x4; position 4/5 between anchors; similarity 1.00",
+      "comment": ""
+    },
+    {
+      "name": "PROJNAME_VA",
+      "old": "0x156f2a0",
+      "sec": ".bss",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x15812a0",
+      "how": "14 refs, 14 sigs, votes {'0x15812a0': 9}",
+      "comment": "UnicodeString global: current project file ('' = untitled)"
+    },
+    {
+      "name": "ARRS_VA",
+      "old": "0x18209d8",
+      "sec": ".bss",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x18329d8",
+      "how": "42 refs, 34 sigs, votes {'0x18329d8': 31}",
+      "comment": "global -> arrangement pointer array (count as int64 at -8)"
+    },
+    {
+      "name": "ARRCUR_VA",
+      "old": "0x148d1dc",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x149e8b4",
+      "how": "10 refs, 10 sigs, votes {'0x149e8b4': 6}",
+      "comment": "int global: current arrangement index"
+    },
+    {
+      "name": "PLFORM_VA",
+      "old": "0x14993e8",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14aab88",
+      "how": "1154 refs, 59 sigs, votes {'0x14aab88': 22}",
+      "comment": "global -> var -> playlist form"
+    },
+    {
+      "name": "PLREFRESH_VA",
+      "old": "0xd40250",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xd45d90",
+      "how": "sig L1 28B; callers: 21 sites, 12 matched, top 0xd45d90 x12; position 1/3 between anchors; similarity 1.00",
+      "comment": "RefreshPlaylist(form): what FL's clip-properties dialog calls after an edit"
+    },
+    {
+      "name": "HINT_VA",
+      "old": "0x10e49f0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x10ec570",
+      "how": "sig L1 24B; callers: 150 sites, 43 matched, top 0x10ec570 x43; position 1/2 between anchors; similarity 1.00",
+      "comment": "ShowHint(form, UnicodeString text, 0): FL's hint bar (top left)"
+    },
+    {
+      "name": "MIXNAME_VA",
+      "old": "0x11b9ce0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11c2810",
+      "how": "sig L1 27B; callers: 25 sites, 20 matched, top 0x11c2810 x20; position 2/3 between anchors; similarity 1.00",
+      "comment": "SetMixerTrackName(track, name, 1): also renames linked playlist tracks"
+    },
+    {
+      "name": "MIXCOLOR_VA",
+      "old": "0x11bcd60",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11c58a0",
+      "how": "sig L1 24B; callers: 26 sites, 16 matched, top 0x11c58a0 x16; position 32/33 between anchors; similarity 1.00",
+      "comment": "SetMixerTrackColor(track record, color)"
+    },
+    {
+      "name": "UIUPDATE_VA",
+      "old": "0xb69db0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xb6a1d0",
+      "how": "sig L1 28B; callers: 208 sites, 31 matched, top 0xb6a1d0 x31; position 1/2 between anchors; similarity 1.00",
+      "comment": "UIUpdate(what, 0); 0x18 = mixer (what FL calls after a mixer color)"
+    },
+    {
+      "name": "MIXOBJ_VA",
+      "old": "0x1498208",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a99a0",
+      "how": "272 refs, 54 sigs, votes {'0x14a99a0': 45}",
+      "comment": "global -> var -> mixer object (routing calls take it)"
+    },
+    {
+      "name": "SETROUTE_VA",
+      "old": "0x119e180",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11a67f0",
+      "how": "sig L1 24B; callers: 13 sites, 12 matched, top 0x11a67f0 x12; position 2/4 between anchors; similarity 0.96",
+      "comment": "SetRoute(mixer, src, dst, on, 1) -> int"
+    },
+    {
+      "name": "ROUTEUPD_VA",
+      "old": "0x119d6d0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11a5d20",
+      "how": "sig L1 27B; callers: 7 sites, 7 matched, top 0x11a5d20 x7; position 1/2 between anchors; similarity 1.00",
+      "comment": "RoutingChanged(mixer): after route / send level edits"
+    },
+    {
+      "name": "PATNAME_VA",
+      "old": "0x11cad70",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11d3960",
+      "how": "sig L1 26B; callers: 9 sites, 7 matched, top 0x11d3960 x7; position 2/3 between anchors; similarity 1.00",
+      "comment": "SetPatternName(pattern, name)"
+    },
+    {
+      "name": "PATCOLOR_VA",
+      "old": "0x11cb260",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11d3e50",
+      "how": "sig L1 26B; callers: 18 sites, 11 matched, top 0x11d3e50 x11; position 1/2 between anchors; similarity 1.00",
+      "comment": "SetPatternColor(pattern, color): also sets the \"custom color\" flag"
+    },
+    {
+      "name": "PATREFRESH_VA",
+      "old": "0xd9a9e0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xda0a70",
+      "how": "sig L1 26B; callers: 82 sites, 17 matched, top 0xda0a70 x17; position 1/2 between anchors; similarity 1.00",
+      "comment": "what FL calls on (playlist form +0xd00) after a pattern rename"
+    },
+    {
+      "name": "PLTRACK_VA",
+      "old": "0x11dec90",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11e7940",
+      "how": "sig L1 25B; callers: 39 sites, 25 matched, top 0x11e7940 x25; position 1/2 between anchors; similarity 1.00",
+      "comment": "SetPlaylistTrack(arrangement, track, name, color)"
+    },
+    {
+      "name": "MARKADD_VA",
+      "old": "0xf69960",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf70ba0",
+      "how": "sig L1 26B; callers: 13 sites, 10 matched, top 0xf70ba0 x10; position 1/2 between anchors; similarity 1.00",
+      "comment": "MarkerListAdd(&list, pos, name, action, num, den): appends a record"
+    },
+    {
+      "name": "MARKTYPE_VA",
+      "old": "0xf5bf38",
+      "sec": ".text",
+      "kind": "data",
+      "status": "unique",
+      "new": "0xf61698",
+      "how": "20 refs, 20 sigs, votes {'0xf61698': 16}",
+      "comment": "global -> RTTI of the marker record array (for DynArraySetLength)"
+    },
+    {
+      "name": "DYNSETLEN_VA",
+      "old": "0x417fc0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x417fc0",
+      "how": "sig L1 25B; callers: 1674 sites, 50 matched, top 0x417fc0 x50; position 1/2 between anchors; similarity 1.00",
+      "comment": "Delphi DynArraySetLength(&arr, typeinfo, 1, newLength)"
+    },
+    {
+      "name": "MARKREFRESH_VA",
+      "old": "0xd4bc60",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xd51810",
+      "how": "sig L1 26B; callers: 34 sites, 16 matched, top 0xd51810 x16; position 1/2 between anchors; similarity 1.00",
+      "comment": "MarkersChanged(playlist form): sort, redraw, time signature from markers"
+    },
+    {
+      "name": "MARKSORT_VA",
+      "old": "0xf692d0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xf70510",
+      "how": "sig L1 30B; callers: 9 sites, 3 matched, top 0xf70510 x3; position 1/2 between anchors; similarity 1.00",
+      "comment": "MarkerListSort(&list): sort + number them (builds the pattern's +0x38 table)"
+    },
+    {
+      "name": "PATLENUPD_VA",
+      "old": "0x11cb550",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11d4140",
+      "how": "sig L1 28B; callers: 32 sites, 25 matched, top 0x11d4140 x25; position 1/2 between anchors; similarity 1.00",
+      "comment": "UpdatePatternLength(pattern, 0): bar length from the pattern's time signature"
+    },
+    {
+      "name": "PATMARKS_VA",
+      "old": "0x11ca910",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x11d3500",
+      "how": "sig L1 46B; callers: 5 sites, 2 matched, top 0x11d3500 x2; position 1/2 between anchors; similarity 1.00",
+      "comment": "PatternMarkersChanged(pattern record): redraws the editors showing them"
+    },
+    {
+      "name": "SONGLOCK_VA",
+      "old": "0x1499b38",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14ab2d8",
+      "how": "612 refs, 52 sigs, votes {'0x14ab2d8': 43}",
+      "comment": "global: CRITICAL_SECTION* FL holds while editing markers / time signature"
+    },
+    {
+      "name": "MODIFIED_VA",
+      "old": "0x10c7570",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x10cefa0",
+      "how": "sig L1 25B; callers: 33 sites, 18 matched, top 0x10cefa0 x18; position 1/2 between anchors; similarity 1.00",
+      "comment": "SetModified(1): project changed"
+    },
+    {
+      "name": "TSNUM_VA",
+      "old": "0x14997d0",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14aaf70",
+      "how": "41 refs, 37 sigs, votes {'0x14aaf70': 26}",
+      "comment": "global -> int: project time signature numerator"
+    },
+    {
+      "name": "TSDEN_VA",
+      "old": "0x1497bd0",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a9368",
+      "how": "66 refs, 52 sigs, votes {'0x14a9368': 32}",
+      "comment": "denominator"
+    },
+    {
+      "name": "TSSET_VA",
+      "old": "0x1255160",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x125e4c0",
+      "how": "sig L1 25B; callers: 4 sites, 2 matched, top 0x125e4c0 x2; position 1/2 between anchors; similarity 1.00",
+      "comment": "TimeSigFromControls(main form): what the toolbar's time settings call"
+    },
+    {
+      "name": "TSCTLS_VA",
+      "old": "0x12552d0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0x125e630",
+      "how": "sig L1 28B; callers: 6 sites, 4 matched, top 0x125e630 x4; position 1/2 between anchors; similarity 1.00",
+      "comment": "TimeSigToControls(main form): controls from the two globals"
+    },
+    {
+      "name": "MSGBOX_VA",
+      "old": "0xa885e0",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xa88770",
+      "how": "sig L1 24B; callers: 287 sites, 36 matched, top 0xa88770 x36; position 1/2 between anchors; similarity 1.00",
+      "comment": "FL's message box (text, flags, callback) -> button id (detoured)"
+    },
+    {
+      "name": "MSGBOX_CORE_VA",
+      "old": "0xa88560",
+      "sec": ".text",
+      "kind": "func",
+      "status": "confirmed",
+      "new": "0xa886f0",
+      "how": "sig L1 24B; callers: 15 sites, 8 matched, top 0xa886f0 x8; position 1/2 between anchors; similarity 1.00",
+      "comment": "25.2: what it calls: (text, flags, 3, callback)"
+    },
+    {
+      "name": "PRFORM_VA",
+      "old": "0x1498380",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14a9b20",
+      "how": "161 refs, 53 sigs, votes {'0x14a9b20': 37}",
+      "comment": "global -> var -> piano roll form (NULL until first opened)"
+    },
+    {
+      "name": "CURPAT_VA",
+      "old": "0x1499de0",
+      "sec": ".data",
+      "kind": "data",
+      "status": "unique",
+      "new": "0x14ab580",
+      "how": "424 refs, 59 sigs, votes {'0x14ab580': 48}",
+      "comment": "global -> int: current pattern (what the piano roll edits)"
+    }
+  ],
+  "normalized_function_review": {
+    "method": "Ignore branch targets and RIP-relative target displacements; retain other memory displacements and non-branch immediates.",
+    "total": 40,
+    "equal": 28,
+    "results": [
+      {
+        "name": "REC_RVA",
+        "old": "0xf4e910",
+        "new": "0xf53fe0",
+        "old_size": 25031,
+        "new_size": 25041,
+        "old_instruction_count": 4616,
+        "new_instruction_count": 4618,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9994,
+        "prefix": "sig L1 29B; callers: 160 sites, 48 matched, top 0xf53fe0 x48; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MUTE_RVA",
+        "old": "0x1176be0",
+        "new": "0x117f050",
+        "old_size": 250,
+        "new_size": 250,
+        "old_instruction_count": 65,
+        "new_instruction_count": 65,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 28B; callers: 8 sites, 8 matched, top 0x117f050 x8; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "SAVEPRESET_VA",
+        "old": "0xe71f20",
+        "new": "0xe78dc0",
+        "old_size": 362,
+        "new_size": 362,
+        "old_instruction_count": 94,
+        "new_instruction_count": 94,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 22 sites, 15 matched, top 0xe78dc0 x15; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "LOADPRESET_VA",
+        "old": "0xe72110",
+        "new": "0xe78fb0",
+        "old_size": 258,
+        "new_size": 258,
+        "old_instruction_count": 64,
+        "new_instruction_count": 64,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 21 sites, 16 matched, top 0xe78fb0 x16; position 2/3 between anchors; similarity 1.00"
+      },
+      {
+        "name": "HASPLUGIN_VA",
+        "old": "0x12204f0",
+        "new": "0x12297e0",
+        "old_size": 8,
+        "new_size": 8,
+        "old_instruction_count": 3,
+        "new_instruction_count": 3,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 27B; callers: 84 sites, 42 matched, top 0x12297e0 x42; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "GETPLUGIN_VA",
+        "old": "0x1222030",
+        "new": "0x122b320",
+        "old_size": 64,
+        "new_size": 64,
+        "old_instruction_count": 20,
+        "new_instruction_count": 20,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 25B; callers: 128 sites, 41 matched, top 0x122b320 x41; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "INTFCLEAR_VA",
+        "old": "0x41a770",
+        "new": "0x41a770",
+        "old_size": 56,
+        "new_size": 56,
+        "old_instruction_count": 19,
+        "new_instruction_count": 19,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 25B; callers: 3917 sites, 36 matched, top 0x41a770 x36; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "ADDCHAN_VA",
+        "old": "0xf1ceb0",
+        "new": "0xf215e0",
+        "old_size": 94,
+        "new_size": 94,
+        "old_instruction_count": 32,
+        "new_instruction_count": 32,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 27 sites, 11 matched, top 0xf215e0 x11; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "DELCHAN_VA",
+        "old": "0xf1d6c0",
+        "new": "0xf21df0",
+        "old_size": 2302,
+        "new_size": 2308,
+        "old_instruction_count": 572,
+        "new_instruction_count": 573,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9764,
+        "prefix": "sig L1 28B; callers: 36 sites, 17 matched, top 0xf21df0 x17; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "RESOLVER_VA",
+        "old": "0xf1e370",
+        "new": "0xf22ac0",
+        "old_size": 136,
+        "new_size": 136,
+        "old_instruction_count": 44,
+        "new_instruction_count": 44,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 54 sites, 42 matched, top 0xf22ac0 x42; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MOVECHAN_VA",
+        "old": "0xf4a780",
+        "new": "0xf4fe10",
+        "old_size": 1156,
+        "new_size": 1176,
+        "old_instruction_count": 319,
+        "new_instruction_count": 323,
+        "normalized_equal": false,
+        "normalized_ratio": 0.972,
+        "prefix": "sig L1 26B; callers: 7 sites, 2 matched, top 0xf4fe10 x2; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "NOTEARR_VA",
+        "old": "0x11cb490",
+        "new": "0x11d4080",
+        "old_size": 113,
+        "new_size": 113,
+        "old_instruction_count": 35,
+        "new_instruction_count": 35,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 41B; callers: 57 sites, 38 matched, top 0x11d4080 x38; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "NOTEDEL_VA",
+        "old": "0xf665d0",
+        "new": "0xf6d7d0",
+        "old_size": 163,
+        "new_size": 163,
+        "old_instruction_count": 56,
+        "new_instruction_count": 56,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 26B; callers: 11 sites, 5 matched, top 0xf6d7d0 x5; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "GRIDREFRESH_VA",
+        "old": "0x11d04f0",
+        "new": "0x11d90e0",
+        "old_size": 92,
+        "new_size": 92,
+        "old_instruction_count": 20,
+        "new_instruction_count": 20,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 46B; callers: 6 sites, 5 matched, top 0x11d90e0 x5; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "SETPROJ_VA",
+        "old": "0x10cb1e0",
+        "new": "0x10d2c90",
+        "old_size": 8353,
+        "new_size": 8353,
+        "old_instruction_count": 119,
+        "new_instruction_count": 112,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9177,
+        "prefix": "sig L1 25B; callers: 12 sites, 7 matched, top 0x10d2c90 x7; position 2/3 between anchors; similarity 1.00"
+      },
+      {
+        "name": "SAVEPROJ_VA",
+        "old": "0x10cdf80",
+        "new": "0x10d5a60",
+        "old_size": 755,
+        "new_size": 755,
+        "old_instruction_count": 22,
+        "new_instruction_count": 31,
+        "normalized_equal": false,
+        "normalized_ratio": 0.6792,
+        "prefix": "sig L1 24B; callers: 5 sites, 3 matched, top 0x10d5a60 x3; position 3/4 between anchors; similarity 0.78"
+      },
+      {
+        "name": "BUSYBEGIN_VA",
+        "old": "0x10c1e70",
+        "new": "0x10c9860",
+        "old_size": 80,
+        "new_size": 80,
+        "old_instruction_count": 18,
+        "new_instruction_count": 18,
+        "normalized_equal": false,
+        "normalized_ratio": 0.8889,
+        "prefix": "sig L2 40B; callers: 5 sites, 3 matched, top 0x10c9860 x3; position 3/5 between anchors; similarity 1.00"
+      },
+      {
+        "name": "BUSYEND_VA",
+        "old": "0x10c1ec0",
+        "new": "0x10c98b0",
+        "old_size": 102,
+        "new_size": 102,
+        "old_instruction_count": 26,
+        "new_instruction_count": 26,
+        "normalized_equal": false,
+        "normalized_ratio": 0.8846,
+        "prefix": "sig L2 44B; callers: 6 sites, 4 matched, top 0x10c98b0 x4; position 4/5 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PLREFRESH_VA",
+        "old": "0xd40250",
+        "new": "0xd45d90",
+        "old_size": 59,
+        "new_size": 59,
+        "old_instruction_count": 17,
+        "new_instruction_count": 17,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9412,
+        "prefix": "sig L1 28B; callers: 21 sites, 12 matched, top 0xd45d90 x12; position 1/3 between anchors; similarity 1.00"
+      },
+      {
+        "name": "HINT_VA",
+        "old": "0x10e49f0",
+        "new": "0x10ec570",
+        "old_size": 423,
+        "new_size": 423,
+        "old_instruction_count": 96,
+        "new_instruction_count": 96,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 150 sites, 43 matched, top 0x10ec570 x43; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MIXNAME_VA",
+        "old": "0x11b9ce0",
+        "new": "0x11c2810",
+        "old_size": 695,
+        "new_size": 695,
+        "old_instruction_count": 191,
+        "new_instruction_count": 191,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 27B; callers: 25 sites, 20 matched, top 0x11c2810 x20; position 2/3 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MIXCOLOR_VA",
+        "old": "0x11bcd60",
+        "new": "0x11c58a0",
+        "old_size": 48,
+        "new_size": 48,
+        "old_instruction_count": 16,
+        "new_instruction_count": 16,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 26 sites, 16 matched, top 0x11c58a0 x16; position 32/33 between anchors; similarity 1.00"
+      },
+      {
+        "name": "UIUPDATE_VA",
+        "old": "0xb69db0",
+        "new": "0xb6a1d0",
+        "old_size": 71,
+        "new_size": 71,
+        "old_instruction_count": 18,
+        "new_instruction_count": 18,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 28B; callers: 208 sites, 31 matched, top 0xb6a1d0 x31; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "SETROUTE_VA",
+        "old": "0x119e180",
+        "new": "0x11a67f0",
+        "old_size": 699,
+        "new_size": 709,
+        "old_instruction_count": 172,
+        "new_instruction_count": 174,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9942,
+        "prefix": "sig L1 24B; callers: 13 sites, 12 matched, top 0x11a67f0 x12; position 2/4 between anchors; similarity 0.96"
+      },
+      {
+        "name": "ROUTEUPD_VA",
+        "old": "0x119d6d0",
+        "new": "0x11a5d20",
+        "old_size": 101,
+        "new_size": 101,
+        "old_instruction_count": 25,
+        "new_instruction_count": 25,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 27B; callers: 7 sites, 7 matched, top 0x11a5d20 x7; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PATNAME_VA",
+        "old": "0x11cad70",
+        "new": "0x11d3960",
+        "old_size": 188,
+        "new_size": 188,
+        "old_instruction_count": 48,
+        "new_instruction_count": 48,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 26B; callers: 9 sites, 7 matched, top 0x11d3960 x7; position 2/3 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PATCOLOR_VA",
+        "old": "0x11cb260",
+        "new": "0x11d3e50",
+        "old_size": 110,
+        "new_size": 110,
+        "old_instruction_count": 27,
+        "new_instruction_count": 27,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 26B; callers: 18 sites, 11 matched, top 0x11d3e50 x11; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PATREFRESH_VA",
+        "old": "0xd9a9e0",
+        "new": "0xda0a70",
+        "old_size": 1048,
+        "new_size": 1048,
+        "old_instruction_count": 264,
+        "new_instruction_count": 264,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 26B; callers: 82 sites, 17 matched, top 0xda0a70 x17; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PLTRACK_VA",
+        "old": "0x11dec90",
+        "new": "0x11e7940",
+        "old_size": 188,
+        "new_size": 188,
+        "old_instruction_count": 50,
+        "new_instruction_count": 50,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 25B; callers: 39 sites, 25 matched, top 0x11e7940 x25; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MARKADD_VA",
+        "old": "0xf69960",
+        "new": "0xf70ba0",
+        "old_size": 133,
+        "new_size": 133,
+        "old_instruction_count": 41,
+        "new_instruction_count": 41,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 26B; callers: 13 sites, 10 matched, top 0xf70ba0 x10; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "DYNSETLEN_VA",
+        "old": "0x417fc0",
+        "new": "0x417fc0",
+        "old_size": 56,
+        "new_size": 56,
+        "old_instruction_count": 18,
+        "new_instruction_count": 18,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 25B; callers: 1674 sites, 50 matched, top 0x417fc0 x50; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MARKREFRESH_VA",
+        "old": "0xd4bc60",
+        "new": "0xd51810",
+        "old_size": 1091,
+        "new_size": 1091,
+        "old_instruction_count": 292,
+        "new_instruction_count": 292,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9795,
+        "prefix": "sig L1 26B; callers: 34 sites, 16 matched, top 0xd51810 x16; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MARKSORT_VA",
+        "old": "0xf692d0",
+        "new": "0xf70510",
+        "old_size": 1402,
+        "new_size": 1402,
+        "old_instruction_count": 385,
+        "new_instruction_count": 385,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 30B; callers: 9 sites, 3 matched, top 0xf70510 x3; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PATLENUPD_VA",
+        "old": "0x11cb550",
+        "new": "0x11d4140",
+        "old_size": 1411,
+        "new_size": 1413,
+        "old_instruction_count": 391,
+        "new_instruction_count": 391,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9872,
+        "prefix": "sig L1 28B; callers: 32 sites, 25 matched, top 0x11d4140 x25; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "PATMARKS_VA",
+        "old": "0x11ca910",
+        "new": "0x11d3500",
+        "old_size": 100,
+        "new_size": 100,
+        "old_instruction_count": 35,
+        "new_instruction_count": 35,
+        "normalized_equal": false,
+        "normalized_ratio": 0.9714,
+        "prefix": "sig L1 46B; callers: 5 sites, 2 matched, top 0x11d3500 x2; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MODIFIED_VA",
+        "old": "0x10c7570",
+        "new": "0x10cefa0",
+        "old_size": 40,
+        "new_size": 40,
+        "old_instruction_count": 10,
+        "new_instruction_count": 10,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 25B; callers: 33 sites, 18 matched, top 0x10cefa0 x18; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "TSSET_VA",
+        "old": "0x1255160",
+        "new": "0x125e4c0",
+        "old_size": 354,
+        "new_size": 354,
+        "old_instruction_count": 81,
+        "new_instruction_count": 81,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 25B; callers: 4 sites, 2 matched, top 0x125e4c0 x2; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "TSCTLS_VA",
+        "old": "0x12552d0",
+        "new": "0x125e630",
+        "old_size": 441,
+        "new_size": 441,
+        "old_instruction_count": 103,
+        "new_instruction_count": 103,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 28B; callers: 6 sites, 4 matched, top 0x125e630 x4; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MSGBOX_VA",
+        "old": "0xa885e0",
+        "new": "0xa88770",
+        "old_size": 22,
+        "new_size": 22,
+        "old_instruction_count": 7,
+        "new_instruction_count": 7,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 287 sites, 36 matched, top 0xa88770 x36; position 1/2 between anchors; similarity 1.00"
+      },
+      {
+        "name": "MSGBOX_CORE_VA",
+        "old": "0xa88560",
+        "new": "0xa886f0",
+        "old_size": 121,
+        "new_size": 121,
+        "old_instruction_count": 34,
+        "new_instruction_count": 34,
+        "normalized_equal": true,
+        "normalized_ratio": 1.0,
+        "prefix": "sig L1 24B; callers: 15 sites, 8 matched, top 0xa886f0 x8; position 1/2 between anchors; similarity 1.00"
+      }
+    ]
+  },
+  "changed_layouts": [
+    {
+      "name": "FORM_BUSY",
+      "reference": "0x3344",
+      "target": "0x334c",
+      "target_sites": [
+        "0x10c9868",
+        "0x10c98a3",
+        "0x10c98bc",
+        "0x10c98d0",
+        "0x10c98dc"
+      ],
+      "observation": "BUSYBEGIN tests and stores the main-form busy object; BUSYEND accesses and clears the same field. The form remains the incoming RCX object."
+    },
+    {
+      "name": "PLFORM_PATS",
+      "reference": "0xd00",
+      "target": "0xd0c",
+      "target_sites": [
+        "0xf501ab"
+      ],
+      "observation": "MOVECHAN loads the form through mapped PLFORM global, reads the pattern-view object at this field, then tests its visible state and calls refresh helpers."
+    },
+    {
+      "name": "PL_MARKSEL",
+      "reference": "0xd58",
+      "target": "0xd64",
+      "target_sites": [
+        "0xd5191a",
+        "0xd5192b",
+        "0xd51940",
+        "0xd5249d",
+        "0xd524ac"
+      ],
+      "observation": "MARKREFRESH remaps the selected marker index after iteration changes; FORMADDMARK selects the new marker for editing then resets this field to -1."
+    },
+    {
+      "name": "PL_GRID",
+      "reference": "0xcf8",
+      "target": "0xd04",
+      "target_sites": [
+        "0xd45db1",
+        "0xd82381"
+      ],
+      "observation": "PLREFRESH loads this grid for refresh. Published VZoomSelectChange independently compares the selected grid to the playlist grid at this offset."
+    }
+  ],
+  "reviewed_unchanged_layouts": [
+    {
+      "name": "CH_SELECTED",
+      "reference": "0x35c",
+      "target": "0x35c",
+      "target_sites": [
+        "0x11a0235",
+        "0x11a0388",
+        "0x115332e"
+      ],
+      "observation": "Published LinkMenuClick and AssignToFreeMixerTrackMenuClick resolve a channel then test its selected byte."
+    },
+    {
+      "name": "CH_GRID",
+      "reference": "0x7bc",
+      "target": "0x7bc",
+      "target_sites": [
+        "0xf507a1",
+        "0xf5140c",
+        "0xf514e4"
+      ],
+      "observation": "The channel refresh helper called by MOVECHAN reads each channel grid through this field and updates its UI state."
+    },
+    {
+      "name": "PAT_STRIDE",
+      "reference": "0xc0",
+      "target": "0xc0",
+      "target_sites": [
+        "0x11d4096",
+        "0x11d409a",
+        "0x11d409e",
+        "0x11d3972",
+        "0x11d3976",
+        "0x11d397a"
+      ],
+      "observation": "NOTEARR and PATNAME index the pattern array by eight times three times eight."
+    },
+    {
+      "name": "PAT_NOTES",
+      "reference": "0x28",
+      "target": "0x28",
+      "target_sites": [
+        "0x11d40a2",
+        "0x11d40b7",
+        "0x11d40e5"
+      ],
+      "observation": "NOTEARR tests, creates and returns the note-array object at pattern record plus 0x28."
+    },
+    {
+      "name": "PAT_MARKERS",
+      "reference": "0x30",
+      "target": "0x30",
+      "target_sites": [
+        "0x11d353c"
+      ],
+      "observation": "PATMARKS forms the marker-list address at pattern record plus 0x30."
+    },
+    {
+      "name": "ED_TICKSPERPX",
+      "reference": "0xaec",
+      "target": "0xaec",
+      "target_sites": [
+        "0x112b2a3",
+        "0x112b10a"
+      ],
+      "observation": "Published EEMarkerAddSongLoopMenuClick and EEMarkerAddSongLoop2MenuClick multiply the visible horizontal pixel position by the editor double at this field."
+    },
+    {
+      "name": "ED_HSCROLL",
+      "reference": "0xafc",
+      "target": "0xafc",
+      "target_sites": [
+        "0x112b291",
+        "0x112b0f4"
+      ],
+      "observation": "The same marker handlers read horizontal scroll as a signed dword and convert it to double before the ticks-per-pixel multiplication."
+    },
+    {
+      "name": "PR_GRID",
+      "reference": "0xc40",
+      "target": "0xc40",
+      "target_sites": [
+        "0xd45d98",
+        "0xd8255c"
+      ],
+      "observation": "PLREFRESH and published VZoomSelectChange read the piano grid at the unchanged form field."
+    },
+    {
+      "name": "GRID_VSCROLL",
+      "reference": "0x3fc",
+      "target": "0x3fc",
+      "target_sites": [
+        "0xd823d0",
+        "0xd82461",
+        "0xd824bf",
+        "0xd82573"
+      ],
+      "observation": "Published VZoomSelectChange uses this grid field in scroll and zoom calculations for both editor branches."
+    },
+    {
+      "name": "MIX_STRIDE",
+      "reference": "0x1474",
+      "target": "0x1474",
+      "target_sites": [
+        "0x117f065",
+        "0x117f06c",
+        "0x117f0c5",
+        "0x11c2832",
+        "0x11c2839"
+      ],
+      "observation": "MUTE and MIXNAME index the mixer array by 0x51d times four; the MUTE loop independently increments by 0x1474."
+    },
+    {
+      "name": "MIX_SLOTS_OFF",
+      "reference": "0x1324",
+      "target": "0x1324",
+      "target_sites": [
+        "0x11c2855"
+      ],
+      "observation": "MIXNAME iterates effect object pointers at track plus 0x1324 plus slot times eight."
+    },
+    {
+      "name": "MIX_ROUTE",
+      "reference": "0x2e4",
+      "target": "0x2e4",
+      "target_sites": [
+        "0x11a685d",
+        "0x11a6864",
+        "0x11a6872",
+        "0x11a6876"
+      ],
+      "observation": "SETROUTE indexes source track by 0x1474, then destination routes from 0x2e4 by eight-byte records and a flag at record plus four."
+    },
+    {
+      "name": "PL_TRK_STRIDE",
+      "reference": "0x114",
+      "target": "0x114",
+      "target_sites": [
+        "0x11e75f7",
+        "0x11e75fb"
+      ],
+      "observation": "The name setter called by PLTRACK indexes playlist track records by 0x45 times four."
+    },
+    {
+      "name": "PL_TRK_NAME",
+      "reference": "0x24",
+      "target": "0x24",
+      "target_sites": [
+        "0x11e75fb"
+      ],
+      "observation": "The playlist track name setter forms the string field at record plus 0x24."
+    }
+  ],
+  "abi_reviews": [
+    {
+      "name": "SETPROJ",
+      "reference": "0x10cb1e0",
+      "target": "0x10d2c90",
+      "target_sites": [
+        "0x10d2d59",
+        "0x10d2d60",
+        "0x10d2d67",
+        "0x10d2d6e",
+        "0x10d2d76",
+        "0x10d2d89"
+      ],
+      "observations": [
+        "Preserves form RCX, path RDX, second path R8 and byte addRecent R9B; same 0x4460 stack frame.",
+        "Assigns UnicodeString path globals 0x1581298/0x15812a0 through the same helper 0x4133f0. Independent caller and function-order matches agree."
+      ]
+    },
+    {
+      "name": "SAVEPROJ",
+      "reference": "0x10cdf80",
+      "target": "0x10d5a60",
+      "target_sites": [
+        "0x10d5a6c",
+        "0x10d5abb",
+        "0x10d5ac2"
+      ],
+      "observations": [
+        "Preserves path RCX and byte flags DL with the same 0x98 stack frame.",
+        "Both versions jump to a protector thunk after the prologue. Linear decode after that jump includes junk; normalized whole-function similarity is not a full-body review or evidence of a changed incoming ABI."
+      ]
+    },
+    {
+      "name": "SETROUTE",
+      "reference": "0x119e180",
+      "target": "0x11a67f0",
+      "observations": [
+        "Preserves object RCX, source EDX, destination R8D, enable R9D and the fifth stack-byte argument. Mixer layout corroborated in the route access."
+      ]
+    },
+    {
+      "name": "MSGBOX",
+      "target": "0xa88770",
+      "core": "0xa886f0",
+      "mode": 1,
+      "observations": [
+        "Seven-instruction wrapper preserves RCX/RDX, moves R8 callback into R9, sets R8D from AL=3, and calls the mapped core at 0xa8877c. Existing mode-one prefix is compatible."
+      ]
+    }
+  ],
+  "project_vmt": {
+    "class_name": "TFLProject",
+    "reference_rtti_name": "0xdb8741",
+    "reference_vmt": "0xdb85e8",
+    "target_rtti_name": "0xdbe8a1",
+    "target_vmt": "0xdbe748",
+    "entries": [
+      {
+        "name": "FLPROJ_LOAD_SLOT",
+        "reference_slot": "0x38",
+        "target_slot": "0x38",
+        "reference_function": "0xdbcb60",
+        "target_function": "0xdc2e30",
+        "signature_hits": [
+          "0xdc2e30"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 25,
+        "normalized_equal": true,
+        "first_22_instructions_match_ignoring_targets": true,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue."
+      },
+      {
+        "name": "PATOP_CLONE_SLOT",
+        "reference_slot": "0xd8",
+        "target_slot": "0xd8",
+        "reference_function": "0xdb9a70",
+        "target_function": "0xdbfcb0",
+        "signature_hits": [
+          "0xdbfcb0"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 31,
+        "normalized_equal": false,
+        "first_22_instructions_match_ignoring_targets": true,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue."
+      },
+      {
+        "name": "PATOP_DELETE_SLOT",
+        "reference_slot": "0xe0",
+        "target_slot": "0xe0",
+        "reference_function": "0xdb9e60",
+        "target_function": "0xdc00c0",
+        "signature_hits": [
+          "0xdc00c0"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 29,
+        "normalized_equal": false,
+        "first_22_instructions_match_ignoring_targets": true,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue."
+      },
+      {
+        "name": "PATOP_REARRANGE_SLOT",
+        "reference_slot": "0xe8",
+        "target_slot": "0xe8",
+        "reference_function": "0xdba5e0",
+        "target_function": "0xdc0850",
+        "signature_hits": [
+          "0xdc0850"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 27,
+        "normalized_equal": false,
+        "first_22_instructions_match_ignoring_targets": false,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue.",
+        "target_argument_sites": [
+          "0xdc085f",
+          "0xdc0863",
+          "0xdc0867"
+        ],
+        "body_difference": "After incoming RDX/R8/R9D are saved, the prompt helper now obtains a global object and supplies a string resource instead of the former flags-based helper; this accounts for the early normalized mismatch."
+      },
+      {
+        "name": "PATOP_EDIT_SLOT",
+        "reference_slot": "0xf0",
+        "target_slot": "0xf0",
+        "reference_function": "0xdbaed0",
+        "target_function": "0xdc1150",
+        "signature_hits": [
+          "0xdc1150"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 26,
+        "normalized_equal": false,
+        "first_22_instructions_match_ignoring_targets": true,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue."
+      },
+      {
+        "name": "PATOP_INSERT_SLOT",
+        "reference_slot": "0xf8",
+        "target_slot": "0xf8",
+        "reference_function": "0xdba3d0",
+        "target_function": "0xdc0640",
+        "signature_hits": [
+          "0xdc0640"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 26,
+        "normalized_equal": false,
+        "first_22_instructions_match_ignoring_targets": true,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue."
+      },
+      {
+        "name": "PATOP_SPLIT_SLOT",
+        "reference_slot": "0x100",
+        "target_slot": "0x100",
+        "reference_function": "0xdbbae0",
+        "target_function": "0xdc1da0",
+        "signature_hits": [
+          "0xdc1da0"
+        ],
+        "signature_level": 1,
+        "signature_bytes": 66,
+        "normalized_equal": false,
+        "first_22_instructions_match_ignoring_targets": false,
+        "incoming_argument_review": "Incoming argument captures and frame size agree with the reference prologue.",
+        "target_argument_sites": [
+          "0xdc1dcd",
+          "0xdc1dd4",
+          "0xdc1ddb"
+        ],
+        "body_difference": "After incoming RCX/RDX/R8 are saved, the same prompt-helper change occurs. The incoming call ABI is preserved."
+      }
+    ]
+  },
+  "tooling_candidates": [
+    {
+      "name": "FORMADDMARK",
+      "reference": "0xd4c810",
+      "target": "0xd523c0",
+      "target_sites": [
+        "0xd523f1",
+        "0xd52415"
+      ],
+      "observation": "Unique level-one 27-byte signature. Body preserves form, position, name and action arguments plus two stack-byte time-signature arguments; forwards to the marker-list routine."
+    },
+    {
+      "name": "PL_MARKERS",
+      "reference": "0xd50",
+      "target": "0xd5c",
+      "target_sites": [
+        "0xd523f1",
+        "0xd52426",
+        "0xd52440",
+        "0xd52482"
+      ],
+      "observation": "FORMADDMARK uses the form marker list at this offset. Its record stride is 0xd times four (0x34); adjacent selected-index field at 0xd64 is independently confirmed."
+    }
+  ],
+  "offset_histograms": [
+    {
+      "name": "CH_SELECTED",
+      "old": "0x35c",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x35c",
+          "count": 71
+        }
+      ],
+      "comment": "channel object: selected byte (what ReorderChannels moves)"
+    },
+    {
+      "name": "CH_GRID",
+      "old": "0x7bc",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x7bc",
+          "count": 113
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "FORM_BUSY",
+      "old": "0x3344",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x334c",
+          "count": 5
+        }
+      ],
+      "comment": "main form: busy object, non-NULL while an .flp load runs"
+    },
+    {
+      "name": "PAT_STRIDE",
+      "old": "0xc0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xc0",
+          "count": 3054
+        },
+        {
+          "value": "0xd0",
+          "count": 16
+        },
+        {
+          "value": "0x5ac",
+          "count": 6
+        },
+        {
+          "value": "0xc8",
+          "count": 5
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PLFORM_PATS",
+      "old": "0xd00",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xd0c",
+          "count": 272
+        },
+        {
+          "value": "0xd00",
+          "count": 14
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PL_MARKSEL",
+      "old": "0xd58",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0xd64",
+          "count": 25
+        }
+      ],
+      "comment": "playlist form: index of the marker being edited (-1 = none)"
+    },
+    {
+      "name": "ED_TICKSPERPX",
+      "old": "0xaec",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0xaec",
+          "count": 89
+        }
+      ],
+      "comment": "double: ticks per pixel (horizontal zoom)"
+    },
+    {
+      "name": "ED_HSCROLL",
+      "old": "0xafc",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0xafc",
+          "count": 111
+        }
+      ],
+      "comment": "int: horizontal scroll, pixels"
+    },
+    {
+      "name": "PR_GRID",
+      "old": "0xc40",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0xc40",
+          "count": 197
+        }
+      ],
+      "comment": "piano roll form: TEventPanel_PR (note grid)"
+    },
+    {
+      "name": "PL_GRID",
+      "old": "0xcf8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xd04",
+          "count": 301
+        },
+        {
+          "value": "0xcf8",
+          "count": 19
+        }
+      ],
+      "comment": "playlist form: TEventPanel_AU (clip grid)"
+    },
+    {
+      "name": "GRID_VSCROLL",
+      "old": "0x3fc",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x3fc",
+          "count": 134
+        }
+      ],
+      "comment": "grid panel: vertical scroll, pixels"
+    },
+    {
+      "name": "MIX_STRIDE",
+      "old": "0x1474",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x1474",
+          "count": 45
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "MIX_SLOTS_OFF",
+      "old": "0x1324",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x1324",
+          "count": 97
+        }
+      ],
+      "comment": "mixer track: 10 effect slot object pointers"
+    },
+    {
+      "name": "MIX_ROUTE",
+      "old": "0x2e4",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x2e4",
+          "count": 38
+        }
+      ],
+      "comment": "+ dst*8: int send level (12800 = 100%); +4: byte, 1 = routed"
+    },
+    {
+      "name": "FLPROJ_LOAD_SLOT",
+      "old": "0x38",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x38",
+          "count": 24943
+        },
+        {
+          "value": "0x0",
+          "count": 59
+        },
+        {
+          "value": "0x40",
+          "count": 15
+        },
+        {
+          "value": "0x130",
+          "count": 13
+        },
+        {
+          "value": "0x48",
+          "count": 12
+        },
+        {
+          "value": "0x30",
+          "count": 3
+        },
+        {
+          "value": "0x58",
+          "count": 2
+        },
+        {
+          "value": "0x50",
+          "count": 1
+        },
+        {
+          "value": "0x68",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_CLONE_SLOT",
+      "old": "0xd8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xd8",
+          "count": 1918
+        },
+        {
+          "value": "0xe8",
+          "count": 10
+        },
+        {
+          "value": "0xe0",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_DELETE_SLOT",
+      "old": "0xe0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xe0",
+          "count": 2176
+        },
+        {
+          "value": "0xf0",
+          "count": 4
+        },
+        {
+          "value": "0xe8",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_REARRANGE_SLOT",
+      "old": "0xe8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xe8",
+          "count": 1457
+        },
+        {
+          "value": "0xf8",
+          "count": 2
+        },
+        {
+          "value": "0xf0",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_EDIT_SLOT",
+      "old": "0xf0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xf0",
+          "count": 2019
+        },
+        {
+          "value": "0x100",
+          "count": 6
+        },
+        {
+          "value": "0xf8",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_INSERT_SLOT",
+      "old": "0xf8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xf8",
+          "count": 1177
+        },
+        {
+          "value": "0x108",
+          "count": 2
+        },
+        {
+          "value": "0x100",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_SPLIT_SLOT",
+      "old": "0x100",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x100",
+          "count": 2687
+        },
+        {
+          "value": "0x110",
+          "count": 4
+        },
+        {
+          "value": "0x108",
+          "count": 2
+        },
+        {
+          "value": "0x10",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "MIX_ENABLED",
+      "old": "0x18",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x18",
+          "count": 6458
+        },
+        {
+          "value": "0xf1c",
+          "count": 1
+        }
+      ],
+      "comment": "byte: 1 = enabled (unmuted)"
+    },
+    {
+      "name": "PAT_NOTES",
+      "old": "0x28",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x28",
+          "count": 37512
+        },
+        {
+          "value": "0x0",
+          "count": 28
+        },
+        {
+          "value": "0x38",
+          "count": 27
+        },
+        {
+          "value": "0x48",
+          "count": 3
+        },
+        {
+          "value": "0x30",
+          "count": 2
+        },
+        {
+          "value": "0x24",
+          "count": 1
+        }
+      ],
+      "comment": "pattern record: note array object (NULL until the pattern has had notes)"
+    },
+    {
+      "name": "NOTES_DATA",
+      "old": "0x8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x8",
+          "count": 14378
+        },
+        {
+          "value": "0x9",
+          "count": 3
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        }
+      ],
+      "comment": "note array: record pointer"
+    },
+    {
+      "name": "NOTES_COUNT",
+      "old": "0x14",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x14",
+          "count": 2653
+        }
+      ],
+      "comment": "record count (u32); element size (0x18) at +0x10"
+    },
+    {
+      "name": "NOTE_SIZE",
+      "old": "0x18",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x18",
+          "count": 6458
+        },
+        {
+          "value": "0xf1c",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "NOTE_SEL_OFS",
+      "old": "0x13",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x13",
+          "count": 387
+        }
+      ],
+      "comment": "byte: low bits = note color, bit 0x80 = SELECTED (client-only, never synced)"
+    },
+    {
+      "name": "NOTE_SEL_BIT",
+      "old": "0x80",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x80",
+          "count": 7594
+        },
+        {
+          "value": "0x88",
+          "count": 8
+        },
+        {
+          "value": "0x90",
+          "count": 7
+        },
+        {
+          "value": "0x0",
+          "count": 5
+        },
+        {
+          "value": "0xa0",
+          "count": 4
+        },
+        {
+          "value": "0x84",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "ARR_CLIPS",
+      "old": "0x14",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x14",
+          "count": 2653
+        }
+      ],
+      "comment": "arrangement: clip array object (same array family as notes)"
+    },
+    {
+      "name": "CLIPS_DATA",
+      "old": "0x8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x8",
+          "count": 14378
+        },
+        {
+          "value": "0x9",
+          "count": 3
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CLIPS_COUNT",
+      "old": "0x14",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x14",
+          "count": 2653
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CLIP_SIZE",
+      "old": "0x50",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x50",
+          "count": 13404
+        },
+        {
+          "value": "0x60",
+          "count": 11
+        },
+        {
+          "value": "0x0",
+          "count": 9
+        },
+        {
+          "value": "0x58",
+          "count": 7
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        }
+      ],
+      "comment": "first 32 bytes = FLP event 233 record"
+    },
+    {
+      "name": "CLIP_DEL_OFS",
+      "old": "0x4",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x4",
+          "count": 6975
+        }
+      ],
+      "comment": "-1 = deleted (then purge)"
+    },
+    {
+      "name": "CLIP_SEL_OFS",
+      "old": "0x13",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x13",
+          "count": 387
+        }
+      ],
+      "comment": "bit 0x80 = SELECTED (client-only)"
+    },
+    {
+      "name": "CLIP_SEL_BIT",
+      "old": "0x80",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x80",
+          "count": 7594
+        },
+        {
+          "value": "0x88",
+          "count": 8
+        },
+        {
+          "value": "0x90",
+          "count": 7
+        },
+        {
+          "value": "0x0",
+          "count": 5
+        },
+        {
+          "value": "0xa0",
+          "count": 4
+        },
+        {
+          "value": "0x84",
+          "count": 2
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CLIP_ID_OFS",
+      "old": "0x20",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x20",
+          "count": 33216
+        },
+        {
+          "value": "0xf14",
+          "count": 61
+        },
+        {
+          "value": "0x28",
+          "count": 18
+        },
+        {
+          "value": "0x30",
+          "count": 4
+        },
+        {
+          "value": "0x3c",
+          "count": 2
+        },
+        {
+          "value": "0x1",
+          "count": 1
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": "per-instance clip id (FL renumbers on add)"
+    },
+    {
+      "name": "MIX_NAME",
+      "old": "0xc",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xc",
+          "count": 4579
+        },
+        {
+          "value": "0xd",
+          "count": 3
+        }
+      ],
+      "comment": "mixer track: UnicodeString name ('' = \"Insert N\")"
+    },
+    {
+      "name": "MIX_COLOR",
+      "old": "0x4",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x4",
+          "count": 6975
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CH_NAME",
+      "old": "0x50",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x50",
+          "count": 13404
+        },
+        {
+          "value": "0x60",
+          "count": 11
+        },
+        {
+          "value": "0x0",
+          "count": 9
+        },
+        {
+          "value": "0x58",
+          "count": 7
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        }
+      ],
+      "comment": "channel object: UnicodeString name"
+    },
+    {
+      "name": "CH_COLOR",
+      "old": "0x78",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x78",
+          "count": 7278
+        },
+        {
+          "value": "0x88",
+          "count": 17
+        },
+        {
+          "value": "0x80",
+          "count": 8
+        },
+        {
+          "value": "0x0",
+          "count": 5
+        },
+        {
+          "value": "0x74",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CH_SETNAME_VSLOT",
+      "old": "0x70",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x70",
+          "count": 8333
+        },
+        {
+          "value": "0x78",
+          "count": 25
+        },
+        {
+          "value": "0x80",
+          "count": 12
+        },
+        {
+          "value": "0x0",
+          "count": 4
+        },
+        {
+          "value": "0x6c",
+          "count": 2
+        },
+        {
+          "value": "0x98",
+          "count": 1
+        }
+      ],
+      "comment": "channel vmt: SetName(self, name)"
+    },
+    {
+      "name": "CH_SETCOLOR_VSLOT",
+      "old": "0x78",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x78",
+          "count": 7278
+        },
+        {
+          "value": "0x88",
+          "count": 17
+        },
+        {
+          "value": "0x80",
+          "count": 8
+        },
+        {
+          "value": "0x0",
+          "count": 5
+        },
+        {
+          "value": "0x74",
+          "count": 1
+        }
+      ],
+      "comment": "SetColor(self, color)"
+    },
+    {
+      "name": "PAT_NAME",
+      "old": "0x0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x0",
+          "count": 123977
+        },
+        {
+          "value": "0x40f9",
+          "count": 6
+        },
+        {
+          "value": "-0x73",
+          "count": 4
+        },
+        {
+          "value": "0x47",
+          "count": 3
+        },
+        {
+          "value": "0x4100",
+          "count": 3
+        },
+        {
+          "value": "-0x7",
+          "count": 3
+        },
+        {
+          "value": "0x20",
+          "count": 3
+        },
+        {
+          "value": "0x1217d",
+          "count": 3
+        },
+        {
+          "value": "0x4947",
+          "count": 2
+        },
+        {
+          "value": "-0x3f",
+          "count": 2
+        },
+        {
+          "value": "0x4a6d",
+          "count": 2
+        },
+        {
+          "value": "-0x4c",
+          "count": 2
+        },
+        {
+          "value": "0x596b",
+          "count": 2
+        },
+        {
+          "value": "0x9133",
+          "count": 2
+        },
+        {
+          "value": "0x19",
+          "count": 2
+        },
+        {
+          "value": "0x1c",
+          "count": 2
+        },
+        {
+          "value": "0x24",
+          "count": 2
+        },
+        {
+          "value": "0x49",
+          "count": 1
+        },
+        {
+          "value": "0x494f",
+          "count": 1
+        },
+        {
+          "value": "-0x6b",
+          "count": 1
+        },
+        {
+          "value": "0x5866",
+          "count": 1
+        },
+        {
+          "value": "0x14",
+          "count": 1
+        },
+        {
+          "value": "0x6458",
+          "count": 1
+        },
+        {
+          "value": "-0x70",
+          "count": 1
+        },
+        {
+          "value": "0x607e",
+          "count": 1
+        },
+        {
+          "value": "0x7f",
+          "count": 1
+        },
+        {
+          "value": "0x67",
+          "count": 1
+        },
+        {
+          "value": "0x7d",
+          "count": 1
+        },
+        {
+          "value": "0x6d",
+          "count": 1
+        },
+        {
+          "value": "0x6e19",
+          "count": 1
+        },
+        {
+          "value": "0x725f",
+          "count": 1
+        },
+        {
+          "value": "-0x21",
+          "count": 1
+        },
+        {
+          "value": "0x1",
+          "count": 1
+        },
+        {
+          "value": "0x100470c",
+          "count": 1
+        },
+        {
+          "value": "-0x46",
+          "count": 1
+        },
+        {
+          "value": "-0x60",
+          "count": 1
+        },
+        {
+          "value": "-0x4e",
+          "count": 1
+        },
+        {
+          "value": "-0x44",
+          "count": 1
+        },
+        {
+          "value": "0x4",
+          "count": 1
+        },
+        {
+          "value": "0x67b6",
+          "count": 1
+        },
+        {
+          "value": "0x91d8",
+          "count": 1
+        },
+        {
+          "value": "0x9d56",
+          "count": 1
+        },
+        {
+          "value": "0x9d",
+          "count": 1
+        },
+        {
+          "value": "0x76",
+          "count": 1
+        },
+        {
+          "value": "-0x7a",
+          "count": 1
+        },
+        {
+          "value": "0xa9df",
+          "count": 1
+        },
+        {
+          "value": "0x48006cd1",
+          "count": 1
+        },
+        {
+          "value": "0x48006ce4",
+          "count": 1
+        },
+        {
+          "value": "0x8855",
+          "count": 1
+        },
+        {
+          "value": "0x56",
+          "count": 1
+        },
+        {
+          "value": "0xa0bc",
+          "count": 1
+        },
+        {
+          "value": "0x8329",
+          "count": 1
+        },
+        {
+          "value": "-0x8",
+          "count": 1
+        },
+        {
+          "value": "0x2e",
+          "count": 1
+        },
+        {
+          "value": "-0xe",
+          "count": 1
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        },
+        {
+          "value": "0xdde2",
+          "count": 1
+        },
+        {
+          "value": "0x4800a794",
+          "count": 1
+        },
+        {
+          "value": "0xef5e",
+          "count": 1
+        },
+        {
+          "value": "-0x32",
+          "count": 1
+        },
+        {
+          "value": "0x668",
+          "count": 1
+        },
+        {
+          "value": "0x104f7",
+          "count": 1
+        },
+        {
+          "value": "0x4800c51e",
+          "count": 1
+        },
+        {
+          "value": "-0x6",
+          "count": 1
+        }
+      ],
+      "comment": "pattern record: UnicodeString name ('' = \"Pattern N\")"
+    },
+    {
+      "name": "PAT_COLOR",
+      "old": "0x8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x8",
+          "count": 14378
+        },
+        {
+          "value": "0x9",
+          "count": 3
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PAT_LENGTH",
+      "old": "0x10",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x10",
+          "count": 11970
+        },
+        {
+          "value": "0x11c",
+          "count": 6
+        },
+        {
+          "value": "0x11",
+          "count": 2
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        }
+      ],
+      "comment": "int, -1 = automatic"
+    },
+    {
+      "name": "PL_TRK_STRIDE",
+      "old": "0x114",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x114",
+          "count": 107
+        },
+        {
+          "value": "0x124",
+          "count": 4
+        }
+      ],
+      "comment": "arrangement object: playlist track t (1..500) at + t*0x114"
+    },
+    {
+      "name": "PL_TRK_NAME",
+      "old": "0x24",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x24",
+          "count": 2732
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PL_TRK_COLOR",
+      "old": "0x2c",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x2c",
+          "count": 4489
+        },
+        {
+          "value": "0x34",
+          "count": 8
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "ARR_MARKERS",
+      "old": "0x21c48",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x21c48",
+          "count": 67
+        }
+      ],
+      "comment": "arrangement object: dynamic array of marker records (stride 0x34)"
+    },
+    {
+      "name": "MARK_SIZE",
+      "old": "0x34",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x34",
+          "count": 3574
+        },
+        {
+          "value": "0x3c",
+          "count": 3
+        }
+      ],
+      "comment": "+0 position, +4 action (8 = time signature), +8 UnicodeString name,"
+    },
+    {
+      "name": "MARK_TAIL",
+      "old": "0x10",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x10",
+          "count": 11970
+        },
+        {
+          "value": "0x11c",
+          "count": 6
+        },
+        {
+          "value": "0x11",
+          "count": 2
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        }
+      ],
+      "comment": "+0x10.. plain data (+0x10 numerator, +0x11 denominator)"
+    },
+    {
+      "name": "PAT_MARKERS",
+      "old": "0x30",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x30",
+          "count": 22376
+        },
+        {
+          "value": "0xe8",
+          "count": 24
+        },
+        {
+          "value": "0x0",
+          "count": 20
+        },
+        {
+          "value": "0x38",
+          "count": 10
+        },
+        {
+          "value": "0x40",
+          "count": 10
+        },
+        {
+          "value": "0x58",
+          "count": 1
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        }
+      ],
+      "comment": "pattern record: dynamic array of marker records"
+    },
+    {
+      "name": "ED_HWND",
+      "old": "0x45c",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x45c",
+          "count": 250
+        }
+      ],
+      "comment": "editor form: window handle"
+    },
+    {
+      "name": "CTL_BOUNDS",
+      "old": "0x90",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x90",
+          "count": 5606
+        },
+        {
+          "value": "0xa0",
+          "count": 14
+        },
+        {
+          "value": "0x98",
+          "count": 9
+        },
+        {
+          "value": "0x0",
+          "count": 3
+        },
+        {
+          "value": "0x5cc",
+          "count": 2
+        },
+        {
+          "value": "0x88",
+          "count": 1
+        }
+      ],
+      "comment": "control: Left, Top, Width, Height in its form's client area"
+    },
+    {
+      "name": "PR_TOPKEY",
+      "old": "0x418",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x418",
+          "count": 57
+        }
+      ],
+      "comment": "piano roll grid: y = (topkey - key) * keyh - vscroll"
+    },
+    {
+      "name": "PR_KEYH",
+      "old": "0x520",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x520",
+          "count": 139
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "TRK_TOP",
+      "old": "0xb4",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xb4",
+          "count": 1430
+        },
+        {
+          "value": "0xc4",
+          "count": 2
+        }
+      ],
+      "comment": "playlist track (arrangement + t * 0x114): top y and height, pixels"
+    },
+    {
+      "name": "TRK_H",
+      "old": "0xb8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xb8",
+          "count": 2418
+        },
+        {
+          "value": "0xc8",
+          "count": 23
+        },
+        {
+          "value": "0xc0",
+          "count": 9
+        },
+        {
+          "value": "0x34",
+          "count": 2
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    }
+  ],
+  "limitations": [
+    "This evidence does not execute FL Studio and does not establish end-to-end compatibility. Runtime project load/save, all pattern operations, channel reorder, notes, markers, mixer routing/effects, editor state, and asset transfer require separate tests.",
+    "Offset histograms combine unrelated object types and are candidate evidence only; only the explicitly contextualized fields above have been reviewed by object use.",
+    "Protected function bodies are not exhaustively decoded. SAVEPROJ review covers the incoming ABI and mapping evidence; runtime save behavior must be checked separately.",
+    "This is an integration-specific review, not a claim to have reverse engineered every FL Studio subsystem."
+  ]
+}

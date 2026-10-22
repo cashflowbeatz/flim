@@ -18,11 +18,11 @@
 #define FLIM_FL_MAJOR  25                   // FL Studio 2025 = file version 25.x
 // FL builds the engine has an address table for (engine: k_flBuilds; keep both in sync)
 #ifdef FLIM_EXPERIMENTAL_FL26
-static const wchar_t *const FLIM_FL_BUILDS[] = { L"25.2.3.5171", L"25.1.6.4997", L"26.1.6.5639" };
-#define FLIM_FL_BUILDS_TEXT L"25.2.3.5171, 25.1.6.4997, 26.1.6.5639 (experimental)"
+static const wchar_t *const FLIM_FL_BUILDS[] = { L"25.2.3.5171", L"25.1.6.4997", L"25.2.5.5319", L"26.1.6.5639", L"26.1.7.5654" };
+#define FLIM_FL_BUILDS_TEXT L"25.2.3.5171, 25.1.6.4997, 25.2.5.5319, 26.1.6.5639 / 26.1.7.5654 (experimental)"
 #else
-static const wchar_t *const FLIM_FL_BUILDS[] = { L"25.2.3.5171", L"25.1.6.4997" };
-#define FLIM_FL_BUILDS_TEXT L"25.2.3.5171, 25.1.6.4997"
+static const wchar_t *const FLIM_FL_BUILDS[] = { L"25.2.3.5171", L"25.1.6.4997", L"25.2.5.5319" };
+#define FLIM_FL_BUILDS_TEXT L"25.2.3.5171, 25.1.6.4997, 25.2.5.5319"
 #endif
 
 static int flimcfg_path(wchar_t *out, int cap) {

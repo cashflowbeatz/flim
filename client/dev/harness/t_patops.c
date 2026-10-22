@@ -13,7 +13,8 @@ int main(void) {
     assert(image);
     g_flBase = (char *)image;
     for (i = 0; i < sizeof(k_flBuilds) / sizeof(k_flBuilds[0]); i++) {
-        int experimental = !wcscmp(k_flBuilds[i].build, L"26.1.6.5639");
+        int major26 = !wcsncmp(k_flBuilds[i].build, L"26.", 3);
+        assert(major26 || !wcsncmp(k_flBuilds[i].build, L"25.", 3));
         memset(image, 0, 8192);
         g_fl = k_flBuilds[i];
         g_fl.FLPROJ = IMG_BASE + 0x100;
@@ -27,12 +28,12 @@ int main(void) {
         for (j = 0; j < 64; j++) vmt[j] = (void *)(uintptr_t)(0x100000 + j * 16);
         memcpy(image + 0x200, "\x48\x83\xec\x28\xb0\x03\x4d\x89\xc1\x41\x89\xc0", 12);
         assert(fl_project() == image + 0x380);
-        assert(FLPROJ_LOAD_SLOT == (experimental ? 0x40 : 0x38) / 8);
+        assert(FLPROJ_LOAD_SLOT == (major26 ? 0x40 : 0x38) / 8);
         patops_install();
         for (j = 0; j < 64; j++) {
             int k, matched = 0;
             for (k = 0; k < PATOP_N; k++) {
-                uint32_t slot = experimental ? slots26[k] : (uint32_t)wire[k];
+                uint32_t slot = major26 ? slots26[k] : (uint32_t)wire[k];
                 assert(PATOP_SLOT[k] == wire[k]);
                 assert(patop_vmt_slot(k) == slot);
                 if (j * sizeof(void *) == slot) {

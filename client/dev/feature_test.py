@@ -163,7 +163,9 @@ def t_layout(a, b, v):
 
 FL_DIRS = {'25.2.3.5171': r'C:\Program Files (x86)\Image-Line\FL Studio 2025',
            '25.1.6.4997': r'C:\Program Files (x86)\Image-Line\FL4997',
-           '26.1.6.5639': r'C:\Program Files\Image-Line\FL Studio 2026'}
+           '25.2.5.5319': r'C:\Program Files\Image-Line\FL Studio 2025',
+           '26.1.6.5639': r'C:\Program Files\Image-Line\FL Studio 2026',
+           '26.1.7.5654': r'C:\Program Files\Image-Line\FL Studio 2026'}
 MASK_FX = 48
 
 

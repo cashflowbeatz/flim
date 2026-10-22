@@ -12,10 +12,13 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 > (see [Requirements](#requirements)). It can crash FL, so save often. flim never overwrites your
 > original `.flp` files (see [Sessions](#sessions)).
 
-This fork adds an opt-in port for **FL Studio 26.1.6.5639 on Windows x64**. Build it with
+This fork adds an opt-in port for **FL Studio 26.1.7.5654 and 26.1.6.5639 on Windows x64**. Build it with
 `FLIM_EXPERIMENTAL_FL26=1`; the resulting launcher and engine are in `client/out-experimental`.
-Other FL 26 builds are not supported. The default build retains the existing FL 25 tables.
-See [FL 26 validation](client/dev/compatibility/README.md) for observed behavior and remaining tests.
+The same experimental client also supports FL **25.2.5.5319, 25.2.3.5171 and 25.1.6.4997**;
+the default build includes those three FL 25 tables. Other builds require a separate verified table.
+Everyone in a session must use the **same exact FL build**. Supporting FL 25 and FL 26 in one client
+does not make newer FL project files loadable in older FL versions.
+See [compatibility validation](client/dev/compatibility/README.md) for observed behavior and remaining tests.
 The release links and public-test instructions below describe the upstream FL 25 release; they do
 not publish the new FL 26 client automatically.
 
@@ -118,8 +121,9 @@ at the same pattern or arrangement. The arrows can't be clicked and never get in
 
 ## Requirements
 
-- **Client:** Windows 10 or 11 (64-bit). The default build supports FL **25.2.3.5171** and
-  **25.1.6.4997**; the experimental build additionally supports **26.1.6.5639** (Help → About).
+- **Client:** Windows 10 or 11 (64-bit). The default build supports FL **25.2.5.5319**, **25.2.3.5171** and
+  **25.1.6.4997**; the experimental build additionally supports **26.1.7.5654** and **26.1.6.5639** (Help → About).
+  All participants in a session must use the same exact build.
   Have a different build? See [Other FL Studio builds](#other-fl-studio-builds).
 - **Server:** a supported Node.js LTS release (Node.js 24 is the container default) on Windows,
   Linux or macOS, reachable by the participants.
@@ -279,8 +283,9 @@ These environment variables are read by the engine and skip the Connect / Host d
 | `FLIM_NAME=<name>` | override the name from `flim.ini` (e.g. to run two FLs on one PC) |
 | `FLIM_SAMPLE_NOLOCAL=1` | never use a local copy of a received sample, always download it (to test sample transfer on one PC) |
 
-`client\restart_test.ps1 [-Url localhost:8080] [-OwnerKey <server password>] [-Slot 01] [-Password test]`
-closes all FL instances, rebuilds, and starts two of them: "A" hosts, "B" joins session `-Slot`.
+`client\restart_test.ps1 -Minimized -FlDir "<FL folder>" [-Experimental] [-Url localhost:8080] [-OwnerKey <server password>] [-Slot 01] [-Password test]`
+closes only test processes whose recorded identities still match, rebuilds, and starts two instances:
+"A" hosts, "B" joins session `-Slot`.
 Handy for testing sync on one machine with a local server (`npm start` in `server/`).
 
 ---
@@ -327,8 +332,11 @@ update. So flim keeps a table for each FL build it knows. Check yours under **He
 
 | Build | Status |
 |---|---|
-| **25.2.3.5171** | The main build. Everything is tested on it. |
-| **25.1.6.4997** | Works: the automated feature test passes, as on 25.2.3.5171 (knobs, mixer, channels and their order, plugins, patterns and pattern operations, notes, playlist clips, markers, time signatures, sample transfer). |
+| **26.1.7.5654** | Experimental; this fork's 31 runtime feature checks pass. |
+| **26.1.6.5639** | Experimental table retained; 31 runtime feature checks passed before the installed FL update. |
+| **25.2.5.5319** | This fork's 31 runtime feature checks pass using the same experimental client as FL 26. |
+| **25.2.3.5171** | Original reference table retained; synthetic hook checks pass. |
+| **25.1.6.4997** | Original upstream table retained; synthetic hook checks pass. |
 
 **Everyone in a session needs the same build.** FL Studio can't safely load projects and plugin
 states from a newer FL, and both travel in a session. So if the host's build differs from yours,

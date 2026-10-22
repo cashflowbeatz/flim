@@ -1,0 +1,3150 @@
+{
+  "schema_version": 1,
+  "status": "manually_reviewed_static_candidates",
+  "runtime_validated": false,
+  "reference": {
+    "path": "C:\\Users\\cashf\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\reference\\extracted\\FLEngine_x64.dll",
+    "file_version": "25.2.3.5171",
+    "sha256": "54eff612a64c9eb047ee63f44204cc42678affdc270c64733bf997ecc0dccd35",
+    "size_bytes": 51069232,
+    "image_base": "0x400000",
+    "machine": "AMD64"
+  },
+  "target": {
+    "path": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FLEngine_x64.dll",
+    "file_version": "26.1.7.5654",
+    "sha256": "6d9c5ab09c1d5594012ac2c31cf9ed08e73f42164ed0964cccae10a95d9b8e02",
+    "size_bytes": 22227016,
+    "image_base": "0x400000",
+    "machine": "AMD64"
+  },
+  "analysis_image_base": "0x400000",
+  "raw_map_summary": {
+    "total": 62,
+    "expected_total": 62,
+    "counts": {
+      "confirmed": 39,
+      "unique": 22,
+      "CONFLICT": 1
+    },
+    "unresolved": [
+      "SETPROJ_VA"
+    ],
+    "missing": [],
+    "unexpected": [],
+    "duplicate": [],
+    "complete": false
+  },
+  "address_corrections": [
+    {
+      "name": "SETPROJ",
+      "rejected": "0xf51fd0",
+      "accepted": "0x11d9380",
+      "evidence": [
+        "Preserves form RCX, path RDX, second path R8, and byte flag R9B at 0x11d943e..0x11d9453.",
+        "Assigns UnicodeString globals 0x16bcc90/0x16bcc98, calls published UpdatePathLabels 0x1363590 at 0x11d949e and loops over 49 recent projects.",
+        "Called by published RenameProjectBtnClick 0x13598d0 at 0x135a0e8 and ProjDataPathBtnClick 0x1364de0 at 0x13650f8.",
+        "The rejected candidate shares only a stack-probe prologue; three independently matched reference callers instead target the accepted address."
+      ]
+    }
+  ],
+  "project_vmt": {
+    "target": "0xed0c28",
+    "evidence": "TFLProject RTTI begins at 0xed0da0; its class pointer at 0xed0dac is 0xed0c28.",
+    "entries": [
+      {
+        "name": "FLPROJ_LOAD_SLOT",
+        "reference_function": "0xdbcb60",
+        "target_function": "0xed5d40",
+        "slot": "0x40",
+        "signature_level": 1,
+        "signature_length": 25,
+        "signature_candidates": [],
+        "initial_similarity": 0.875
+      },
+      {
+        "name": "PATOP_CLONE_SLOT",
+        "reference_function": "0xdb9a70",
+        "target_function": "0xed23f0",
+        "slot": "0xe8",
+        "signature_level": 1,
+        "signature_length": 31,
+        "signature_candidates": [
+          "0xed23f0"
+        ],
+        "initial_similarity": 1.0
+      },
+      {
+        "name": "PATOP_DELETE_SLOT",
+        "reference_function": "0xdb9e60",
+        "target_function": "0xed2ac0",
+        "slot": "0xf8",
+        "signature_level": 1,
+        "signature_length": 29,
+        "signature_candidates": [
+          "0xed2ac0"
+        ],
+        "initial_similarity": 1.0
+      },
+      {
+        "name": "PATOP_REARRANGE_SLOT",
+        "reference_function": "0xdba5e0",
+        "target_function": "0xed3580",
+        "slot": "0x108",
+        "signature_level": 1,
+        "signature_length": 27,
+        "signature_candidates": [
+          "0xed3580"
+        ],
+        "initial_similarity": 0.9166666666666666
+      },
+      {
+        "name": "PATOP_EDIT_SLOT",
+        "reference_function": "0xdbaed0",
+        "target_function": "0xed3e80",
+        "slot": "0x110",
+        "signature_level": 1,
+        "signature_length": 26,
+        "signature_candidates": [],
+        "initial_similarity": 1.0
+      },
+      {
+        "name": "PATOP_INSERT_SLOT",
+        "reference_function": "0xdba3d0",
+        "target_function": "0xed3370",
+        "slot": "0x118",
+        "signature_level": 1,
+        "signature_length": 26,
+        "signature_candidates": [
+          "0xed3370"
+        ],
+        "initial_similarity": 1.0
+      },
+      {
+        "name": "PATOP_SPLIT_SLOT",
+        "reference_function": "0xdbbae0",
+        "target_function": "0xed4b70",
+        "slot": "0x120",
+        "signature_level": 1,
+        "signature_length": 66,
+        "signature_candidates": [
+          "0xed4b70"
+        ],
+        "initial_similarity": 0.9166666666666666
+      }
+    ]
+  },
+  "additional_signatures": {
+    "FORMADDMARK": {
+      "reference": "0xd4c810",
+      "target": "0xe543b0",
+      "signature_level": 1,
+      "signature_length": 27
+    },
+    "FLP_READER": {
+      "reference": "0xaa9220",
+      "target": "0xa9e7a0",
+      "signature_level": 1,
+      "signature_length": 28
+    },
+    "FLP_WRITER": {
+      "reference": "0xaa96e0",
+      "target": "0xa9ec60",
+      "signature_level": 1,
+      "signature_length": 29
+    }
+  },
+  "offset_candidates": [
+    {
+      "name": "CH_SELECTED",
+      "reference": "0x35c",
+      "previous_fl26": "0x32c",
+      "target": "0x32c"
+    },
+    {
+      "name": "CH_GRID",
+      "reference": "0x7bc",
+      "previous_fl26": "0x7ac",
+      "target": "0x7ac"
+    },
+    {
+      "name": "FORM_BUSY",
+      "reference": "0x3344",
+      "previous_fl26": "0x34d4",
+      "target": "0x34d4"
+    },
+    {
+      "name": "PAT_STRIDE",
+      "reference": "0xc0",
+      "previous_fl26": "0xc0",
+      "target": "0xc0"
+    },
+    {
+      "name": "PLFORM_PATS",
+      "reference": "0xd00",
+      "previous_fl26": "0xd34",
+      "target": "0xd34"
+    },
+    {
+      "name": "PL_MARKSEL",
+      "reference": "0xd58",
+      "previous_fl26": "0xd8c",
+      "target": "0xd8c"
+    },
+    {
+      "name": "ED_TICKSPERPX",
+      "reference": "0xaec",
+      "previous_fl26": "0xb04",
+      "target": "0xb04"
+    },
+    {
+      "name": "ED_HSCROLL",
+      "reference": "0xafc",
+      "previous_fl26": "0xb14",
+      "target": "0xb14"
+    },
+    {
+      "name": "PR_GRID",
+      "reference": "0xc40",
+      "previous_fl26": "0xc68",
+      "target": "0xc68"
+    },
+    {
+      "name": "PL_GRID",
+      "reference": "0xcf8",
+      "previous_fl26": "0xd2c",
+      "target": "0xd2c"
+    },
+    {
+      "name": "GRID_VSCROLL",
+      "reference": "0x3fc",
+      "previous_fl26": "0x3fc",
+      "target": "0x3fc"
+    },
+    {
+      "name": "MIX_STRIDE",
+      "reference": "0x1474",
+      "previous_fl26": "0x1478",
+      "target": "0x1478"
+    },
+    {
+      "name": "MIX_SLOTS_OFF",
+      "reference": "0x1324",
+      "previous_fl26": "0x134c",
+      "target": "0x134c"
+    },
+    {
+      "name": "MIX_ROUTE",
+      "reference": "0x2e4",
+      "previous_fl26": "0x394",
+      "target": "0x394"
+    },
+    {
+      "name": "FLPROJ_LOAD_SLOT",
+      "reference": "0x38",
+      "previous_fl26": "0x40",
+      "target": "0x40"
+    },
+    {
+      "name": "PATOP_CLONE_SLOT",
+      "reference": "0xd8",
+      "previous_fl26": "0xe8",
+      "target": "0xe8"
+    },
+    {
+      "name": "PATOP_DELETE_SLOT",
+      "reference": "0xe0",
+      "previous_fl26": "0xf8",
+      "target": "0xf8"
+    },
+    {
+      "name": "PATOP_REARRANGE_SLOT",
+      "reference": "0xe8",
+      "previous_fl26": "0x108",
+      "target": "0x108"
+    },
+    {
+      "name": "PATOP_EDIT_SLOT",
+      "reference": "0xf0",
+      "previous_fl26": "0x110",
+      "target": "0x110"
+    },
+    {
+      "name": "PATOP_INSERT_SLOT",
+      "reference": "0xf8",
+      "previous_fl26": "0x118",
+      "target": "0x118"
+    },
+    {
+      "name": "PATOP_SPLIT_SLOT",
+      "reference": "0x100",
+      "previous_fl26": "0x120",
+      "target": "0x120"
+    }
+  ],
+  "offset_histograms": [
+    {
+      "name": "CH_SELECTED",
+      "old": "0x35c",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x32c",
+          "count": 43
+        },
+        {
+          "value": "0x35c",
+          "count": 14
+        },
+        {
+          "value": "0x1ec",
+          "count": 6
+        },
+        {
+          "value": "0x380",
+          "count": 1
+        }
+      ],
+      "comment": "channel object: selected byte (what ReorderChannels moves)"
+    },
+    {
+      "name": "CH_GRID",
+      "old": "0x7bc",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x7ac",
+          "count": 90
+        },
+        {
+          "value": "0x7bc",
+          "count": 21
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "FORM_BUSY",
+      "old": "0x3344",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x34d4",
+          "count": 5
+        }
+      ],
+      "comment": "main form: busy object, non-NULL while an .flp load runs"
+    },
+    {
+      "name": "PAT_STRIDE",
+      "old": "0xc0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xc0",
+          "count": 2739
+        },
+        {
+          "value": "0xc8",
+          "count": 60
+        },
+        {
+          "value": "0xd0",
+          "count": 58
+        },
+        {
+          "value": "0xb8",
+          "count": 19
+        },
+        {
+          "value": "0xdc",
+          "count": 6
+        },
+        {
+          "value": "0xb0",
+          "count": 5
+        },
+        {
+          "value": "0xa0",
+          "count": 5
+        },
+        {
+          "value": "0xcc",
+          "count": 4
+        },
+        {
+          "value": "0xa8",
+          "count": 3
+        },
+        {
+          "value": "0xb4",
+          "count": 3
+        },
+        {
+          "value": "0xf8",
+          "count": 2
+        },
+        {
+          "value": "0x20",
+          "count": 2
+        },
+        {
+          "value": "0x100",
+          "count": 1
+        },
+        {
+          "value": "0xe0",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PLFORM_PATS",
+      "old": "0xd00",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xd34",
+          "count": 240
+        },
+        {
+          "value": "0xd00",
+          "count": 14
+        },
+        {
+          "value": "0x10",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PL_MARKSEL",
+      "old": "0xd58",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0xd8c",
+          "count": 16
+        }
+      ],
+      "comment": "playlist form: index of the marker being edited (-1 = none)"
+    },
+    {
+      "name": "ED_TICKSPERPX",
+      "old": "0xaec",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xb04",
+          "count": 76
+        },
+        {
+          "value": "0xaec",
+          "count": 5
+        }
+      ],
+      "comment": "double: ticks per pixel (horizontal zoom)"
+    },
+    {
+      "name": "ED_HSCROLL",
+      "old": "0xafc",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xb14",
+          "count": 101
+        },
+        {
+          "value": "0xafc",
+          "count": 1
+        }
+      ],
+      "comment": "int: horizontal scroll, pixels"
+    },
+    {
+      "name": "PR_GRID",
+      "old": "0xc40",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xc68",
+          "count": 158
+        },
+        {
+          "value": "0xc50",
+          "count": 6
+        },
+        {
+          "value": "0xc40",
+          "count": 3
+        }
+      ],
+      "comment": "piano roll form: TEventPanel_PR (note grid)"
+    },
+    {
+      "name": "PL_GRID",
+      "old": "0xcf8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xd2c",
+          "count": 256
+        },
+        {
+          "value": "0xcf8",
+          "count": 19
+        }
+      ],
+      "comment": "playlist form: TEventPanel_AU (clip grid)"
+    },
+    {
+      "name": "GRID_VSCROLL",
+      "old": "0x3fc",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x3fc",
+          "count": 134
+        }
+      ],
+      "comment": "grid panel: vertical scroll, pixels"
+    },
+    {
+      "name": "MIX_STRIDE",
+      "old": "0x1474",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x1478",
+          "count": 37
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "MIX_SLOTS_OFF",
+      "old": "0x1324",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x134c",
+          "count": 68
+        }
+      ],
+      "comment": "mixer track: 10 effect slot object pointers"
+    },
+    {
+      "name": "MIX_ROUTE",
+      "old": "0x2e4",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x2e4",
+          "count": 20
+        },
+        {
+          "value": "0x2ec",
+          "count": 7
+        },
+        {
+          "value": "0x2b4",
+          "count": 4
+        },
+        {
+          "value": "0x394",
+          "count": 4
+        }
+      ],
+      "comment": "+ dst*8: int send level (12800 = 100%); +4: byte, 1 = routed"
+    },
+    {
+      "name": "FLPROJ_LOAD_SLOT",
+      "old": "0x38",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x38",
+          "count": 23101
+        },
+        {
+          "value": "0x30",
+          "count": 60
+        },
+        {
+          "value": "0x0",
+          "count": 57
+        },
+        {
+          "value": "0x48",
+          "count": 42
+        },
+        {
+          "value": "0x40",
+          "count": 41
+        },
+        {
+          "value": "0x3c",
+          "count": 14
+        },
+        {
+          "value": "0x20",
+          "count": 3
+        },
+        {
+          "value": "0x28",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 2
+        },
+        {
+          "value": "0x58",
+          "count": 2
+        },
+        {
+          "value": "0x3a",
+          "count": 1
+        },
+        {
+          "value": "0x50",
+          "count": 1
+        },
+        {
+          "value": "0xb8",
+          "count": 1
+        },
+        {
+          "value": "0x68",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_CLONE_SLOT",
+      "old": "0xd8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xd8",
+          "count": 1655
+        },
+        {
+          "value": "0xe0",
+          "count": 47
+        },
+        {
+          "value": "0xe8",
+          "count": 43
+        },
+        {
+          "value": "0xd0",
+          "count": 26
+        },
+        {
+          "value": "0xb8",
+          "count": 5
+        },
+        {
+          "value": "0xc0",
+          "count": 2
+        },
+        {
+          "value": "0xd4",
+          "count": 2
+        },
+        {
+          "value": "0xc8",
+          "count": 2
+        },
+        {
+          "value": "0x98",
+          "count": 1
+        },
+        {
+          "value": "0x38",
+          "count": 1
+        },
+        {
+          "value": "0xf0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_DELETE_SLOT",
+      "old": "0xe0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xe0",
+          "count": 1924
+        },
+        {
+          "value": "0xd8",
+          "count": 42
+        },
+        {
+          "value": "0xe8",
+          "count": 25
+        },
+        {
+          "value": "0xe4",
+          "count": 21
+        },
+        {
+          "value": "0xf0",
+          "count": 19
+        },
+        {
+          "value": "0xc8",
+          "count": 6
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        },
+        {
+          "value": "0xf8",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_REARRANGE_SLOT",
+      "old": "0xe8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xe8",
+          "count": 1256
+        },
+        {
+          "value": "0xf0",
+          "count": 27
+        },
+        {
+          "value": "0xf8",
+          "count": 26
+        },
+        {
+          "value": "0xe0",
+          "count": 12
+        },
+        {
+          "value": "0xd8",
+          "count": 5
+        },
+        {
+          "value": "0xec",
+          "count": 3
+        },
+        {
+          "value": "0xd0",
+          "count": 2
+        },
+        {
+          "value": "0xe4",
+          "count": 2
+        },
+        {
+          "value": "0x108",
+          "count": 2
+        },
+        {
+          "value": "0x18",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_EDIT_SLOT",
+      "old": "0xf0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xf0",
+          "count": 1678
+        },
+        {
+          "value": "0xf8",
+          "count": 102
+        },
+        {
+          "value": "0x100",
+          "count": 60
+        },
+        {
+          "value": "0xe8",
+          "count": 19
+        },
+        {
+          "value": "0xc0",
+          "count": 11
+        },
+        {
+          "value": "0xd0",
+          "count": 5
+        },
+        {
+          "value": "0xd8",
+          "count": 4
+        },
+        {
+          "value": "0xe0",
+          "count": 3
+        },
+        {
+          "value": "0x110",
+          "count": 2
+        },
+        {
+          "value": "0x6c",
+          "count": 1
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_INSERT_SLOT",
+      "old": "0xf8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xf8",
+          "count": 1063
+        },
+        {
+          "value": "0x100",
+          "count": 22
+        },
+        {
+          "value": "0x108",
+          "count": 11
+        },
+        {
+          "value": "0xf0",
+          "count": 8
+        },
+        {
+          "value": "0xe0",
+          "count": 3
+        },
+        {
+          "value": "0xfc",
+          "count": 2
+        },
+        {
+          "value": "0xd0",
+          "count": 2
+        },
+        {
+          "value": "0xe8",
+          "count": 2
+        },
+        {
+          "value": "0xf4",
+          "count": 1
+        },
+        {
+          "value": "0x118",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PATOP_SPLIT_SLOT",
+      "old": "0x100",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x100",
+          "count": 2458
+        },
+        {
+          "value": "0x104",
+          "count": 14
+        },
+        {
+          "value": "0x110",
+          "count": 12
+        },
+        {
+          "value": "0x108",
+          "count": 11
+        },
+        {
+          "value": "0xf8",
+          "count": 8
+        },
+        {
+          "value": "0xfc",
+          "count": 7
+        },
+        {
+          "value": "0xf0",
+          "count": 4
+        },
+        {
+          "value": "0xe0",
+          "count": 2
+        },
+        {
+          "value": "0xe8",
+          "count": 1
+        },
+        {
+          "value": "0x40000100",
+          "count": 1
+        },
+        {
+          "value": "0x200",
+          "count": 1
+        },
+        {
+          "value": "0xd0",
+          "count": 1
+        },
+        {
+          "value": "0x120",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "MIX_ENABLED",
+      "old": "0x18",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x18",
+          "count": 5851
+        },
+        {
+          "value": "0x1c",
+          "count": 127
+        },
+        {
+          "value": "0x30",
+          "count": 5
+        },
+        {
+          "value": "0x19",
+          "count": 4
+        },
+        {
+          "value": "0x6c",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 3
+        },
+        {
+          "value": "0x28",
+          "count": 2
+        },
+        {
+          "value": "0x10",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        },
+        {
+          "value": "0x2c",
+          "count": 1
+        }
+      ],
+      "comment": "byte: 1 = enabled (unmuted)"
+    },
+    {
+      "name": "PAT_NOTES",
+      "old": "0x28",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x28",
+          "count": 35498
+        },
+        {
+          "value": "0x38",
+          "count": 43
+        },
+        {
+          "value": "0x30",
+          "count": 32
+        },
+        {
+          "value": "0x20",
+          "count": 28
+        },
+        {
+          "value": "0x0",
+          "count": 25
+        },
+        {
+          "value": "0x2c",
+          "count": 11
+        },
+        {
+          "value": "0xb8",
+          "count": 3
+        },
+        {
+          "value": "0x48",
+          "count": 3
+        },
+        {
+          "value": "0x46",
+          "count": 2
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        },
+        {
+          "value": "0x32",
+          "count": 1
+        },
+        {
+          "value": "0xa",
+          "count": 1
+        },
+        {
+          "value": "0x8c",
+          "count": 1
+        },
+        {
+          "value": "0x12b4",
+          "count": 1
+        }
+      ],
+      "comment": "pattern record: note array object (NULL until the pattern has had notes)"
+    },
+    {
+      "name": "NOTES_DATA",
+      "old": "0x8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x8",
+          "count": 13654
+        },
+        {
+          "value": "0xc",
+          "count": 8
+        },
+        {
+          "value": "0x10",
+          "count": 5
+        },
+        {
+          "value": "0x9",
+          "count": 4
+        },
+        {
+          "value": "0x7",
+          "count": 3
+        },
+        {
+          "value": "0x2c",
+          "count": 2
+        },
+        {
+          "value": "0x13",
+          "count": 1
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        },
+        {
+          "value": "0x2",
+          "count": 1
+        },
+        {
+          "value": "0xe0",
+          "count": 1
+        },
+        {
+          "value": "0x18",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        },
+        {
+          "value": "0x6",
+          "count": 1
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        }
+      ],
+      "comment": "note array: record pointer"
+    },
+    {
+      "name": "NOTES_COUNT",
+      "old": "0x14",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x14",
+          "count": 2470
+        },
+        {
+          "value": "0x2c",
+          "count": 8
+        },
+        {
+          "value": "0x1c",
+          "count": 6
+        },
+        {
+          "value": "0x18",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        },
+        {
+          "value": "0x15",
+          "count": 1
+        },
+        {
+          "value": "0xa",
+          "count": 1
+        },
+        {
+          "value": "0x13",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": "record count (u32); element size (0x18) at +0x10"
+    },
+    {
+      "name": "NOTE_SIZE",
+      "old": "0x18",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x18",
+          "count": 5851
+        },
+        {
+          "value": "0x1c",
+          "count": 127
+        },
+        {
+          "value": "0x30",
+          "count": 5
+        },
+        {
+          "value": "0x19",
+          "count": 4
+        },
+        {
+          "value": "0x6c",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 3
+        },
+        {
+          "value": "0x28",
+          "count": 2
+        },
+        {
+          "value": "0x10",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        },
+        {
+          "value": "0x2c",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "NOTE_SEL_OFS",
+      "old": "0x13",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x13",
+          "count": 347
+        },
+        {
+          "value": "0x1b",
+          "count": 4
+        },
+        {
+          "value": "0x14",
+          "count": 1
+        },
+        {
+          "value": "0xe",
+          "count": 1
+        }
+      ],
+      "comment": "byte: low bits = note color, bit 0x80 = SELECTED (client-only, never synced)"
+    },
+    {
+      "name": "NOTE_SEL_BIT",
+      "old": "0x80",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x80",
+          "count": 7047
+        },
+        {
+          "value": "0x88",
+          "count": 59
+        },
+        {
+          "value": "0x90",
+          "count": 47
+        },
+        {
+          "value": "0x78",
+          "count": 29
+        },
+        {
+          "value": "0x84",
+          "count": 17
+        },
+        {
+          "value": "0x7c",
+          "count": 10
+        },
+        {
+          "value": "0xa0",
+          "count": 10
+        },
+        {
+          "value": "0x98",
+          "count": 5
+        },
+        {
+          "value": "0x0",
+          "count": 4
+        },
+        {
+          "value": "0xc0",
+          "count": 1
+        },
+        {
+          "value": "0x100",
+          "count": 1
+        },
+        {
+          "value": "0x1b0",
+          "count": 1
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        },
+        {
+          "value": "0xb8",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "ARR_CLIPS",
+      "old": "0x14",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x14",
+          "count": 2470
+        },
+        {
+          "value": "0x2c",
+          "count": 8
+        },
+        {
+          "value": "0x1c",
+          "count": 6
+        },
+        {
+          "value": "0x18",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        },
+        {
+          "value": "0x15",
+          "count": 1
+        },
+        {
+          "value": "0xa",
+          "count": 1
+        },
+        {
+          "value": "0x13",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": "arrangement: clip array object (same array family as notes)"
+    },
+    {
+      "name": "CLIPS_DATA",
+      "old": "0x8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x8",
+          "count": 13654
+        },
+        {
+          "value": "0xc",
+          "count": 8
+        },
+        {
+          "value": "0x10",
+          "count": 5
+        },
+        {
+          "value": "0x9",
+          "count": 4
+        },
+        {
+          "value": "0x7",
+          "count": 3
+        },
+        {
+          "value": "0x2c",
+          "count": 2
+        },
+        {
+          "value": "0x13",
+          "count": 1
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        },
+        {
+          "value": "0x2",
+          "count": 1
+        },
+        {
+          "value": "0xe0",
+          "count": 1
+        },
+        {
+          "value": "0x18",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        },
+        {
+          "value": "0x6",
+          "count": 1
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CLIPS_COUNT",
+      "old": "0x14",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x14",
+          "count": 2470
+        },
+        {
+          "value": "0x2c",
+          "count": 8
+        },
+        {
+          "value": "0x1c",
+          "count": 6
+        },
+        {
+          "value": "0x18",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        },
+        {
+          "value": "0x15",
+          "count": 1
+        },
+        {
+          "value": "0xa",
+          "count": 1
+        },
+        {
+          "value": "0x13",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CLIP_SIZE",
+      "old": "0x50",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x50",
+          "count": 12377
+        },
+        {
+          "value": "0x58",
+          "count": 63
+        },
+        {
+          "value": "0x78",
+          "count": 59
+        },
+        {
+          "value": "0x48",
+          "count": 40
+        },
+        {
+          "value": "0x60",
+          "count": 21
+        },
+        {
+          "value": "0x54",
+          "count": 16
+        },
+        {
+          "value": "0x80",
+          "count": 9
+        },
+        {
+          "value": "0x0",
+          "count": 7
+        },
+        {
+          "value": "0x4c",
+          "count": 5
+        },
+        {
+          "value": "0x68",
+          "count": 4
+        },
+        {
+          "value": "0x64",
+          "count": 2
+        },
+        {
+          "value": "0x30",
+          "count": 2
+        },
+        {
+          "value": "0x48005a0e",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        },
+        {
+          "value": "0x40",
+          "count": 1
+        },
+        {
+          "value": "0x28",
+          "count": 1
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        },
+        {
+          "value": "0x46",
+          "count": 1
+        }
+      ],
+      "comment": "first 32 bytes = FLP event 233 record"
+    },
+    {
+      "name": "CLIP_DEL_OFS",
+      "old": "0x4",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x4",
+          "count": 6539
+        },
+        {
+          "value": "0x8",
+          "count": 3
+        },
+        {
+          "value": "0x1",
+          "count": 2
+        },
+        {
+          "value": "0x5",
+          "count": 2
+        },
+        {
+          "value": "0x26",
+          "count": 1
+        },
+        {
+          "value": "0x3",
+          "count": 1
+        },
+        {
+          "value": "0x6",
+          "count": 1
+        },
+        {
+          "value": "0x5a",
+          "count": 1
+        },
+        {
+          "value": "0x15",
+          "count": 1
+        }
+      ],
+      "comment": "-1 = deleted (then purge)"
+    },
+    {
+      "name": "CLIP_SEL_OFS",
+      "old": "0x13",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x13",
+          "count": 347
+        },
+        {
+          "value": "0x1b",
+          "count": 4
+        },
+        {
+          "value": "0x14",
+          "count": 1
+        },
+        {
+          "value": "0xe",
+          "count": 1
+        }
+      ],
+      "comment": "bit 0x80 = SELECTED (client-only)"
+    },
+    {
+      "name": "CLIP_SEL_BIT",
+      "old": "0x80",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x80",
+          "count": 7047
+        },
+        {
+          "value": "0x88",
+          "count": 59
+        },
+        {
+          "value": "0x90",
+          "count": 47
+        },
+        {
+          "value": "0x78",
+          "count": 29
+        },
+        {
+          "value": "0x84",
+          "count": 17
+        },
+        {
+          "value": "0x7c",
+          "count": 10
+        },
+        {
+          "value": "0xa0",
+          "count": 10
+        },
+        {
+          "value": "0x98",
+          "count": 5
+        },
+        {
+          "value": "0x0",
+          "count": 4
+        },
+        {
+          "value": "0xc0",
+          "count": 1
+        },
+        {
+          "value": "0x100",
+          "count": 1
+        },
+        {
+          "value": "0x1b0",
+          "count": 1
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        },
+        {
+          "value": "0xb8",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CLIP_ID_OFS",
+      "old": "0x20",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x20",
+          "count": 31294
+        },
+        {
+          "value": "0x28",
+          "count": 81
+        },
+        {
+          "value": "0x30",
+          "count": 48
+        },
+        {
+          "value": "0x24",
+          "count": 30
+        },
+        {
+          "value": "0x2c",
+          "count": 9
+        },
+        {
+          "value": "0x3c",
+          "count": 2
+        },
+        {
+          "value": "0x58",
+          "count": 1
+        },
+        {
+          "value": "0x1c",
+          "count": 1
+        },
+        {
+          "value": "0x80",
+          "count": 1
+        },
+        {
+          "value": "0x1",
+          "count": 1
+        },
+        {
+          "value": "0x10",
+          "count": 1
+        },
+        {
+          "value": "0x704",
+          "count": 1
+        },
+        {
+          "value": "0x38",
+          "count": 1
+        },
+        {
+          "value": "0x54",
+          "count": 1
+        },
+        {
+          "value": "0x18",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": "per-instance clip id (FL renumbers on add)"
+    },
+    {
+      "name": "MIX_NAME",
+      "old": "0xc",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xc",
+          "count": 4290
+        },
+        {
+          "value": "0x10",
+          "count": 11
+        },
+        {
+          "value": "0xf",
+          "count": 2
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        },
+        {
+          "value": "0xd",
+          "count": 1
+        },
+        {
+          "value": "0x14",
+          "count": 1
+        },
+        {
+          "value": "0x4",
+          "count": 1
+        },
+        {
+          "value": "0xb",
+          "count": 1
+        }
+      ],
+      "comment": "mixer track: UnicodeString name ('' = \"Insert N\")"
+    },
+    {
+      "name": "MIX_COLOR",
+      "old": "0x4",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x4",
+          "count": 6539
+        },
+        {
+          "value": "0x8",
+          "count": 3
+        },
+        {
+          "value": "0x1",
+          "count": 2
+        },
+        {
+          "value": "0x5",
+          "count": 2
+        },
+        {
+          "value": "0x26",
+          "count": 1
+        },
+        {
+          "value": "0x3",
+          "count": 1
+        },
+        {
+          "value": "0x6",
+          "count": 1
+        },
+        {
+          "value": "0x5a",
+          "count": 1
+        },
+        {
+          "value": "0x15",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CH_NAME",
+      "old": "0x50",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x50",
+          "count": 12377
+        },
+        {
+          "value": "0x58",
+          "count": 63
+        },
+        {
+          "value": "0x78",
+          "count": 59
+        },
+        {
+          "value": "0x48",
+          "count": 40
+        },
+        {
+          "value": "0x60",
+          "count": 21
+        },
+        {
+          "value": "0x54",
+          "count": 16
+        },
+        {
+          "value": "0x80",
+          "count": 9
+        },
+        {
+          "value": "0x0",
+          "count": 7
+        },
+        {
+          "value": "0x4c",
+          "count": 5
+        },
+        {
+          "value": "0x68",
+          "count": 4
+        },
+        {
+          "value": "0x64",
+          "count": 2
+        },
+        {
+          "value": "0x30",
+          "count": 2
+        },
+        {
+          "value": "0x48005a0e",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        },
+        {
+          "value": "0x40",
+          "count": 1
+        },
+        {
+          "value": "0x28",
+          "count": 1
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        },
+        {
+          "value": "0x46",
+          "count": 1
+        }
+      ],
+      "comment": "channel object: UnicodeString name"
+    },
+    {
+      "name": "CH_COLOR",
+      "old": "0x78",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x78",
+          "count": 6789
+        },
+        {
+          "value": "0x80",
+          "count": 42
+        },
+        {
+          "value": "0x88",
+          "count": 27
+        },
+        {
+          "value": "0x70",
+          "count": 20
+        },
+        {
+          "value": "0xd8",
+          "count": 5
+        },
+        {
+          "value": "0x60",
+          "count": 4
+        },
+        {
+          "value": "0x0",
+          "count": 4
+        },
+        {
+          "value": "0x68",
+          "count": 2
+        },
+        {
+          "value": "0xb0",
+          "count": 2
+        },
+        {
+          "value": "0x90",
+          "count": 2
+        },
+        {
+          "value": "0x7c",
+          "count": 1
+        },
+        {
+          "value": "0x74",
+          "count": 1
+        },
+        {
+          "value": "0xa0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "CH_SETNAME_VSLOT",
+      "old": "0x70",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x70",
+          "count": 7784
+        },
+        {
+          "value": "0x78",
+          "count": 90
+        },
+        {
+          "value": "0x80",
+          "count": 23
+        },
+        {
+          "value": "0x68",
+          "count": 16
+        },
+        {
+          "value": "0xa8",
+          "count": 11
+        },
+        {
+          "value": "0x74",
+          "count": 8
+        },
+        {
+          "value": "0x58",
+          "count": 6
+        },
+        {
+          "value": "0x88",
+          "count": 4
+        },
+        {
+          "value": "0x7c",
+          "count": 3
+        },
+        {
+          "value": "0x60",
+          "count": 3
+        },
+        {
+          "value": "0x0",
+          "count": 2
+        },
+        {
+          "value": "0x6c",
+          "count": 2
+        },
+        {
+          "value": "0x20",
+          "count": 2
+        },
+        {
+          "value": "0xd0",
+          "count": 2
+        },
+        {
+          "value": "0xb0",
+          "count": 1
+        },
+        {
+          "value": "0x98",
+          "count": 1
+        }
+      ],
+      "comment": "channel vmt: SetName(self, name)"
+    },
+    {
+      "name": "CH_SETCOLOR_VSLOT",
+      "old": "0x78",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x78",
+          "count": 6789
+        },
+        {
+          "value": "0x80",
+          "count": 42
+        },
+        {
+          "value": "0x88",
+          "count": 27
+        },
+        {
+          "value": "0x70",
+          "count": 20
+        },
+        {
+          "value": "0xd8",
+          "count": 5
+        },
+        {
+          "value": "0x60",
+          "count": 4
+        },
+        {
+          "value": "0x0",
+          "count": 4
+        },
+        {
+          "value": "0x68",
+          "count": 2
+        },
+        {
+          "value": "0xb0",
+          "count": 2
+        },
+        {
+          "value": "0x90",
+          "count": 2
+        },
+        {
+          "value": "0x7c",
+          "count": 1
+        },
+        {
+          "value": "0x74",
+          "count": 1
+        },
+        {
+          "value": "0xa0",
+          "count": 1
+        }
+      ],
+      "comment": "SetColor(self, color)"
+    },
+    {
+      "name": "PAT_NAME",
+      "old": "0x0",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x0",
+          "count": 114649
+        },
+        {
+          "value": "0x4100",
+          "count": 6
+        },
+        {
+          "value": "0x40f9",
+          "count": 5
+        },
+        {
+          "value": "-0x7",
+          "count": 4
+        },
+        {
+          "value": "-0x1f",
+          "count": 4
+        },
+        {
+          "value": "-0x77",
+          "count": 4
+        },
+        {
+          "value": "0x1",
+          "count": 4
+        },
+        {
+          "value": "0x4",
+          "count": 4
+        },
+        {
+          "value": "0x1c",
+          "count": 3
+        },
+        {
+          "value": "0xffffffff",
+          "count": 3
+        },
+        {
+          "value": "0x20",
+          "count": 3
+        },
+        {
+          "value": "-0x29",
+          "count": 2
+        },
+        {
+          "value": "0x19",
+          "count": 2
+        },
+        {
+          "value": "-0x73",
+          "count": 2
+        },
+        {
+          "value": "0x55",
+          "count": 2
+        },
+        {
+          "value": "-0xfffdfc",
+          "count": 2
+        },
+        {
+          "value": "0x10",
+          "count": 2
+        },
+        {
+          "value": "0x24",
+          "count": 2
+        },
+        {
+          "value": "-0x28",
+          "count": 1
+        },
+        {
+          "value": "0x66",
+          "count": 1
+        },
+        {
+          "value": "0x68",
+          "count": 1
+        },
+        {
+          "value": "0x5e",
+          "count": 1
+        },
+        {
+          "value": "0x50cd",
+          "count": 1
+        },
+        {
+          "value": "0x5d28",
+          "count": 1
+        },
+        {
+          "value": "-0x3f",
+          "count": 1
+        },
+        {
+          "value": "0x8803",
+          "count": 1
+        },
+        {
+          "value": "0x7",
+          "count": 1
+        },
+        {
+          "value": "0x880f",
+          "count": 1
+        },
+        {
+          "value": "0x140bd",
+          "count": 1
+        },
+        {
+          "value": "-0x2fffd8bf",
+          "count": 1
+        },
+        {
+          "value": "0x6418",
+          "count": 1
+        },
+        {
+          "value": "0x6419",
+          "count": 1
+        },
+        {
+          "value": "0x5121",
+          "count": 1
+        },
+        {
+          "value": "0x5122",
+          "count": 1
+        },
+        {
+          "value": "0x16",
+          "count": 1
+        },
+        {
+          "value": "0x717c",
+          "count": 1
+        },
+        {
+          "value": "0x7181",
+          "count": 1
+        },
+        {
+          "value": "0x7a00003f",
+          "count": 1
+        },
+        {
+          "value": "0x48004f11",
+          "count": 1
+        },
+        {
+          "value": "0x530002fa",
+          "count": 1
+        },
+        {
+          "value": "0x5d92",
+          "count": 1
+        },
+        {
+          "value": "0x4dd3",
+          "count": 1
+        },
+        {
+          "value": "0x48005579",
+          "count": 1
+        },
+        {
+          "value": "-0xb",
+          "count": 1
+        },
+        {
+          "value": "0x5a0e",
+          "count": 1
+        },
+        {
+          "value": "0x61",
+          "count": 1
+        },
+        {
+          "value": "-0x5f",
+          "count": 1
+        },
+        {
+          "value": "0x9dad",
+          "count": 1
+        },
+        {
+          "value": "0x9286",
+          "count": 1
+        },
+        {
+          "value": "0x6e",
+          "count": 1
+        },
+        {
+          "value": "-0x5d",
+          "count": 1
+        },
+        {
+          "value": "-0x42",
+          "count": 1
+        },
+        {
+          "value": "0xbec7",
+          "count": 1
+        },
+        {
+          "value": "-0x39",
+          "count": 1
+        },
+        {
+          "value": "-0x30",
+          "count": 1
+        },
+        {
+          "value": "0x79",
+          "count": 1
+        },
+        {
+          "value": "0x48006ca6",
+          "count": 1
+        },
+        {
+          "value": "0x2",
+          "count": 1
+        },
+        {
+          "value": "0x704",
+          "count": 1
+        },
+        {
+          "value": "0x170",
+          "count": 1
+        },
+        {
+          "value": "0x30",
+          "count": 1
+        },
+        {
+          "value": "0x102ee",
+          "count": 1
+        },
+        {
+          "value": "0x56",
+          "count": 1
+        },
+        {
+          "value": "0x668",
+          "count": 1
+        },
+        {
+          "value": "0x38c",
+          "count": 1
+        },
+        {
+          "value": "0x10d80",
+          "count": 1
+        },
+        {
+          "value": "0x10d7e",
+          "count": 1
+        },
+        {
+          "value": "-0x80",
+          "count": 1
+        },
+        {
+          "value": "0x11470",
+          "count": 1
+        },
+        {
+          "value": "0x8",
+          "count": 1
+        },
+        {
+          "value": "0xb8",
+          "count": 1
+        },
+        {
+          "value": "0xd2c",
+          "count": 1
+        },
+        {
+          "value": "0x1c0",
+          "count": 1
+        },
+        {
+          "value": "-0x6",
+          "count": 1
+        }
+      ],
+      "comment": "pattern record: UnicodeString name ('' = \"Pattern N\")"
+    },
+    {
+      "name": "PAT_COLOR",
+      "old": "0x8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x8",
+          "count": 13654
+        },
+        {
+          "value": "0xc",
+          "count": 8
+        },
+        {
+          "value": "0x10",
+          "count": 5
+        },
+        {
+          "value": "0x9",
+          "count": 4
+        },
+        {
+          "value": "0x7",
+          "count": 3
+        },
+        {
+          "value": "0x2c",
+          "count": 2
+        },
+        {
+          "value": "0x13",
+          "count": 1
+        },
+        {
+          "value": "0x670",
+          "count": 1
+        },
+        {
+          "value": "0x2",
+          "count": 1
+        },
+        {
+          "value": "0xe0",
+          "count": 1
+        },
+        {
+          "value": "0x18",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        },
+        {
+          "value": "0x6",
+          "count": 1
+        },
+        {
+          "value": "0x48",
+          "count": 1
+        },
+        {
+          "value": "0x20",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PAT_LENGTH",
+      "old": "0x10",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x10",
+          "count": 11338
+        },
+        {
+          "value": "0x14",
+          "count": 17
+        },
+        {
+          "value": "0x18",
+          "count": 9
+        },
+        {
+          "value": "0x20",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 2
+        },
+        {
+          "value": "0xa0",
+          "count": 1
+        },
+        {
+          "value": "0x28",
+          "count": 1
+        },
+        {
+          "value": "0x11",
+          "count": 1
+        }
+      ],
+      "comment": "int, -1 = automatic"
+    },
+    {
+      "name": "PL_TRK_STRIDE",
+      "old": "0x114",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x114",
+          "count": 92
+        },
+        {
+          "value": "0x11c",
+          "count": 4
+        },
+        {
+          "value": "0x124",
+          "count": 4
+        },
+        {
+          "value": "0x110",
+          "count": 3
+        }
+      ],
+      "comment": "arrangement object: playlist track t (1..500) at + t*0x114"
+    },
+    {
+      "name": "PL_TRK_NAME",
+      "old": "0x24",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x24",
+          "count": 2512
+        },
+        {
+          "value": "0x3c",
+          "count": 44
+        },
+        {
+          "value": "0x2c",
+          "count": 17
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        },
+        {
+          "value": "0x78",
+          "count": 1
+        },
+        {
+          "value": "0x4c",
+          "count": 1
+        },
+        {
+          "value": "0x80",
+          "count": 1
+        },
+        {
+          "value": "0x70",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "PL_TRK_COLOR",
+      "old": "0x2c",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x2c",
+          "count": 4143
+        },
+        {
+          "value": "0x44",
+          "count": 14
+        },
+        {
+          "value": "0x3c",
+          "count": 12
+        },
+        {
+          "value": "0x34",
+          "count": 9
+        },
+        {
+          "value": "0x24",
+          "count": 3
+        },
+        {
+          "value": "0x28",
+          "count": 1
+        },
+        {
+          "value": "0x1",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "ARR_MARKERS",
+      "old": "0x21c48",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x21c48",
+          "count": 65
+        }
+      ],
+      "comment": "arrangement object: dynamic array of marker records (stride 0x34)"
+    },
+    {
+      "name": "MARK_SIZE",
+      "old": "0x34",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x34",
+          "count": 3294
+        },
+        {
+          "value": "0x3c",
+          "count": 23
+        },
+        {
+          "value": "0x38",
+          "count": 14
+        },
+        {
+          "value": "0x4c",
+          "count": 14
+        },
+        {
+          "value": "0x68",
+          "count": 1
+        },
+        {
+          "value": "0x44",
+          "count": 1
+        },
+        {
+          "value": "0x35",
+          "count": 1
+        }
+      ],
+      "comment": "+0 position, +4 action (8 = time signature), +8 UnicodeString name,"
+    },
+    {
+      "name": "MARK_TAIL",
+      "old": "0x10",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x10",
+          "count": 11338
+        },
+        {
+          "value": "0x14",
+          "count": 17
+        },
+        {
+          "value": "0x18",
+          "count": 9
+        },
+        {
+          "value": "0x20",
+          "count": 3
+        },
+        {
+          "value": "0x8",
+          "count": 2
+        },
+        {
+          "value": "0xa0",
+          "count": 1
+        },
+        {
+          "value": "0x28",
+          "count": 1
+        },
+        {
+          "value": "0x11",
+          "count": 1
+        }
+      ],
+      "comment": "+0x10.. plain data (+0x10 numerator, +0x11 denominator)"
+    },
+    {
+      "name": "PAT_MARKERS",
+      "old": "0x30",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x30",
+          "count": 21044
+        },
+        {
+          "value": "0x38",
+          "count": 86
+        },
+        {
+          "value": "0x28",
+          "count": 39
+        },
+        {
+          "value": "0x40",
+          "count": 36
+        },
+        {
+          "value": "0x34",
+          "count": 28
+        },
+        {
+          "value": "0x0",
+          "count": 19
+        },
+        {
+          "value": "0x48",
+          "count": 4
+        },
+        {
+          "value": "0x58",
+          "count": 2
+        }
+      ],
+      "comment": "pattern record: dynamic array of marker records"
+    },
+    {
+      "name": "ED_HWND",
+      "old": "0x45c",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x45c",
+          "count": 243
+        },
+        {
+          "value": "0x460",
+          "count": 2
+        },
+        {
+          "value": "0x46c",
+          "count": 2
+        }
+      ],
+      "comment": "editor form: window handle"
+    },
+    {
+      "name": "CTL_BOUNDS",
+      "old": "0x90",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x90",
+          "count": 5145
+        },
+        {
+          "value": "0xa0",
+          "count": 61
+        },
+        {
+          "value": "0x98",
+          "count": 33
+        },
+        {
+          "value": "0x94",
+          "count": 21
+        },
+        {
+          "value": "0x88",
+          "count": 16
+        },
+        {
+          "value": "0xa8",
+          "count": 10
+        },
+        {
+          "value": "0xb0",
+          "count": 9
+        },
+        {
+          "value": "0x80",
+          "count": 5
+        },
+        {
+          "value": "0x78",
+          "count": 4
+        },
+        {
+          "value": "0x0",
+          "count": 3
+        },
+        {
+          "value": "0x58",
+          "count": 1
+        },
+        {
+          "value": "0x1a8",
+          "count": 1
+        },
+        {
+          "value": "0xc8",
+          "count": 1
+        }
+      ],
+      "comment": "control: Left, Top, Width, Height in its form's client area"
+    },
+    {
+      "name": "PR_TOPKEY",
+      "old": "0x418",
+      "status": "observed",
+      "votes": [
+        {
+          "value": "0x418",
+          "count": 57
+        }
+      ],
+      "comment": "piano roll grid: y = (topkey - key) * keyh - vscroll"
+    },
+    {
+      "name": "PR_KEYH",
+      "old": "0x520",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0x520",
+          "count": 132
+        },
+        {
+          "value": "0x530",
+          "count": 5
+        },
+        {
+          "value": "0x538",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    },
+    {
+      "name": "TRK_TOP",
+      "old": "0xb4",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xb4",
+          "count": 1268
+        },
+        {
+          "value": "0xc4",
+          "count": 16
+        },
+        {
+          "value": "0xbc",
+          "count": 13
+        },
+        {
+          "value": "0xb0",
+          "count": 3
+        },
+        {
+          "value": "0x90",
+          "count": 2
+        },
+        {
+          "value": "0x60",
+          "count": 1
+        },
+        {
+          "value": "0x1d4",
+          "count": 1
+        },
+        {
+          "value": "0xac",
+          "count": 1
+        }
+      ],
+      "comment": "playlist track (arrangement + t * 0x114): top y and height, pixels"
+    },
+    {
+      "name": "TRK_H",
+      "old": "0xb8",
+      "status": "ambiguous",
+      "votes": [
+        {
+          "value": "0xb8",
+          "count": 1953
+        },
+        {
+          "value": "0xc0",
+          "count": 74
+        },
+        {
+          "value": "0xc8",
+          "count": 42
+        },
+        {
+          "value": "0x8",
+          "count": 39
+        },
+        {
+          "value": "0xb0",
+          "count": 32
+        },
+        {
+          "value": "0xd0",
+          "count": 7
+        },
+        {
+          "value": "0xac",
+          "count": 4
+        },
+        {
+          "value": "0xa8",
+          "count": 4
+        },
+        {
+          "value": "0xcc",
+          "count": 3
+        },
+        {
+          "value": "0x94",
+          "count": 3
+        },
+        {
+          "value": "0xd8",
+          "count": 2
+        },
+        {
+          "value": "0xb4",
+          "count": 2
+        },
+        {
+          "value": "0x104",
+          "count": 1
+        },
+        {
+          "value": "0x90",
+          "count": 1
+        },
+        {
+          "value": "0x0",
+          "count": 1
+        }
+      ],
+      "comment": ""
+    }
+  ],
+  "limitations": [
+    "No runtime access was performed by this analysis.",
+    "The previous 26.1.6.5639 binary was overwritten; comparison uses its recorded evidence, not an asserted binary-to-binary match.",
+    "Aggregate operand counts cannot establish object identity; focused disassembly and fresh runtime layout/behavior checks remain required."
+  ],
+  "abi_reviews": [
+    {
+      "name": "SAVEPROJ",
+      "target": "0x11dbe10",
+      "observations": [
+        "Preserves path RCX at 0x11dbe1c and flags DL at 0x11dbe6b; no additional incoming R8/R9 argument is consumed before the first nested call at 0x11dbe76.",
+        "The 0.70 initial mnemonic similarity is insufficient alone; the explicit argument review and one matched caller support the existing two-argument ABI."
+      ]
+    },
+    {
+      "name": "PATREFRESH",
+      "target": "0xea7ae0",
+      "observations": [
+        "Captures RCX object, DL and R8B into the same 0x38/0x42/0x43 stack fields as reference 0xd9a9e0.",
+        "The added early readiness call and atomic pending-refresh flag explain initial similarity 0.71. Existing three-argument call remains valid; five matched callers independently agree."
+      ]
+    },
+    {
+      "name": "FLPROJ_LOAD_SLOT",
+      "target": "0xed5d40",
+      "observations": [
+        "Captures RCX self, RDX path and R8B flags; classifies the path against eight extensions and tests the save-prompt flag. Slot 0x40 matches the previously validated FL26 ABI.",
+        "The adjacent slot 0x38 is a different function at 0xed5c40 and must not be substituted."
+      ]
+    },
+    {
+      "name": "PATOP_EDIT_SLOT",
+      "target": "0xed3e80",
+      "observations": [
+        "Captures self, open-array pointer RDX, bound R8, and action R9D at 0xed3e92..0xed3e9e. Uses dialog operation 0x402 at 0xed3f26 and mapped pattern table global 0x15e2aa0 at 0xed3f82.",
+        "Different stack allocation prevents the reference prefix signature from matching; its ABI, pattern lookup, VMT position and operation semantics agree with the previous FL26 review."
+      ]
+    },
+    {
+      "name": "MSGBOX",
+      "target": "0x9635b0",
+      "observations": [
+        "Matches the mode-one wrapper guard and forwards to mapped MSGBOX_CORE 0x963520 at 0x9635bc."
+      ]
+    }
+  ],
+  "focused_layout_reviews": [
+    {
+      "names": [
+        "MIX_STRIDE",
+        "MIX_ENABLED"
+      ],
+      "sites": [
+        "0x127b9c5",
+        "0x127b9cc",
+        "0x127b9d4",
+        "0x127ba25"
+      ],
+      "observation": "MUTE uses 0x28f times eight for the record address, enabled byte at 0x18, and independently increments by 0x1478 in its full-track loop."
+    },
+    {
+      "names": [
+        "MIX_SLOTS_OFF",
+        "MIX_ROUTE"
+      ],
+      "sites": [
+        "0x12be735",
+        "0x12a3434",
+        "0x12a34af",
+        "0x12a34c8"
+      ],
+      "observation": "MIXNAME and SETROUTE use effect-object pointers at 0x134c; SETROUTE forms route entries from record plus 0x394 and destination index times eight."
+    },
+    {
+      "names": [
+        "CH_SELECTED"
+      ],
+      "sites": [
+        "0x1042644",
+        "0x104269e",
+        "0x1042766",
+        "0x1042798"
+      ],
+      "observation": "The selection-dependent reorder helpers called by MOVECHAN test channel byte 0x32c."
+    },
+    {
+      "names": [
+        "CH_GRID"
+      ],
+      "sites": [
+        "0x10012fb",
+        "0x1001368",
+        "0x10431c1"
+      ],
+      "observation": "The channel note-edit path dereferences its grid at 0x7ac, accesses grid entries and invokes mapped NOTEARR. MOVECHAN refresh helper independently uses the same grid pointer."
+    },
+    {
+      "names": [
+        "FORM_BUSY"
+      ],
+      "sites": [
+        "0x11cf9f8",
+        "0x11cfa33"
+      ],
+      "observation": "BUSYBEGIN tests and stores the busy object at form offset 0x34d4."
+    },
+    {
+      "names": [
+        "PAT_STRIDE",
+        "PAT_NOTES"
+      ],
+      "sites": [
+        "0x12d16f6",
+        "0x12d16fa",
+        "0x12d16fe",
+        "0x12d1702"
+      ],
+      "observation": "NOTEARR multiplies pattern index by eight, three and eight, giving stride 0xc0, then tests/stores the notes object at 0x28."
+    },
+    {
+      "names": [
+        "PLFORM_PATS"
+      ],
+      "sites": [
+        "0x1042bca"
+      ],
+      "observation": "MOVECHAN refresh path reads the playlist pattern-control pointer at 0xd34 before invoking mapped PATREFRESH."
+    },
+    {
+      "names": [
+        "PL_MARKSEL",
+        "PL_MARKERS"
+      ],
+      "sites": [
+        "0xe5391a",
+        "0xe5392b",
+        "0xe543e1",
+        "0xe54416"
+      ],
+      "observation": "Marker refresh accesses selected marker at 0xd8c; the uniquely matched form AddMarker helper reads the marker list at 0xd84."
+    },
+    {
+      "names": [
+        "ED_TICKSPERPX",
+        "ED_HSCROLL"
+      ],
+      "sites": [
+        "0xe56d35",
+        "0xe56d4e",
+        "0xe577e3",
+        "0xe577fa"
+      ],
+      "observation": "Published TimePanelMouseDown and TimePanelMouseMove combine the integer horizontal scroll at 0xb14 with the double ticks-per-pixel at 0xb04."
+    },
+    {
+      "names": [
+        "PR_GRID",
+        "PL_GRID",
+        "GRID_VSCROLL"
+      ],
+      "sites": [
+        "0xe4ae48",
+        "0xe4ae7a",
+        "0xe83a81",
+        "0xe83ad0",
+        "0xe83c5c"
+      ],
+      "observation": "Published TimeScrollerPaintKnob branches by editor mode to grid pointers at 0xd2c and 0xc68. VZoomSelectChange corroborates these pointers and the grid scroll offset 0x3fc."
+    },
+    {
+      "names": [
+        "PL_TRK_STRIDE",
+        "PL_TRK_NAME",
+        "PL_TRK_COLOR"
+      ],
+      "sites": [
+        "0x12e5da7",
+        "0x12e5dab",
+        "0x12e5dd7",
+        "0x12e5ddb"
+      ],
+      "observation": "The setters called by PLTRACK index tracks by 0x45 times four (0x114) and assign name at 0x24 and color at 0x2c."
+    }
+  ],
+  "format_review": {
+    "reader": "0xa9e7a0",
+    "writer": "0xa9ec60",
+    "sites": [
+      "0xa9e80e",
+      "0xa9e888",
+      "0xa9e8bd",
+      "0xa9eca2",
+      "0xa9ecc8"
+    ],
+    "observation": "The reader still consumes 0xac then a uint32 event ID and dispatches by high nibble; the writer emits the escape byte then four ID bytes. The extended-event parser fix applies without alteration."
+  },
+  "static_unresolved_addresses": [],
+  "runtime_validation_required": [
+    "Read-only live layout inspection against this exact new engine hash.",
+    "Fresh owned pair: project join/load/save, all pattern operations, notes, clips, metadata, mixer state, repeated FX state and sample transfer.",
+    "Cursor geometry and real editor interactions at the user display scaling.",
+    "Preserve compile gating and report the exact tested version; no support for untested future builds."
+  ]
+}

@@ -11,6 +11,12 @@ cl /nologo /W3 t_launcher.c /Fe:t_launcher.exe /link /SUBSYSTEM:CONSOLE /MANIFES
 if errorlevel 1 exit /b 1
 cl /nologo /W3 t_injection.c /Fe:t_injection.exe /link /SUBSYSTEM:CONSOLE /MANIFEST:EMBED
 if errorlevel 1 exit /b 1
+cl /nologo /W3 /DFLIM_EXPERIMENTAL_FL26 t_injection.c /Fe:t_injection_experimental.exe /link /SUBSYSTEM:CONSOLE /MANIFEST:EMBED
+if errorlevel 1 exit /b 1
+cl /nologo /W3 t_build_gate.c /Fe:t_build_gate.exe
+if errorlevel 1 exit /b 1
+cl /nologo /W3 /DFLIM_EXPERIMENTAL_FL26 t_build_gate.c /Fe:t_build_gate_experimental.exe
+if errorlevel 1 exit /b 1
 cl /nologo /W3 t_patops.c /Fe:t_patops.exe
 if errorlevel 1 exit /b 1
 cl /nologo /W4 t_flp.c /Fe:t_flp.exe

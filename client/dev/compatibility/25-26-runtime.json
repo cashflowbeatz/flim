@@ -1,0 +1,214 @@
+{
+  "schema_version": 2,
+  "status": "experimental_runtime_validated_subset",
+  "date": "2026-10-22",
+  "targets": [
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FL64.exe",
+      "version": "26.1.7.5654",
+      "sha256": "a1f3f53cb8ee1bb80fdfe1814876e268730f8b6bdba95e3d4a8bcba6600255e6",
+      "signature": "Valid"
+    },
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FLEngine_x64.dll",
+      "version": "26.1.7.5654",
+      "sha256": "6d9c5ab09c1d5594012ac2c31cf9ed08e73f42164ed0964cccae10a95d9b8e02",
+      "signature": "Valid"
+    },
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FL64.exe",
+      "version": "25.2.5.5319",
+      "sha256": "4743d610c860a4387c2632fd9603d921685270a00313039492ad17492cc81604",
+      "signature": "Valid"
+    },
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FLEngine_x64.dll",
+      "version": "25.2.5.5319",
+      "sha256": "1b7e2381f2853ee590bff74429fb8aa5540d33a5b33c0c5e41ec01c03fe0c7ac",
+      "signature": "Valid"
+    }
+  ],
+  "supported_builds": {
+    "default": [
+      "25.2.5.5319",
+      "25.2.3.5171",
+      "25.1.6.4997"
+    ],
+    "experimental": [
+      "26.1.7.5654",
+      "26.1.6.5639",
+      "25.2.5.5319",
+      "25.2.3.5171",
+      "25.1.6.4997"
+    ]
+  },
+  "environment": {
+    "os": "Windows x64",
+    "topology": "two same-build pairs, loopback-only relay",
+    "same_client_binaries_used_for_both_builds": true,
+    "installed_files_patched": false,
+    "unrelated_processes_modified": false,
+    "owned_test_processes_and_relay_stopped": true
+  },
+  "client_binaries": {
+    "flim.exe": "5b32a5ecdac3401fbffc00383daa2233b4d8019d1e104c8b18183df55e5d1253",
+    "flim_engine.dll": "62d761244eb9943ea388a9cd93fc3d66e8f318669d5d7af157126cb2c01bfd22"
+  },
+  "standard_client_binaries": {
+    "flim.exe": "37dd41c33121059a711a28325e8923eb7ac03248977027b3ecdfc3384afa0726",
+    "flim_engine.dll": "19dd88e97d19114797fde8d4928289430928af198acdfee97bd2e12128a40a80"
+  },
+  "runtime": [
+    {
+      "version": "26.1.7.5654",
+      "log": "fl26-5654-runtime.log",
+      "sha256": "4f3fdf6626c0eef8c7df5ab42e912d03bfe4a501fa346341981b8a5e43c18989",
+      "passed": 31,
+      "failed": 0,
+      "checks": [
+        "channel volume (REC)",
+        "mixer volume (REC)",
+        "mixer mute",
+        "mixer track name",
+        "mixer track color",
+        "mixer routing",
+        "channel add",
+        "channel name",
+        "channel delete",
+        "pattern names + notes",
+        "pattern op: insert",
+        "pattern op: delete (msgbox hook)",
+        "time signature set in A",
+        "project time signature",
+        "playlist marker",
+        "playlist track name",
+        "pattern time signature (pattern 1)",
+        "note delete",
+        "piano roll layout offsets          hwnd 0x11023c4 TEventEditForm, ticks/px 1.000, grid 888x555 at 79,79, vscroll 987",
+        "playlist layout offsets            hwnd 0x16e1494 TEventEditForm, ticks/px 6.400, grid 1289x850 at 273,75, vscroll 0",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "reorder fixture replicated",
+        "channel reorder in A",
+        "channel reorder in B",
+        "clip added in A",
+        "clip in B (position, pattern, length, track)",
+        "sample downloaded by B",
+        "B's channel uses the downloaded file"
+      ],
+      "project_join": {
+        "log": "fl26-5654-project-join.log",
+        "sha256": "bc6b372ce9ed085a132de44d47f78323b561a675b30235de149892510173f2ab",
+        "loaded": true,
+        "settled": true
+      },
+      "pids": {
+        "A": 31504,
+        "B": 88980
+      }
+    },
+    {
+      "version": "25.2.5.5319",
+      "log": "fl25-5319-runtime.log",
+      "sha256": "9ad49c2a4de01009d5b801604fe40fe39153afd813f62a68f5f2941d91e1de98",
+      "passed": 31,
+      "failed": 0,
+      "checks": [
+        "channel volume (REC)",
+        "mixer volume (REC)",
+        "mixer mute",
+        "mixer track name",
+        "mixer track color",
+        "mixer routing",
+        "channel add",
+        "channel name",
+        "channel delete",
+        "pattern names + notes",
+        "pattern op: insert",
+        "pattern op: delete (msgbox hook)",
+        "time signature set in A",
+        "project time signature",
+        "playlist marker",
+        "playlist track name",
+        "pattern time signature (pattern 1)",
+        "note delete",
+        "piano roll layout offsets          hwnd 0x761420 TEventEditForm, ticks/px 1.000, grid 829x518 at 78,79, vscroll 1006",
+        "playlist layout offsets            hwnd 0x1641144 TEventEditForm, ticks/px 6.400, grid 1286x850 at 273,75, vscroll 0",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "reorder fixture replicated",
+        "channel reorder in A",
+        "channel reorder in B",
+        "clip added in A",
+        "clip in B (position, pattern, length, track)",
+        "sample downloaded by B",
+        "B's channel uses the downloaded file"
+      ],
+      "project_join": {
+        "log": "fl25-5319-project-join.log",
+        "sha256": "6728f36f6984f103157e2d0d73de06610f51faa03383c1e0ec7191c126146831",
+        "loaded": true,
+        "settled": true
+      },
+      "pids": {
+        "A": 92440,
+        "B": 71320
+      }
+    }
+  ],
+  "effect_comparison": "All parsed serialized events compared except wrapper212 editor-visibility bit0; plugin213 bytes compared unchanged",
+  "sample_verification": "Fresh 8864-byte synthetic WAV per run, B local shortcut disabled; saved path resolved and SHA256 matched downloaded bytes",
+  "project_version_policy": "Same exact FL build required. Full FLP stream and every version event validated before sample rewrite, file write or project load; invalid, missing or conflicting versions rejected.",
+  "offline": {
+    "python_tests": 48,
+    "build_gate_checks": {
+      "default": 120,
+      "experimental": 184
+    },
+    "mocked_launcher_scenarios": {
+      "default": 11,
+      "experimental": 13
+    },
+    "synthetic_vmt_builds": 5,
+    "activity_reference_comparisons": 231,
+    "other_harnesses": [
+      "WebSocket buffer",
+      "FLP bounds and extended events",
+      "plugin apply race",
+      "launcher installation discovery",
+      "sample macros and rewrites"
+    ],
+    "standard_and_experimental_builds": "passed",
+    "logs": [
+      {
+        "log": "current-offline-harness.log",
+        "sha256": "83f2c6cda020baac1d6cecc259dc4f3a6e19bf0a1926fc5d732cc2cd61bc3f4a"
+      },
+      {
+        "log": "current-offline-python.log",
+        "sha256": "dbb10704519561a1bd66db3e766f3a2760d3ea8110ff74c483ebe6a04c0fe581"
+      },
+      {
+        "log": "current-offline-rest.log",
+        "sha256": "f634d9b1c9eda894e6cf283f3fd02df364d259967916337d697b6f1dcc93565d"
+      }
+    ]
+  },
+  "historical_validation": {
+    "record": "26.1.6.5639-runtime.json",
+    "note": "Different earlier client hashes; historical FL26.1.6 runtime, corpus, server and process-ownership results were not rerun unless listed above."
+  },
+  "limits": [
+    "Targeted flim interoperability, not a complete reconstruction or diagnosis of every FL subsystem",
+    "Exact build support only; FL25 and FL26 cannot share a session",
+    "Older retained builds were not rerun live after this update; all five tables passed synthetic hook checks",
+    "No broad third-party plugin matrix, audio render comparison, long-session soak or internet latency benchmark",
+    "Not every pattern operation, automation, mouse arrow or lock-conflict combination was exercised",
+    "Cloudflare deployment and Docker build were not run",
+    "Low 32 bits of LoadLibraryW module address can rarely cause the launcher to fail closed"
+  ]
+}
