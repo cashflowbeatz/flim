@@ -1,26 +1,67 @@
 # RE helpers for FLEngine_x64.dll (VAs at image base 0x400000, like the engine's *_VA defines)
-import sys, struct, re, os, pickle, bisect
+import argparse
+import hashlib
+import json
+import sys, struct, re, os, bisect
+from pathlib import Path
 import numpy as np
 import pefile
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 
-DLL = r'C:\Program Files (x86)\Image-Line\FL Studio 2025\FLEngine_x64.dll'
+DLL = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = 0x400000
 
-data = open(DLL, 'rb').read()
-pe = pefile.PE(DLL, fast_load=True)
-SECS = [(s.VirtualAddress + BASE, s.Misc_VirtualSize, s.PointerToRawData, s.SizeOfRawData, s.Name.rstrip(b'\0')) for s in pe.sections]
-TEXT = SECS[0]
+data = pe = TEXT = None
+SECS = []
+IDENTITY = None
 md = Cs(CS_ARCH_X86, CS_MODE_64)
 md.detail = False
 
+
+def load_target(path=None):
+    """Select one DLL and invalidate every index derived from the previous target."""
+    global DLL, data, pe, BASE, SECS, TEXT, IDENTITY, _pd, _stubs, _names, _tx
+    target = path or os.environ.get('FLIM_FL_DLL')
+    if not target:
+        raise ValueError('select FLEngine_x64.dll with --dll, FLIM_FL_DLL, or flre.load_target(path)')
+    target = Path(target).resolve()
+    raw = target.read_bytes()
+    image = pefile.PE(data=raw, fast_load=True)
+    if image.FILE_HEADER.Machine != 0x8664 or image.OPTIONAL_HEADER.Magic != 0x20b:
+        raise ValueError(f'{target}: expected a Windows x64 PE image')
+    image.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_RESOURCE']])
+    versions = getattr(image, 'VS_FIXEDFILEINFO', [])
+    version = None
+    if versions:
+        v = versions[0]
+        version = '.'.join(str(n) for n in (v.FileVersionMS >> 16, v.FileVersionMS & 0xffff,
+                                           v.FileVersionLS >> 16, v.FileVersionLS & 0xffff))
+    base = image.OPTIONAL_HEADER.ImageBase
+    sections = [(s.VirtualAddress + base, s.Misc_VirtualSize, s.PointerToRawData,
+                 s.SizeOfRawData, s.Name.rstrip(b'\0')) for s in image.sections]
+    text = next((s for s in sections if s[4] == b'.text'), None)
+    if text is None:
+        raise ValueError(f'{target}: no .text section')
+    DLL, data, pe, BASE, SECS, TEXT = str(target), raw, image, base, sections, text
+    IDENTITY = dict(path=DLL, file_version=version, sha256=hashlib.sha256(raw).hexdigest(),
+                    size_bytes=len(raw), image_base=hex(base))
+    _pd = _stubs = _names = _tx = None
+    return dict(IDENTITY)
+
+
+def _ensure_loaded():
+    if pe is None:
+        load_target()
+
 def off(va):
+    _ensure_loaded()
     for v, sz, raw, rsz, n in SECS:
         if v <= va < v + min(sz, rsz): return raw + va - v
     return None
 
 def va_of(o):
+    _ensure_loaded()
     for v, sz, raw, rsz, n in SECS:
         if raw <= o < raw + rsz: return v + o - raw
     return None
@@ -34,9 +75,13 @@ def d(va): return struct.unpack('<I', rd(va, 4))[0]
 _pd = None
 def pdata():
     global _pd
+    _ensure_loaded()
     if _pd is None:
         dd = pe.OPTIONAL_HEADER.DATA_DIRECTORY[3]
         o = off(dd.VirtualAddress + BASE)
+        if o is None or dd.Size < 12:
+            _pd = (np.array([], dtype=np.int64), np.array([], dtype=np.int64))
+            return _pd
         raw = np.frombuffer(data[o:o + dd.Size // 12 * 12], dtype='<u4').reshape(-1, 3)
         raw = raw[raw[:, 0] != 0]
         order = np.argsort(raw[:, 0])
@@ -73,7 +118,9 @@ def dis(va, n=None, end=None, show=True):
     if show: print('\n'.join(out))
     return out
 
-def in_text(va): return TEXT[0] <= va < TEXT[0] + TEXT[1]
+def in_text(va):
+    _ensure_loaded()
+    return TEXT[0] <= va < TEXT[0] + TEXT[1]
 
 def resolve(t):
     # protector call stubs: E9 rel32 (+junk) outside .text
@@ -87,6 +134,7 @@ def resolve(t):
 _stubs = None
 def stubs_to(target):
     global _stubs
+    _ensure_loaded()
     if _stubs is None:
         _stubs = {}
         for v, sz, raw, rsz, n in SECS[1:]:
@@ -116,8 +164,7 @@ def show_callers(target):
 _names = None
 def names():
     global _names
-    p = os.path.join(os.environ.get('TEMP', HERE), 'flre_names.pkl')   # cache of the name index
-    if _names is None and os.path.exists(p): _names = pickle.load(open(p, 'rb'))
+    _ensure_loaded()
     if _names is None:
         _names = {}
         tv, tsz = TEXT[0], TEXT[1]
@@ -129,7 +176,6 @@ def names():
             if struct.unpack('<H', data[m.start():m.start()+2])[0] != 2 + 8 + 1 + ln: continue
             a = struct.unpack('<Q', m.group(1))[0]
             if tv <= a < tv + tsz: _names.setdefault(a, nm.decode())
-        pickle.dump(_names, open(p, 'wb'))
     return _names
 
 def name_at(va):
@@ -144,6 +190,7 @@ def find_name(pat):
 _tx = None
 def text_arr():
     global _tx
+    _ensure_loaded()
     if _tx is None:
         v, sz, raw, rsz, n = TEXT
         _tx = np.frombuffer(data[raw:raw + min(sz, rsz)], dtype=np.uint8)
@@ -189,6 +236,7 @@ def show_xrefs(target, ctx=0):
         print('%x: %s %s%s' % (ins.address, ins.mnemonic, ins.op_str, fn) if ins else '%x ?' % x)
 
 def strs(s, wide=True):
+    _ensure_loaded()
     out = []
     for enc in (['ascii', 'utf-16le'] if wide else ['ascii']):
         for m in re.finditer(re.escape(s.encode(enc)), data):
@@ -197,6 +245,7 @@ def strs(s, wide=True):
 
 
 def meth(nm):
+    _ensure_loaded()
     out = []
     for m in re.finditer(bytes([len(nm)]) + nm.encode() + rb'(?![A-Za-z0-9_])', data):
         a = struct.unpack('<Q', data[m.start()-8:m.start()])[0]
@@ -212,5 +261,26 @@ def near(va, before=0x60, after=0x80):
             return dis(s, end=va + after)
     return dis(va, end=va + after)
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Read-only static helpers for one explicitly selected FL DLL.')
+    parser.add_argument('--dll', help='FLEngine_x64.dll path (default: FLIM_FL_DLL)')
+    parser.add_argument('--info', action='store_true', help='print selected PE identity as JSON')
+    parser.add_argument('code', nargs='?', help='Python expression or statements using the helper functions')
+    args = parser.parse_args(argv)
+    if not args.info and args.code is None:
+        parser.error('provide Python code or --info')
+    try:
+        identity = load_target(args.dll)
+        if args.info:
+            print(json.dumps(identity, indent=2))
+        if args.code is not None:
+            print(f"Target: {DLL} ({identity['file_version']}); SHA-256 {identity['sha256']}", file=sys.stderr)
+            exec(args.code, globals())
+    except (OSError, ValueError, pefile.PEFormatError) as error:
+        print(f'error: {error}', file=sys.stderr)
+        return 2
+    return 0
+
+
 if __name__ == '__main__':
-    exec(sys.argv[1])
+    sys.exit(main())

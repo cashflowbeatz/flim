@@ -16,7 +16,20 @@ interface Lock {
 }
 
 export function send(ws: WebSocket, msg: ServerMsg): void {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  if (ws.readyState === WebSocket.OPEN) sendSerialized(ws, JSON.stringify(msg));
+}
+
+// Allows a full 64 MiB project message while bounding queues for peers that stop reading.
+export const MAX_BUFFERED_BYTES = 128 * 1024 * 1024;
+const MAX_LOCKS = 4096;
+
+export function sendSerialized(ws: WebSocket, data: string, bytes = Buffer.byteLength(data)): void {
+  if (ws.readyState !== WebSocket.OPEN) return;
+  if (ws.bufferedAmount + bytes > MAX_BUFFERED_BYTES) {
+    ws.terminate();
+    return;
+  }
+  ws.send(data, (err) => { if (err) ws.terminate(); });
 }
 
 const sha = (v: string) => crypto.createHash("sha256").update(v, "utf8").digest();
@@ -91,7 +104,9 @@ export class Session {
   }
 
   private broadcast(msg: ServerMsg, except?: Client): void {
-    for (const c of this.clients) if (c !== except) send(c.ws, msg);
+    const data = JSON.stringify(msg);
+    const bytes = Buffer.byteLength(data);
+    for (const c of this.clients) if (c !== except) sendSerialized(c.ws, data, bytes);
   }
 
   private clientOf(ws: WebSocket): Client | undefined {
@@ -149,6 +164,10 @@ export class Session {
   acquire(from: Client, key: UnitKey): void {
     const now = Date.now();
     const existing = this.locks.get(key);
+    if (!existing && this.locks.size >= MAX_LOCKS) {
+      send(from.ws, { t: "error", code: "lock_limit", msg: "Too many active locks. Release a lock or wait for expiry." });
+      return;
+    }
     if (existing && existing.owner !== from.user.id && now - existing.at < LOCK_TTL_MS) {
       send(from.ws, { t: "lock", key, granted: false, owner: existing.owner });
       return;

@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "status": "experimental_runtime_validated_subset",
+  "date": "2026-10-22",
+  "target": {
+    "version": "26.1.6.5639",
+    "engine_sha256": "bc3637c3e41694c820865e757d88a42bdc15b6db4011582a2ef8f4d1b05a2d95"
+  },
+  "environment": {
+    "os": "Windows x64",
+    "topology": "two owned local FL processes, loopback-only relay",
+    "leader_pid": 40848,
+    "member_pid": 111392,
+    "original_user_process_modified": false,
+    "owned_test_processes_and_relay_stopped": true
+  },
+  "client_binaries": {
+    "flim.exe": "ad90d7ff02ef16cad8d77702af0c2f7119c770b085cc47e1ac50939043aece6e",
+    "flim_engine.dll": "e880206339e3080ab16f5e744921bfe8362ea1a620935c6d1d6546ad4e9263ec"
+  },
+  "runtime": [
+    {
+      "log": "fl26-runtime-release.log",
+      "sha256": "dfbf33ddbde365ce54c404b8f82cd83f797a524f8633f30fcec694204b686a64",
+      "passed": 31,
+      "failed": 0,
+      "checks": [
+        "channel volume (REC)",
+        "mixer volume (REC)",
+        "mixer mute",
+        "mixer track name",
+        "mixer track color",
+        "mixer routing",
+        "channel add",
+        "channel name",
+        "channel delete",
+        "pattern names + notes",
+        "pattern op: insert",
+        "pattern op: delete (msgbox hook)",
+        "time signature set in A",
+        "project time signature",
+        "playlist marker",
+        "playlist track name",
+        "pattern time signature (pattern 1)",
+        "note delete",
+        "piano roll layout offsets          hwnd 0xd32c64 TEventEditForm, ticks/px 1.000, grid 888x555 at 79,79, vscroll 987",
+        "playlist layout offsets            hwnd 0x12316c TEventEditForm, ticks/px 6.400, grid 1289x850 at 273,75, vscroll 0",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "reorder fixture replicated",
+        "channel reorder in A",
+        "channel reorder in B",
+        "clip added in A",
+        "clip in B (position, pattern, length, track)",
+        "sample downloaded by B",
+        "B's channel uses the downloaded file"
+      ]
+    },
+    {
+      "log": "fl26-runtime-fx-repeat.log",
+      "sha256": "4cf432267ecd7bccd33d93e6c30401e8783532c96d8ea04e37fddfaf641441a0",
+      "passed": 12,
+      "failed": 0,
+      "checks": [
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B"
+      ]
+    }
+  ],
+  "project_join": "Observed remote project load return 1 and settled state before checks",
+  "effect_comparison": "All parsed serialized events compared except wrapper212 editor-visibility bit0; plugin213 payload compared unchanged",
+  "sample_verification": "Fresh 8,864-byte synthetic WAV uploaded and downloaded with local-file shortcut disabled on B; saved FL path resolved and SHA256 matched source",
+  "offline": {
+    "python_unittest": 48,
+    "process_ownership_checks": 20,
+    "unit_activity_reference_comparisons": 231,
+    "native_harnesses": [
+      "t_flp",
+      "t_ws_buffer",
+      "t_launcher",
+      "t_injection (9 scenarios)",
+      "t_patops (3 build tables)",
+      "t_samples (including 20 macro path checks)",
+      "t_plugin_apply"
+    ],
+    "preset_corpus_files": 8738,
+    "preset_corpus_errors": 0,
+    "server_hardening_tests": 12,
+    "server_session_checks": 58,
+    "npm_audit_vulnerabilities": 0,
+    "standard_and_experimental_builds": "passed"
+  },
+  "limits": [
+    "Focused FL26 interoperability; not complete FL reverse engineering",
+    "No broad third-party plugin matrix, audio render comparison, long-session soak, or internet latency benchmark",
+    "Not all pattern operations, automation, mouse arrows, and lock combinations exercised",
+    "Existing FL25 builds checked synthetically; installed 25.2.5.5319 unsupported",
+    "Docker build and Cloudflare deployment not run",
+    "Raw effect presets may differ in local editor visibility",
+    "LoadLibraryW success detection can fail closed when module-address low 32 bits are zero"
+  ]
+}

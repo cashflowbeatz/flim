@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "status": "manually_reviewed_static_candidates",
+  "runtime_validated": false,
+  "analysis_image_base": "0x400000",
+  "method": "Explicit-target flre.py and Capstone disassembly, Delphi published-method names and RTTI VMT pointers, plus sigscan unique signatures. This file contains addresses and observations, not binary code.",
+  "reference": {
+    "version": "25.2.3.5171",
+    "sha256": "54eff612a64c9eb047ee63f44204cc42678affdc270c64733bf997ecc0dccd35"
+  },
+  "target": {
+    "version": "26.1.6.5639",
+    "sha256": "bc3637c3e41694c820865e757d88a42bdc15b6db4011582a2ef8f4d1b05a2d95"
+  },
+  "address_corrections": [
+    {
+      "name": "SETPROJ",
+      "reference": "0x10cb1e0",
+      "accepted_target": "0x11d8e40",
+      "rejected_target": "0xf52060",
+      "observations": [
+        "The accepted target preserves the form, two qword UnicodeString arguments, and byte addRecent argument. It assigns two project-path globals using the same Delphi string helper, calls the published UpdatePathLabels method, and preserves the 49-entry recent-project list loop.",
+        "Reference globals 0x156f298 and 0x156f2a0 correspond to target 0x16c0c90 and 0x16c0c98. The MAINFORM references match the independent address map.",
+        "Both versions have callers in the published RenameProjectBtnClick and ProjDataPathBtnClick handlers.",
+        "The rejected candidate shares only a stack-probe prologue. Its second argument is a dword, and its body enters different loading/busy logic. A short unique prefix is insufficient evidence here."
+      ]
+    }
+  ],
+  "abi_reviews": [
+    {
+      "name": "SAVEPROJ",
+      "reference": "0x10cdf80",
+      "target": "0x11db8d0",
+      "compatible_call": "SaveProjectTo(path, byte_flags)",
+      "observations": [
+        "Reference sites 0x10cdf8c and 0x10cdfdb preserve the path in RCX and byte flags in DL; target sites 0x11db8dc and 0x11db92b preserve the same arguments and both allocate a 0x98-byte frame.",
+        "The target captures no incoming R8 or R9 value before its first nested call at 0x11db936. At 0x11db9eb it supplies saved path, zero mask/object values, and saved flags to mapped SAVEPRESET at 0xf54600.",
+        "The reduced automatic similarity reflects the reference protector jump at 0x10cdfe2 before the body, and does not indicate new mandatory incoming arguments. Runtime save success remains a separate test."
+      ]
+    }
+  ],
+  "changed_layouts": [
+    {
+      "name": "MIX_STRIDE",
+      "reference": "0x1474",
+      "target": "0x1478",
+      "reference_sites": [
+        "0x1176bf5",
+        "0x1176c55"
+      ],
+      "target_sites": [
+        "0x1280695",
+        "0x12806f5"
+      ],
+      "observation": "The matched MUTE function indexes a mixer record using 0x51d times 4 in the reference and 0x28f times 8 in the target. Its full-track reset loop independently increments by 0x1474 and 0x1478 respectively."
+    },
+    {
+      "name": "MIX_SLOTS_OFF",
+      "reference": "0x1324",
+      "target": "0x134c",
+      "reference_sites": [
+        "0x11b9d25"
+      ],
+      "target_sites": [
+        "0x12c3405",
+        "0x12a817f"
+      ],
+      "observation": "MIXNAME traverses ten qword effect-slot objects using this displacement, preserving the per-object name and VMT name-setter call. SETROUTE independently accesses the same target slot region."
+    },
+    {
+      "name": "MIX_ROUTE",
+      "reference": "0x2e4",
+      "target": "0x394",
+      "reference_sites": [
+        "0x119e1ea",
+        "0x119e1fc"
+      ],
+      "target_sites": [
+        "0x12a8104",
+        "0x12a8116"
+      ],
+      "observation": "SETROUTE calculates source-record base plus this displacement, indexes destination entries at eight-byte intervals, and reads/writes the enabled flag at entry plus four. An aggregate histogram incorrectly favors unchanged 0x2e4 because unrelated structures use that value."
+    }
+  ],
+  "project_vmt": {
+    "reference_vmt": "0xdb85e8",
+    "target_vmt": "0xed0cb8",
+    "source": "Class pointer in Delphi class RTTI with the exact shortstring name TFLProject.",
+    "slot_unit": "byte displacement",
+    "entries": [
+      {
+        "name": "FLPROJ_LOAD_SLOT",
+        "reference_slot": "0x38",
+        "target_slot": "0x40",
+        "reference_function": "0xdbcb60",
+        "target_function": "0xed5dd0",
+        "observation": "Both accept form, qword path in RDX, and byte flags in R8; classify against an eight-entry extension list, use flag one for the save-changes prompt and flag two for the underlying load call. Target slot 0x38 points to 0xed5cd0, which instead accepts a byte selector in DL and path in R9, so reusing the old slot is an ABI error."
+      },
+      {
+        "name": "PATOP_CLONE_SLOT",
+        "wire_id": "0xd8",
+        "reference_slot": "0xd8",
+        "target_slot": "0xe8",
+        "reference_function": "0xdb9a70",
+        "target_function": "0xed2480",
+        "observation": "Unique reference function signature maps to the target function, whose pointer occupies the stated target VMT slot."
+      },
+      {
+        "name": "PATOP_DELETE_SLOT",
+        "wire_id": "0xe0",
+        "reference_slot": "0xe0",
+        "target_slot": "0xf8",
+        "reference_function": "0xdb9e60",
+        "target_function": "0xed2b50",
+        "observation": "Unique reference function signature maps to the target function, whose pointer occupies the stated target VMT slot."
+      },
+      {
+        "name": "PATOP_REARRANGE_SLOT",
+        "wire_id": "0xe8",
+        "reference_slot": "0xe8",
+        "target_slot": "0x108",
+        "reference_function": "0xdba5e0",
+        "target_function": "0xed3610",
+        "observation": "Unique reference function signature maps to the target function, whose pointer occupies the stated target VMT slot."
+      },
+      {
+        "name": "PATOP_EDIT_SLOT",
+        "wire_id": "0xf0",
+        "reference_slot": "0xf0",
+        "target_slot": "0x110",
+        "reference_function": "0xdbaed0",
+        "target_function": "0xed3f10",
+        "observation": "Direct comparison preserves open-array argument roles, the 0x402 dialog operation, pattern table lookup, string/color handling, and control flow with changed stack allocation. Normalized similarity is 1.00."
+      },
+      {
+        "name": "PATOP_INSERT_SLOT",
+        "wire_id": "0xf8",
+        "reference_slot": "0xf8",
+        "target_slot": "0x118",
+        "reference_function": "0xdba3d0",
+        "target_function": "0xed3400",
+        "observation": "Unique reference function signature maps to the target function, whose pointer occupies the stated target VMT slot."
+      },
+      {
+        "name": "PATOP_SPLIT_SLOT",
+        "wire_id": "0x100",
+        "reference_slot": "0x100",
+        "target_slot": "0x120",
+        "reference_function": "0xdbbae0",
+        "target_function": "0xed4c00",
+        "observation": "Unique reference function signature maps to the target function, whose pointer occupies the stated target VMT slot."
+      }
+    ]
+  },
+  "unchanged_layouts": [
+    {
+      "name": "MIX_ENABLED",
+      "value": "0x18",
+      "target_sites": [
+        "0x12806a4"
+      ],
+      "observation": "Matched MUTE function reads the enabled byte at this record displacement."
+    },
+    {
+      "name": "MIX_NAME",
+      "value": "0x0c",
+      "target_sites": [
+        "0x12c33ed"
+      ],
+      "observation": "MIXNAME assigns the record string at this displacement."
+    },
+    {
+      "name": "MIX_COLOR",
+      "value": "0x04",
+      "target_sites": [
+        "0x12c64ce"
+      ],
+      "observation": "Matched MIXCOLOR writes the supplied color at this displacement."
+    },
+    {
+      "name": "PAT_STRIDE",
+      "value": "0xc0",
+      "target_sites": [
+        "0x12d5af2",
+        "0x12d6216",
+        "0x12d62a8"
+      ],
+      "observation": "PATNAME and NOTEARR both index by eight times three times eight; an adjacent full-table loop independently increments by 0xc0 until 1000 records."
+    },
+    {
+      "name": "PAT_NOTES",
+      "value": "0x28",
+      "target_sites": [
+        "0x12d6222",
+        "0x12d6237",
+        "0x12d6265"
+      ],
+      "observation": "NOTEARR tests, creates, and returns the note-array object at this pattern record displacement."
+    },
+    {
+      "name": "PAT_MARKERS",
+      "value": "0x30",
+      "target_sites": [
+        "0x12d56bc"
+      ],
+      "observation": "PATMARKS forms the marker-list address from pattern record plus 0x30."
+    },
+    {
+      "name": "PL_TRK_STRIDE",
+      "value": "0x114",
+      "target_sites": [
+        "0x12ea8c7",
+        "0x12ea8cb"
+      ],
+      "observation": "PLTRACK's name setter indexes tracks by 0x45 times four."
+    },
+    {
+      "name": "PL_TRK_NAME",
+      "value": "0x24",
+      "target_sites": [
+        "0x12ea8cb"
+      ],
+      "observation": "PLTRACK's name setter assigns the string at track record plus 0x24."
+    },
+    {
+      "name": "PL_TRK_COLOR",
+      "value": "0x2c",
+      "target_sites": [
+        "0x12ea8fb"
+      ],
+      "observation": "PLTRACK's color setter writes the masked color at track record plus 0x2c."
+    }
+  ],
+  "tooling_candidates": [
+    {
+      "name": "FORMADDMARK",
+      "reference": "0xd4c810",
+      "target": "0xe545b0",
+      "observation": "Unique 27-byte signature and function-order anchors agree. Body forwards marker position/name/action/time-signature arguments through the form's marker-list pointer."
+    },
+    {
+      "name": "PL_MARKERS",
+      "reference": "0xd50",
+      "target": "0xd84",
+      "target_sites": [
+        "0xe545e1",
+        "0xe54616"
+      ],
+      "observation": "FORMADDMARK reads the form's marker-list pointer at 0xd84. Selected-marker writes at 0xd8c independently establish the neighboring PL_MARKSEL field."
+    },
+    {
+      "name": "MSGBOX_WRAPPER",
+      "target": "0x963680",
+      "observation": "The first twelve bytes match the existing msgbox mode-one guard; its call at 0x96368c reaches mapped MSGBOX_CORE 0x9635f0."
+    }
+  ],
+  "remaining_validation": [
+    "Static layout and method correspondence does not establish safe end-to-end project synchronization or operation replay.",
+    "Verify project join/load, all six pattern operations, mixer routing/effects, markers, note edits and sample transfer in disposable test sessions before enabling ordinary builds.",
+    "Piano-roll geometry and all unreviewed object fields still need targeted runtime or static validation; aggregate offset counts alone cannot establish object identity.",
+    "Preserve default compile gating until compatibility tests pass."
+  ],
+  "runtime_followup": "26.1.6.5639-runtime.json (selected behavior only; this document records the preceding static investigation)"
+}

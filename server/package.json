@@ -8,15 +8,16 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "test": "npm run build && node test/slots_test.js"
+    "test": "npm run build && node --test test/hardening_test.js test/blob_race_test.js && node test/slots_test.js",
+    "benchmark:relay": "npm run build && node test/relay_benchmark.js"
   },
   "dependencies": {
-    "ws": "8.18.0"
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@types/node": "20.14.9",
     "@types/ws": "8.5.10",
-    "tsx": "4.16.2",
+    "tsx": "4.23.15",
     "typescript": "5.5.3"
   }
 }

@@ -8,6 +8,9 @@ primary_region = 'iad'
 
 [build]
 
+[env]
+  FLIM_PROXY = 'fly'
+
 [http_service]
   internal_port = 8080
   force_https = true

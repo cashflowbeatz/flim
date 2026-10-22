@@ -5,8 +5,14 @@ PROBE = os.path.join(HERE, 'probe', 'probe.dll')
 k32 = ctypes.WinDLL('kernel32', use_last_error=True)
 u32 = ctypes.WinDLL('user32', use_last_error=True)
 k32.OpenProcess.restype = W.HANDLE
+k32.OpenProcess.argtypes = [W.DWORD, W.BOOL, W.DWORD]
+k32.CloseHandle.argtypes = [W.HANDLE]
+k32.WaitForSingleObject.argtypes = [W.HANDLE, W.DWORD]
+k32.WaitForSingleObject.restype = W.DWORD
+k32.GetExitCodeThread.argtypes = [W.HANDLE, ctypes.POINTER(W.DWORD)]
 k32.VirtualAllocEx.restype = ctypes.c_void_p
 k32.VirtualAllocEx.argtypes = [W.HANDLE, ctypes.c_void_p, ctypes.c_size_t, W.DWORD, W.DWORD]
+k32.VirtualFreeEx.argtypes = [W.HANDLE, ctypes.c_void_p, ctypes.c_size_t, W.DWORD]
 k32.WriteProcessMemory.argtypes = [W.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p]
 k32.GetProcAddress.restype = ctypes.c_void_p
 k32.GetProcAddress.argtypes = [W.HMODULE, ctypes.c_char_p]
@@ -19,14 +25,36 @@ def pids(name='FL64.exe'):
     return [int(l.split('","')[1]) for l in out.strip().splitlines() if l.startswith('"')]
 
 def inject(pid, dll=PROBE):
-    h = k32.OpenProcess(0x1F0FFF, False, pid)
-    p = dll.encode('utf-16le') + b'\0\0'
-    mem = k32.VirtualAllocEx(h, None, len(p), 0x3000, 4)
-    k32.WriteProcessMemory(h, mem, p, len(p), None)
-    ll = k32.GetProcAddress(k32.GetModuleHandleW('kernel32.dll'), b'LoadLibraryW')
-    t = k32.CreateRemoteThread(h, None, 0, ll, mem, 0, None)
-    k32.WaitForSingleObject(t, 10000)
-    return bool(t)
+    dll = os.path.abspath(dll)
+    if not os.path.isfile(dll): raise FileNotFoundError(dll)
+    if not isinstance(pid, int) or pid <= 0: raise ValueError('explicit positive test PID required')
+    h = k32.OpenProcess(0x043A, False, pid)
+    if not h: raise ctypes.WinError(ctypes.get_last_error())
+    mem, t, completed = None, None, False
+    try:
+        p = dll.encode('utf-16le') + b'\0\0'
+        mem = k32.VirtualAllocEx(h, None, len(p), 0x3000, 4)
+        if not mem: raise ctypes.WinError(ctypes.get_last_error())
+        written = ctypes.c_size_t()
+        if not k32.WriteProcessMemory(h, mem, p, len(p), ctypes.byref(written)) or written.value != len(p):
+            raise ctypes.WinError(ctypes.get_last_error())
+        ll = k32.GetProcAddress(k32.GetModuleHandleW('kernel32.dll'), b'LoadLibraryW')
+        if not ll: raise ctypes.WinError(ctypes.get_last_error())
+        t = k32.CreateRemoteThread(h, None, 0, ll, mem, 0, None)
+        if not t: raise ctypes.WinError(ctypes.get_last_error())
+        wait = k32.WaitForSingleObject(t, 15000)
+        if wait != 0:
+            # The loader may still use the path. Leave it until this test process exits.
+            raise TimeoutError(f'probe loader did not complete in test PID {pid} (wait={wait})')
+        completed = True
+        loaded = W.DWORD()
+        if not k32.GetExitCodeThread(t, ctypes.byref(loaded)) or not loaded.value:
+            raise RuntimeError(f'Windows could not load the probe into test PID {pid}')
+        return True
+    finally:
+        if mem and (not t or completed): k32.VirtualFreeEx(h, mem, 0, 0x8000)
+        if t: k32.CloseHandle(t)
+        k32.CloseHandle(h)
 
 class Probe:
     def __init__(self, pid=None):
@@ -43,7 +71,9 @@ class Probe:
         while not buf.endswith(b'\n'): buf += self.f.read(1 << 20) if False else self._rd()
         return buf[:-1].decode('utf-8', 'replace')
     def _rd(self):
-        return os.read(self.f.fileno(), 1 << 21)
+        data = os.read(self.f.fileno(), 1 << 21)
+        if not data: raise EOFError(f'probe pipe closed for PID {self.pid}')
+        return data
     def a(self, va): return self.base + va - 0x400000
     def r(self, addr, n):
         x = self.cmd('r %x %d' % (addr, n))

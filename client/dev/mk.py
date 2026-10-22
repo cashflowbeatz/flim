@@ -4,6 +4,12 @@
 import fl, flbuild, struct, sys, os, re
 
 def session_pids(log=os.path.join(os.environ['TEMP'], 'flim_engine.log')):
+    explicit = (os.environ.get('FLIM_TEST_A'), os.environ.get('FLIM_TEST_B'))
+    if any(explicit):
+        if not all(explicit): raise ValueError('Set both FLIM_TEST_A and FLIM_TEST_B')
+        a, b = map(int, explicit)
+        if a <= 0 or b <= 0 or a == b: raise ValueError('Two distinct positive test PIDs required')
+        return a, b
     t = open(log, encoding='utf-8', errors='replace').read()
     pid = lambda role: int(re.findall(r'\[(\d+)\] server: \{"t":"welcome".{0,40}"role":"%s"' % role, t)[-1])
     return pid('leader'), pid('member')
@@ -32,8 +38,12 @@ def pats(p, n=6):
         out.append((i, p.ustr(p.q(r)), cnt))
     return out
 def patop(p, slot, *args):
-    proj = p.q(p.q(p.g(V(p).FLPROJ)) + 0x10); vmt = p.q(proj)
-    fn = p.q(vmt + slot)
+    v = V(p)
+    fields = {0xd8: 'PATOP_CLONE_SLOT', 0xe0: 'PATOP_DELETE_SLOT', 0xe8: 'PATOP_REARRANGE_SLOT',
+              0xf0: 'PATOP_EDIT_SLOT', 0xf8: 'PATOP_INSERT_SLOT', 0x100: 'PATOP_SPLIT_SLOT'}
+    if slot not in fields: raise ValueError('unknown pattern operation ID: %#x' % slot)
+    proj = p.q(p.q(p.g(v.FLPROJ)) + 0x10); vmt = p.q(proj)
+    fn = p.q(vmt + v[fields[slot]])
     r = p.cmd('call %x %d %s' % (fn, proj, ' '.join('%d' % (x & 0xFFFFFFFFFFFFFFFF) for x in args)))
     return r
 def setup(a):

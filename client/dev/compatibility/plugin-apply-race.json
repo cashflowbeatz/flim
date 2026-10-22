@@ -1,0 +1,29 @@
+{
+  "issue": "Remote preset parameter changes mistaken for local edits during g_loadPreset",
+  "observed_build": "26.1.6.5639",
+  "owned_runtime_evidence": {
+    "date": "2026-10-22",
+    "sender_pid": 13128,
+    "receiver_pid": 100856,
+    "unit": "fx 1/0",
+    "sender_state_sent": "17:45:27.512",
+    "receiver_snap_back_decisions": "17:45:27.797 through 17:45:27.800",
+    "receiver_load_completed": "17:45:27.832",
+    "stale_parameter_writes_executed": "17:45:27.863 through 17:45:27.871",
+    "observation": "Eight parameter reversions were queued while the incoming Fruity Delay 3 preset was loading, then executed after it completed. The correct plugin identity arrived, but these old default values overwrote its preset values."
+  },
+  "cause": "do_load established parameter suppression only after calling FL's preset loader. The polling thread could observe and classify intermediate changes during that call, then enqueue reversion writes under the sender's held plugin lock.",
+  "fix": [
+    "Publish an odd per-unit apply generation before invoking FL and advance to even only after the parameter baseline and suppression deadlines are published. This guard covers the whole load without depending on an estimated duration.",
+    "Reject polling observations whose slot or unit generation changed. Skip snapshots and snapshot scheduling while a unit is applying or in its existing cooldown.",
+    "Tag locally generated lock reversions with the observed unit generation. At main-thread execution, discard reversions invalidated by a later preset load; ordinary inbound parameter operations retain their original behavior.",
+    "Clear obsolete pending undo values when the remote load establishes the new baseline."
+  ],
+  "validation": [
+    "t_plugin_apply.c invokes the actual do_load, do_snap and main-thread queue functions with synthetic local objects and mocked plugin/REC functions; no FL process is started or accessed.",
+    "Checks active-load suppression even beyond the cooldown duration, pre-load and during-load stale reversion rejection, preservation of the preset value, allowed ordinary inbound updates, allowed current-generation local reversions, exception cleanup, and DWORD timer wrap.",
+    "test_unit_activity.py still passes all 231 reference comparisons plus sticky-burst, repeated-tick, >=2000-change and epoch-wrap checks.",
+    "Engine-inclusive regression harness compiled successfully with MSVC; git diff --check passed."
+  ],
+  "runtime_status": "Fresh rebuilt-client full feature suite 31/31 passed, followed by three consecutive effect-load repetitions 12/12. See 26.1.6.5639-runtime.json."
+}

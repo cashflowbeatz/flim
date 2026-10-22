@@ -54,7 +54,9 @@ def close_dialogs_until(t, pids, timeout=8.0):
     t.join(1)
 
 
-def mixrec(p, t): return p.g(mk.V(p).MIXARR) + t * 0x1474
+def mixrec(p, t):
+    v = mk.V(p)
+    return p.g(v.MIXARR) + t * v.MIX_STRIDE
 def arrangement(p):
     v = mk.V(p)
     return p.q(p.g(v.ARRS) + 8 * p.d(p.a(v.ARRCUR)))
@@ -78,7 +80,7 @@ def t_mixer(a, b, v):
     check('mixer track color', lambda: b.d(mixrec(b, 4) + 4) & 0xffffff, 0x3366ff)
     mix = a.q(a.g(v.MIXOBJ))
     a.call(v.SETROUTE, mix, 5, 6, 1, 1); a.call(v.ROUTEUPD, mix)
-    check('mixer routing', lambda: b.r(mixrec(b, 5) + 0x2e4 + 6 * 8 + 4, 1)[0], 1)
+    check('mixer routing', lambda: b.r(mixrec(b, 5) + mk.V(b).MIX_ROUTE + 6 * 8 + 4, 1)[0], 1)
 
 
 def t_channels(a, b, v):
@@ -98,13 +100,13 @@ def t_patterns(a, b, v):
     want = [(1, 'Verse', 1), (2, 'Chorus', 1), (3, 'Bridge', 1)]
     check('pattern names + notes', lambda: mk.pats(b, 3), want)
     # Insert one before pattern 2 (A: FL opens a rename box, closed here; B: answered by flim)
-    t, _ = bg_call(a, 'call %x %d 2' % (a.q(a.q(a.q(a.q(a.g(v.FLPROJ)) + 0x10)) + 0xf8), a.q(a.q(a.g(v.FLPROJ)) + 0x10)))
+    t, _ = bg_call(a, 'call %x %d 2' % (a.q(a.q(a.q(a.q(a.g(v.FLPROJ)) + 0x10)) + v.PATOP_INSERT_SLOT), a.q(a.q(a.g(v.FLPROJ)) + 0x10)))
     close_dialogs_until(t, [A])
     check('pattern op: insert', lambda: mk.pats(b, 4), [(1, 'Verse', 1), (2, '', 0), (3, 'Chorus', 1), (4, 'Bridge', 1)], 15)
     # Delete pattern 2 (A: FL asks "are you sure", confirmed here; B: message box answered by flim's hook)
     arr = a.alloc(8); a.w(arr, struct.pack('<i', 2))
     proj = a.q(a.q(a.g(v.FLPROJ)) + 0x10)
-    t, _ = bg_call(a, 'call %x %d %d 0' % (a.q(a.q(proj) + 0xe0), proj, arr))
+    t, _ = bg_call(a, 'call %x %d %d 0' % (a.q(a.q(proj) + v.PATOP_DELETE_SLOT), proj, arr))
     close_dialogs_until(t, [A])
     check('pattern op: delete (msgbox hook)', lambda: mk.pats(b, 3), want, 15)
 
@@ -160,7 +162,8 @@ def t_layout(a, b, v):
 
 
 FL_DIRS = {'25.2.3.5171': r'C:\Program Files (x86)\Image-Line\FL Studio 2025',
-           '25.1.6.4997': r'C:\Program Files (x86)\Image-Line\FL4997'}
+           '25.1.6.4997': r'C:\Program Files (x86)\Image-Line\FL4997',
+           '26.1.6.5639': r'C:\Program Files\Image-Line\FL Studio 2026'}
 MASK_FX = 48
 
 
@@ -174,28 +177,49 @@ def plugin_state(p, v, obj, tag):
     return open(path, 'rb').read()
 
 
+def shared_effect_state(data):
+    """Keep sound and wrapper state; editor visibility belongs to each participant."""
+    from flp import events
+    if not data: raise ValueError('FL did not save the effect preset')
+    out = []
+    for event, value in events(data):
+        if event == 212:
+            if len(value) < 18: raise ValueError('Truncated effect wrapper')
+            value = bytearray(value)
+            value[16] &= ~1  # WrapperEvent flags bit 0: editor visible (PyFLP plugin.py).
+            value = bytes(value)
+        out.append((event, value))
+    if not any(e == 212 for e, _ in out) or not any(e == 213 for e, _ in out):
+        raise ValueError('Effect wrapper/plugin data missing')
+    return out
+
+
 def t_fx(a, b, v):
     """a mixer effect: replacing the plugin in a slot sends its whole state (plug.state)"""
     vb = mk.V(b)
-    slot = lambda p, vv: p.q(mixrec(p, 1) + 0x1324)              # insert 1, slot 1
+    slot = lambda p, vv: p.q(mixrec(p, 1) + vv.MIX_SLOTS_OFF)     # insert 1, slot 1
     preset = FL_DIRS[v.build] + r'\Data\Patches\Plugin presets\Effects\Fruity Delay 3\Chorus.fst'
     a.call(v.LOADPRESET, a.mkstr(preset), MASK_FX, slot(a, v), 0)
     check('effect added in A', lambda: a.call(v.HASPLUGIN, slot(a, v)) & 0xff, 1, 3)
     check('effect plugin in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 1, 15)
     sa = plugin_state(a, v, slot(a, v), 'a')
-    ok, sb = wait_for(lambda: plugin_state(b, vb, slot(b, vb), 'b'), sa, 10)
-    diff = [i for i in range(min(len(sa or b''), len(sb or b''))) if sa[i] != sb[i]] if sa and isinstance(sb, bytes) else '-'
-    results.append(('effect state identical', ok))
-    print('%-4s %-34s %d bytes%s' % ('PASS' if ok else 'FAIL', 'effect state identical', len(sa or b''),
-          '' if ok else ', differs at %s' % ['%#x: %02x/%02x' % (i, sa[i], sb[i]) for i in diff[:4]] if diff != '-' else ''), flush=True)
+    check('effect state (local visibility excluded)',
+          lambda: shared_effect_state(plugin_state(b, vb, slot(b, vb), 'b')),
+          shared_effect_state(sa), 10)
     a.call(v.LOADPRESET, a.mkstr(FL_DIRS[v.build] + r'\Data\System\(delete) effect.fst'), MASK_FX, slot(a, v), 0)
     check('effect removed in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 0, 15)
 
 
 def t_reorder(a, b, v):
     """move a channel up the way FL's Alt+Up does (selection + ReorderChannels mode 4)"""
+    for _ in range(max(0, 3 - len(mk.chans(a)))):
+        a.call(v.ADDCHAN, 0xFFFFFFFFFFFFFFFF, 0, 1)
+    items = a.q(a.q(a.g(v.CHANLIST)) + 8)
+    for i in range(3):
+        ch = a.q(items + 8 * i)
+        a.cmd('call %x %d %d' % (a.q(a.q(ch) + 0x70), ch, a.mkstr('flim reorder %d' % i)))
     before = [n for _, n in mk.chans(a)]
-    if len(before) < 3: results.append(('channel reorder', False)); print('FAIL channel reorder: < 3 channels'); return
+    if not check('reorder fixture replicated', lambda: [n for _, n in mk.chans(b)], before, 15): return
     items = a.q(a.q(a.g(v.CHANLIST)) + 8)
     objs = [a.q(items + 8 * i) for i in range(len(before))]
     sel = [a.r(o + v.CH_SELECTED, 1) for o in objs]
@@ -227,11 +251,34 @@ def t_clips(a, b, v):
     check('clip in B (position, pattern, length, track)', lambda: [c[:14].hex() for c in clip_list(b)], [c[:14].hex() for c in clip_list(a)], 15)
 
 
+def make_sample_fixture(v):
+    """Use FL's installed sampler template and a fresh, tiny generated WAV."""
+    import os, random, tempfile, uuid, wave
+    from flp import events, data_bounds
+    template = FL_DIRS[v.build] + r'\Data\Patches\Channel presets\Sampler\Default.fst'
+    data = open(template, 'rb').read()
+    version = next(value.rstrip(b'\0').decode('ascii') for event, value in events(data) if event == 199)
+    stem = os.path.join(tempfile.gettempdir(), 'flim_sample_test_' + uuid.uuid4().hex)
+    wav, fst = stem + '.wav', stem + '.fst'
+    rng = random.Random(stem)
+    with wave.open(wav, 'wb') as out:
+        out.setnchannels(1); out.setsampwidth(2); out.setframerate(44100)
+        out.writeframes(b''.join(struct.pack('<h', rng.randrange(-400, 401)) for _ in range(4410)))
+    path = (wav + '\0').encode('ascii' if int(version.split('.')[0]) < 11 else 'utf-16-le')
+    length, n = bytearray(), len(path)
+    while n >= 128: length.append((n & 127) | 128); n >>= 7
+    length.append(n)
+    start, end = data_bounds(data)
+    body = data[start:end] + bytes([196]) + bytes(length) + path
+    with open(fst, 'wb') as out: out.write(data[:start - 4] + struct.pack('<I', len(body)) + body + data[end:])
+    return fst
+
+
 def t_sample(a, b, v, fst=None):
     """A loads a channel preset that uses a sample B doesn't have: B downloads it (plug.state + samples)"""
-    import os, re, tempfile
-    fst = fst or os.environ.get('FLIM_FT_FST')
-    if not fst: print('SKIP sample (set FLIM_FT_FST=<channel .fst using one of your own samples>)'); return
+    import os, re, tempfile, hashlib
+    supplied = fst or os.environ.get('FLIM_FT_FST')
+    fst = supplied or make_sample_fixture(v)
     log = os.path.join(os.environ['TEMP'], 'flim_engine.log')
     mark = os.path.getsize(log)
     def tail():
@@ -251,7 +298,29 @@ def t_sample(a, b, v, fst=None):
     def b_uses_download():
         if os.path.exists(path): os.remove(path)
         b.call(vb.SAVEPRESET, b.mkstr(path), 32, chb, 1)
-        return os.path.exists(path) and r'Documents\flim\samples'.encode('utf-16-le') in open(path, 'rb').read()
+        if not os.path.exists(path): return False
+        data = open(path, 'rb').read()
+        if supplied:
+            return any(p.encode('utf-16-le') in data for p in
+                       (r'Documents\flim\samples', r'%ILSharedData%flim\samples'))
+        from flp import events
+        import winreg
+        source = os.path.splitext(fst)[0] + '.wav'
+        expected = hashlib.sha256(open(source, 'rb').read()).digest()
+        cache = os.path.join(os.environ['USERPROFILE'], 'Documents', 'flim', 'samples')
+        for event, value in events(data):
+            if event != 196: continue
+            saved = value.decode('utf-16-le').rstrip('\0')
+            if saved.lower().startswith('%ilshareddata%'):
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Image-Line\Shared\Paths') as key:
+                        shared = winreg.QueryValueEx(key, 'Shared data')[0]
+                except OSError: shared = os.path.join(os.environ['USERPROFILE'], 'Documents', 'Image-Line')
+                saved = os.path.join(shared, saved[len('%ILSharedData%'):].lstrip('\\/'))
+            if os.path.commonpath([os.path.abspath(saved), cache]).lower() != cache.lower(): continue
+            if os.path.isfile(saved) and hashlib.sha256(open(saved, 'rb').read()).digest() == expected:
+                return True
+        return False
     check("B's channel uses the downloaded file", b_uses_download, True, 15)
     a.call(v.DELCHAN, last, 0, 3)
 
@@ -272,3 +341,4 @@ if __name__ == '__main__':
             results.append((name, False)); print('FAIL %-34s exception: %s' % (name, e), flush=True)
     n = sum(ok for _, ok in results)
     print('\n%d / %d passed' % (n, len(results)))
+    raise SystemExit(0 if n == len(results) else 1)

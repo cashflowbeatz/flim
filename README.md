@@ -1,6 +1,6 @@
 # flim
 
-**Real-time multiplayer for FL Studio 2025.** Two or more people each run their own FL Studio, with their
+**Real-time multiplayer for FL Studio, with an experimental FL 26 port.** Two or more people each run their own FL Studio, with their
 own windows, zoom and selection, while the song itself (knobs, plugins, channels, notes, playlist, mixer,
 samples) is kept in sync over the internet. It works a bit like [Drawpile](https://drawpile.net/), but for FL.
 
@@ -11,6 +11,16 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 > It works by running extra code inside FL Studio's process, and it only supports **specific FL builds**
 > (see [Requirements](#requirements)). It can crash FL, so save often. flim never overwrites your
 > original `.flp` files (see [Sessions](#sessions)).
+
+This fork adds an opt-in port for **FL Studio 26.1.6.5639 on Windows x64**. Build it with
+`FLIM_EXPERIMENTAL_FL26=1`; the resulting launcher and engine are in `client/out-experimental`.
+Other FL 26 builds are not supported. The default build retains the existing FL 25 tables.
+See [FL 26 validation](client/dev/compatibility/README.md) for observed behavior and remaining tests.
+The release links and public-test instructions below describe the upstream FL 25 release; they do
+not publish the new FL 26 client automatically.
+
+The supplied server runs on **Fly.io**. For your own server behind Cloudflare Tunnel, see
+[private testing and Cloudflare](server/DEPLOYMENT.md).
 
 ---
 
@@ -40,7 +50,8 @@ Rules of the public test:
 - If all 8 slots are taken, Host tells you so. Try again a bit later.
 - Up to 8 people per session. If the host leaves, the session ends.
 
-Want no time limit? [Run your own server](#server): it's one `npm start`, and it has no limits.
+Want no public-test time limit? [Run your own server](#server); transfer and connection limits
+still apply.
 
 ---
 
@@ -107,9 +118,11 @@ at the same pattern or arrangement. The arrows can't be clicked and never get in
 
 ## Requirements
 
-- **Client:** Windows 10 or 11 (64-bit) and **FL Studio 2025, build 25.2.3.5171** (Help → About).
+- **Client:** Windows 10 or 11 (64-bit). The default build supports FL **25.2.3.5171** and
+  **25.1.6.4997**; the experimental build additionally supports **26.1.6.5639** (Help → About).
   Have a different build? See [Other FL Studio builds](#other-fl-studio-builds).
-- **Server:** any machine with Node.js 20 or newer (Windows, Linux or macOS) that everyone can reach.
+- **Server:** a supported Node.js LTS release (Node.js 24 is the container default) on Windows,
+  Linux or macOS, reachable by the participants.
 
 ---
 

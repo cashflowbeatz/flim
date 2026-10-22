@@ -4,8 +4,15 @@ import { WebSocketServer, WebSocket } from "ws";
 import { dropBlobs, handleBlob } from "./blobs";
 import { ClientMsg, PING_INTERVAL_MS, UserInfo } from "./protocol";
 import { Client, Session, send } from "./session";
+import { clientIp, proxyMode } from "./proxy";
 
 const PORT = Number(process.env.PORT ?? 8080);
+const PROXY_MODE = proxyMode();
+const BIND = process.env.FLIM_BIND ?? (PROXY_MODE === "cloudflare" ? "127.0.0.1" : undefined);
+if (PROXY_MODE === "cloudflare" && BIND !== "127.0.0.1" && BIND !== "::1") {
+  throw new Error("Cloudflare Tunnel mode requires FLIM_BIND=127.0.0.1 or ::1");
+}
+const LOG_OPS = process.env.FLIM_LOG_OPS === "1";
 const MAX_PAYLOAD = 64 * 1024 * 1024; // 64 MB — an .flp snapshot in base64
 
 // Two modes.
@@ -93,10 +100,6 @@ function addFail(ip: string): void {
   const f = fails.get(ip);
   if (!f || Date.now() - f.since > FAIL_WINDOW_MS) fails.set(ip, { n: 1, since: Date.now() });
   else f.n += 1;
-}
-
-function clientIp(req: http.IncomingMessage): string {
-  return String(req.headers["fly-client-ip"] ?? req.socket.remoteAddress ?? "?");
 }
 
 // What a browser sees when someone opens a session link.
@@ -228,22 +231,28 @@ function handleInSession(ws: WebSocket, client: Client, session: Session, msg: C
   if (msg.t !== "bye") session.touch();
   switch (msg.t) {
     case "snapshot":
+      if (typeof msg.flp !== "string") return fail(ws, "bad_request", "Malformed snapshot.");
       session.setSnapshot(client, msg.flp);
       break;
     case "project_swap":
+      if (typeof msg.flp !== "string") return fail(ws, "bad_request", "Malformed project swap.");
       session.projectSwap(client, msg.flp);
       break;
     case "op":
-      if (!msg.op || typeof msg.op !== "object") return fail(ws, "bad_request", "Malformed op.");
+      if (!msg.op || typeof msg.op !== "object" || Array.isArray(msg.op) ||
+          typeof msg.op.kind !== "string" || !msg.op.kind || msg.op.kind.length > 64 ||
+          (msg.op.key !== undefined && !validKey(msg.op.key))) return fail(ws, "bad_request", "Malformed op.");
       if (msg.op.kind === "cur") { session.relayOp(client, msg.op); break; } // mouse position: frequent, not an edit
       session.touchLocksOf(client.user.id); // editing keeps the user's locks fresh
       session.relayOp(client, msg.op);
-      console.log(`[${session.code} op] ${client.user.name}: ${JSON.stringify(msg.op).slice(0, 120)}`);
+      if (LOG_OPS) console.log(`[${session.code} op] ${client.user.name}: ${JSON.stringify(msg.op.kind)}`);
       break;
     case "lock_acquire":
+      if (!validKey(msg.key)) return fail(ws, "bad_request", "Malformed lock key.");
       session.acquire(client, msg.key);
       break;
     case "lock_release":
+      if (!validKey(msg.key)) return fail(ws, "bad_request", "Malformed lock key.");
       session.release(client, msg.key);
       break;
     case "bye":
@@ -254,8 +263,12 @@ function handleInSession(ws: WebSocket, client: Client, session: Session, msg: C
   }
 }
 
+function validKey(key: unknown): key is string {
+  return typeof key === "string" && key.length > 0 && key.length <= 256;
+}
+
 wss.on("connection", (ws, req) => {
-  const conn: Conn = { ip: clientIp(req), tokens: RATE_BURST, tokensAt: Date.now() };
+  const conn: Conn = { ip: clientIp(req, PROXY_MODE), tokens: RATE_BURST, tokensAt: Date.now() };
   conns.set(ws, conn);
   const n = (connsPerIp.get(conn.ip) ?? 0) + 1;
   connsPerIp.set(conn.ip, n);
@@ -270,9 +283,10 @@ wss.on("connection", (ws, req) => {
   }, JOIN_TIMEOUT_MS);
 
   ws.on("message", (raw) => {
-    if (conn.refused) return;
+    if (conn.refused || ws.readyState !== WebSocket.OPEN) return;
     if (!rateOk(conn)) {
       console.log(`[rate] ${conn.client?.user.name ?? conn.ip} sent too fast: closed`);
+      conn.refused = true;
       ws.close(4008, "rate");
       return;
     }
@@ -355,11 +369,13 @@ wss.on("close", () => {
   clearInterval(sweep);
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, BIND, () => {
+  const address = httpServer.address();
+  const port = typeof address === "object" && address ? address.port : PORT;
   console.log(
     PUBLIC
-      ? `flim-server listening on :${PORT} (public: slots ${OWNER_SLOT}, ${PUBLIC_SLOTS.join(" ")}; ` +
+      ? `flim-server listening on :${port} (public: slots ${OWNER_SLOT}, ${PUBLIC_SLOTS.join(" ")}; ` +
           `${SESSION_MS / 60_000} min sessions, ${COOLDOWN_MS / 60_000} min cooldown)`
-      : `flim-server listening on :${PORT} (self-hosted: one session)`,
+      : `flim-server listening on :${port} (self-hosted: one session)`,
   );
 });

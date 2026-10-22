@@ -40,6 +40,8 @@
 #include "../common/flim_config.h"
 #include "../common/flim_res.h"
 #include "../common/flim_version.h"
+#include "../common/flim_ws_buffer.h"
+#include "../common/flim_unit_bursts.h"
 #include <bcrypt.h>
 #include <commctrl.h>
 #pragma comment(lib, "winhttp.lib")
@@ -67,6 +69,8 @@ typedef struct {
                            // 2 = no wrapper: MSGBOX is the core itself (text, flags, cb)
     uint64_t REC, MUTE, MIXARR, MIXCNT, MAINFORM, SAVEPRESET, LOADPRESET, HASPLUGIN, GETPLUGIN, INTFCLEAR, ADDCHAN, DELCHAN, RESOLVER, CHANLIST, MOVECHAN, MOVEOBJ, MOVEARG, CHANFILT, PATARR, NOTEARR, NOTEDEL, NOTELOCK, GRIDREFRESH, FLPROJ, MAINOBJ, SETPROJ, SAVEPROJ, BUSYBEGIN, BUSYEND, PROJNAME, ARRS, ARRCUR, PLFORM, PLREFRESH, HINT, MIXNAME, MIXCOLOR, UIUPDATE, MIXOBJ, SETROUTE, ROUTEUPD, PATNAME, PATCOLOR, PATREFRESH, PLTRACK, MARKADD, MARKTYPE, DYNSETLEN, MARKREFRESH, MARKSORT, PATLENUPD, PATMARKS, SONGLOCK, MODIFIED, TSNUM, TSDEN, TSSET, TSCTLS, MSGBOX, MSGBOX_CORE, PRFORM, CURPAT;
     uint32_t CH_SELECTED, CH_GRID, FORM_BUSY, PAT_STRIDE, PLFORM_PATS, PL_MARKSEL, ED_TICKSPERPX, ED_HSCROLL, PR_GRID, PL_GRID, GRID_VSCROLL;
+    uint32_t MIX_STRIDE, MIX_SLOTS_OFF, MIX_ROUTE;
+    uint32_t FLPROJ_LOAD_SLOT, PATOP_CLONE_SLOT, PATOP_DELETE_SLOT, PATOP_REARRANGE_SLOT, PATOP_EDIT_SLOT, PATOP_INSERT_SLOT, PATOP_SPLIT_SLOT;
 } FlBuild;
 
 static const FlBuild k_flBuilds[] = {
@@ -145,6 +149,16 @@ static const FlBuild k_flBuilds[] = {
         .PR_GRID       = 0xc40,
         .PL_GRID       = 0xcf8,
         .GRID_VSCROLL  = 0x3fc,
+        .MIX_STRIDE    = 0x1474,
+        .MIX_SLOTS_OFF = 0x1324,
+        .MIX_ROUTE     = 0x2e4,
+        .FLPROJ_LOAD_SLOT = 0x38,
+        .PATOP_CLONE_SLOT = 0xd8,
+        .PATOP_DELETE_SLOT = 0xe0,
+        .PATOP_REARRANGE_SLOT = 0xe8,
+        .PATOP_EDIT_SLOT = 0xf0,
+        .PATOP_INSERT_SLOT = 0xf8,
+        .PATOP_SPLIT_SLOT = 0x100,
     },
     {   // FL Studio 2025 (25.1.6.4997): dev/sigscan.py from 5171, checked by hand where noted
         .build = L"25.1.6.4997", .msgbox = 2,
@@ -221,7 +235,105 @@ static const FlBuild k_flBuilds[] = {
         .PR_GRID       = 0xc38,
         .PL_GRID       = 0xcf0,
         .GRID_VSCROLL  = 0x400,
+        .MIX_STRIDE    = 0x1474,
+        .MIX_SLOTS_OFF = 0x1324,
+        .MIX_ROUTE     = 0x2e4,
+        .FLPROJ_LOAD_SLOT = 0x38,
+        .PATOP_CLONE_SLOT = 0xd8,
+        .PATOP_DELETE_SLOT = 0xe0,
+        .PATOP_REARRANGE_SLOT = 0xe8,
+        .PATOP_EDIT_SLOT = 0xf0,
+        .PATOP_INSERT_SLOT = 0xf8,
+        .PATOP_SPLIT_SLOT = 0x100,
     },
+#ifdef FLIM_EXPERIMENTAL_FL26
+    {   // FL Studio 26.1.6.5639: experimental mapping; see dev/compatibility/
+        .build = L"26.1.6.5639", .msgbox = 1,
+        .REC           = 0x1046540,
+        .MUTE          = 0x1280680,
+        .MIXARR        = 0x15e4708,
+        .MIXCNT        = 0x15e6200,
+        .MAINFORM      = 0x15e5418,
+        .SAVEPRESET    = 0xf54600,
+        .LOADPRESET    = 0xf547f0,
+        .HASPLUGIN     = 0x13342e0,
+        .GETPLUGIN     = 0x1335ea0,
+        .INTFCLEAR     = 0x41a770,
+        .ADDCHAN       = 0x1003d00,
+        .DELCHAN       = 0x1004530,
+        .RESOLVER      = 0x1005240,
+        .CHANLIST      = 0x15e6280,
+        .MOVECHAN      = 0x10422d0,
+        .MOVEOBJ       = 0x15e5508,
+        .MOVEARG       = 0x15e7ac8,
+        .CHANFILT      = 0x15e4190,
+        .PATARR        = 0x15e6b08,
+        .NOTEARR       = 0x12d6200,
+        .NOTEDEL       = 0x105fe80,
+        .NOTELOCK      = 0x15e6070,
+        .GRIDREFRESH   = 0x12db420,
+        .FLPROJ        = 0x15e87f8,
+        .MAINOBJ       = 0x15e5060,
+        .SETPROJ       = 0x11d8e40,
+        .SAVEPROJ      = 0x11db8d0,
+        .BUSYBEGIN     = 0x11cf500,
+        .BUSYEND       = 0x11cf550,
+        .PROJNAME      = 0x16c0c98,
+        .ARRS          = 0x1972b60,
+        .ARRCUR        = 0x15da658,
+        .PLFORM        = 0x15e7630,
+        .PLREFRESH     = 0xe47e80,
+        .HINT          = 0x11f11b0,
+        .MIXNAME       = 0x12c33c0,
+        .MIXCOLOR      = 0x12c64b0,
+        .UIUPDATE      = 0xbd6930,
+        .MIXOBJ        = 0x15e6340,
+        .SETROUTE      = 0x12a8090,
+        .ROUTEUPD      = 0x12a75c0,
+        .PATNAME       = 0x12d5ae0,
+        .PATCOLOR      = 0x12d5fd0,
+        .PATREFRESH    = 0xea7be0,
+        .PLTRACK       = 0x12eac10,
+        .MARKADD       = 0x1063290,
+        .MARKTYPE      = 0x1053d50,
+        .DYNSETLEN     = 0x417fc0,
+        .MARKREFRESH   = 0xe53a10,
+        .MARKSORT      = 0x1062c00,
+        .PATLENUPD     = 0x12d62c0,
+        .PATMARKS      = 0x12d5680,
+        .SONGLOCK      = 0x15e7da8,
+        .MODIFIED      = 0x11d4ff0,
+        .TSNUM         = 0x15e7a28,
+        .TSDEN         = 0x15e5cd8,
+        .TSSET         = 0x136a1c0,
+        .TSCTLS        = 0x136a330,
+        .MSGBOX        = 0x963680,
+        .MSGBOX_CORE   = 0x9635f0,
+        .PRFORM        = 0x15e64e0,
+        .CURPAT        = 0x15e8080,
+        .CH_SELECTED   = 0x32c,
+        .CH_GRID       = 0x7ac,
+        .FORM_BUSY     = 0x34d4,
+        .PAT_STRIDE    = 0xc0,
+        .PLFORM_PATS   = 0xd34,
+        .PL_MARKSEL    = 0xd8c,
+        .ED_TICKSPERPX = 0xb04,
+        .ED_HSCROLL    = 0xb14,
+        .PR_GRID       = 0xc68,
+        .PL_GRID       = 0xd2c,
+        .GRID_VSCROLL  = 0x3fc,
+        .MIX_STRIDE    = 0x1478,
+        .MIX_SLOTS_OFF = 0x134c,
+        .MIX_ROUTE     = 0x394,
+        .FLPROJ_LOAD_SLOT = 0x40,
+        .PATOP_CLONE_SLOT = 0xe8,
+        .PATOP_DELETE_SLOT = 0xf8,
+        .PATOP_REARRANGE_SLOT = 0x108,
+        .PATOP_EDIT_SLOT = 0x110,
+        .PATOP_INSERT_SLOT = 0x118,
+        .PATOP_SPLIT_SLOT = 0x120,
+    },
+#endif
 };
 static FlBuild g_fl;       // the row in use (engineMain)
 #define REC_RVA      (g_fl.REC - IMG_BASE)   // ProcessRECEvent(eventId, value, flags)
@@ -229,7 +341,7 @@ static FlBuild g_fl;       // the row in use (engineMain)
 #define MIXARR_VA (g_fl.MIXARR)     // global: pointer to mixer track array (stride 0x1474)
 #define MIXCNT_VA (g_fl.MIXCNT)     // global: pointer to mixer track count (int)
 #define MAINFORM_VA (g_fl.MAINFORM)     // global: pointer to FL main form pointer
-#define MIX_STRIDE   0x1474
+#define MIX_STRIDE   (g_fl.MIX_STRIDE)
 #define MIX_ENABLED  0x18          // byte: 1 = enabled (unmuted)
 
 #define REC_UpdateValue   0x01
@@ -331,7 +443,7 @@ static HINSTANCE g_hinst = NULL;
 #define DELCHAN_FLAGS 3            // bit 2 = "already confirmed" (FL's menu sets it after its own dialog)
 #define RESOLVER_VA (g_fl.RESOLVER)     // ResolveChannel(index, global, &obj): global 0 = index in the rack's filter group
 #define CHANLIST_VA (g_fl.CHANLIST)    // global: pointer to channel list (items +8, count +0x10)
-#define MIX_SLOTS_OFF 0x1324       // mixer track: 10 effect slot object pointers
+#define MIX_SLOTS_OFF (g_fl.MIX_SLOTS_OFF) // mixer track: 10 effect slot object pointers
 #define MOVECHAN_VA (g_fl.MOVECHAN)     // ReorderChannels(**MOVEOBJ, mode, **MOVEARG, flags): FL's Alt+Up/Down + sorts
 #define MOVEOBJ_VA (g_fl.MOVEOBJ)    //   first arg (pointer global, deref twice)
 #define MOVEARG_VA (g_fl.MOVEARG)    //   third arg (int, deref twice; -1 seen)
@@ -360,7 +472,7 @@ static HINSTANCE g_hinst = NULL;
 
 // ---- project files (FL functions / globals, Ghidra VAs) ----
 #define FLPROJ_VA (g_fl.FLPROJ)    // global -> holder; *(holder + 0x10) = TFLProject object
-#define FLPROJ_LOAD_SLOT (0x38 / 8) // TFLProject vmt +0x38: LoadFile(self, path, flags) -> bool; flags bit 0 = "save changes?" prompt
+#define FLPROJ_LOAD_SLOT (g_fl.FLPROJ_LOAD_SLOT / 8) // LoadFile(self, path, flags); flags bit 0 = "save changes?" prompt
 #define MAINOBJ_VA (g_fl.MAINOBJ)    // global -> var -> main form object (what FL's own open/save code passes)
 #define FORM_BUSY     (g_fl.FORM_BUSY)       // main form: busy object, non-NULL while an .flp load runs
 #define SETPROJ_VA (g_fl.SETPROJ)    // SetProjectFile(form, path, path, addRecent): title, Ctrl+S target, recent list
@@ -432,6 +544,7 @@ enum { SNAP_BASELINE, SNAP_IF_DIFF, SNAP_FORCE, SNAP_ADD, SNAP_COLLECT };
 typedef struct {
     int type;
     uint32_t id, v;          // T_PARAM
+    LONG applyGen;          // local T_PARAM revert: reject after a remote preset load
     int unit, a, b;          // unit kind + (channel) or (track, slot)
     int mode;                // T_SNAP mode / T_LOAD: 1 = skip if identical
     char *path;              // T_LOAD / T_ADDCH: inbound .fst file (owned; deleted after use)
@@ -763,6 +876,7 @@ typedef struct {
     DWORD absorbUntil;       // identity changes until then come from our own apply
     DWORD baselineAt;        // take a silent baseline at this tick
     DWORD baseAt;            // when the current hash baseline was taken
+    volatile LONG applyGen;  // odd throughout a remote load; even when complete
 } Unit;
 
 #define BURST_PARAMS     8       // params of one unit changing in one poll tick = preset load
@@ -798,6 +912,25 @@ static int unit_of_id(uint32_t id, int *unit, int *a, int *b) {
     uint32_t ts = (id - 0x70000000u) >> 16;
     *unit = U_FX; *a = (int)(ts >> 6); *b = (int)(ts & 63);
     return *a < MAX_MIX && *b < MAX_FX_SLOTS;
+}
+
+static Unit *param_unit(uint32_t id) {
+    int unit, a, b;
+    return unit_of_id(id, &unit, &a, &b) ? unit_ptr(unit, a, b) : NULL;
+}
+
+static int unit_applying(const Unit *u, DWORD now) {
+    return u && ((u->applyGen & 1) || (u->suppressUntil && (LONG)(now - u->suppressUntil) < 0));
+}
+
+static int unit_poll_current(const Unit *u, LONG gen, DWORD now) {
+    return !u || (u->applyGen == gen && !unit_applying(u, now));
+}
+
+static void enqueue_local_revert(uint32_t id, uint32_t v, LONG applyGen) {
+    QItem it; memset(&it, 0, sizeof(it));
+    it.type = T_PARAM; it.id = id; it.v = v; it.mode = 1; it.applyGen = applyGen;
+    enqueue(&it);
 }
 
 // Delphi x64 UnicodeString with refcount -1 (a "literal"): FL copies rather than
@@ -935,7 +1068,7 @@ static void send_unit(const char *kind, int unit, int a, int b, const unsigned c
 static void do_snap(const QItem *it) {
     Unit *u = unit_ptr(it->unit, it->a, it->b);
     size_t n = 0;
-    if (!u) return;
+    if (!u || unit_applying(u, GetTickCount())) return;
     unsigned char *d = unit_save(it->unit, it->a, it->b, &n);
     if (!d) return;
     uint64_t h = state_hash(d, n);
@@ -988,6 +1121,7 @@ static void do_load(const QItem *it) {
         free(own);
         if (hown && hown == hin) { u->hash = hown; return; }
     }
+    InterlockedIncrement(&u->applyGen);
     u->identAt = 0; u->lastAct = 0; u->burst = 0;
     wchar_t *w = dstr_new(it->path);
     int r = -1;
@@ -1005,6 +1139,7 @@ static void do_load(const QItem *it) {
             if (!unit_of_id(s->id, &un, &ua, &ub) || un != it->unit || ua != it->a || ub != it->b) continue;
             EnterCriticalSection(&g_slotLock);
             s->last = read_value(s->id);
+            s->hasUndo = 0;
             InterlockedIncrement(&s->gen);
             LeaveCriticalSection(&g_slotLock);
             k++;
@@ -1016,6 +1151,7 @@ static void do_load(const QItem *it) {
         u->baselineAt = now + REBASE_MS;
         (void)k;
     }
+    InterlockedIncrement(&u->applyGen);
     logmsg("PLUG applied unit=%s %d/%d ret=%d", it->unit == U_CH ? "ch" : "fx", it->a, it->b, r);
 }
 
@@ -1813,7 +1949,7 @@ static void on_clips_set(const char *m) {
 #define ROUTEUPD_VA (g_fl.ROUTEUPD)    // RoutingChanged(mixer): after route / send level edits
 #define MIX_NAME      0x0c         // mixer track: UnicodeString name ('' = "Insert N")
 #define MIX_COLOR     0x04
-#define MIX_ROUTE     0x2e4        // + dst*8: int send level (12800 = 100%); +4: byte, 1 = routed
+#define MIX_ROUTE     (g_fl.MIX_ROUTE) // + dst*8: int send level (12800 = 100%); +4: byte, 1 = routed
 #define MIX_ROUTE_MAX 502
 #define CH_NAME       0x50         // channel object: UnicodeString name
 #define CH_COLOR      0x78
@@ -3551,6 +3687,18 @@ static const int PATOP_SLOT[PATOP_N] = {
     0xf8,       // Insert(pattern): "Insert one"
     0x100,      // SplitByChannel(pats[])
 };
+// Wire operation IDs stay stable when a build moves its virtual methods.
+static uint32_t patop_vmt_slot(int k) {
+    switch (k) {
+    case 0: return g_fl.PATOP_CLONE_SLOT;
+    case 1: return g_fl.PATOP_DELETE_SLOT;
+    case 2: return g_fl.PATOP_REARRANGE_SLOT;
+    case 3: return g_fl.PATOP_EDIT_SLOT;
+    case 4: return g_fl.PATOP_INSERT_SLOT;
+    case 5: return g_fl.PATOP_SPLIT_SLOT;
+    default: return 0;
+    }
+}
 #define PATOP_INSERT  4            // the one slot that takes a single pattern number
 #define MSGBOX_VA     (g_fl.MSGBOX)        // FL's message box (text, flags, callback) -> button id (detoured)
 #define MSGBOX_CORE_VA (g_fl.MSGBOX_CORE)  //   25.2: what it calls: (text, flags, 3, callback)
@@ -3622,6 +3770,7 @@ static void patops_install(void) {
     unsigned char jmp[12] = { 0x48, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xE0 };   // mov rax, imm64; jmp rax
     void *target = (void *)msgbox_detour;
     DWORD old;
+    uint32_t firstSlot = UINT32_MAX, lastSlot = 0;
     int k;
     char *proj = (char *)fl_project();
     if (!proj) { logmsg("PATTERN ops: no project object, not hooked"); return; }
@@ -3645,12 +3794,18 @@ static void patops_install(void) {
         FlushInstructionCache(GetCurrentProcess(), t, 26);
         g_mbOrig = (msgbox_t)t;
     }
-    if (!VirtualProtect(vmt + 0xd8 / 8, 8 * PATOP_N, PAGE_EXECUTE_READWRITE, &old)) { logmsg("PATTERN ops: vmt not writable"); return; }
     for (k = 0; k < PATOP_N; k++) {
-        g_patOrig[k] = (patop_t)vmt[PATOP_SLOT[k] / 8];
-        vmt[PATOP_SLOT[k] / 8] = (void *)PATOP_HOOKS[k];
+        uint32_t slot = patop_vmt_slot(k);
+        if (!slot || slot % sizeof(void *) || slot > 0x1000) { logmsg("PATTERN ops: invalid vmt slot"); return; }
+        if (slot < firstSlot) firstSlot = slot;
+        if (slot > lastSlot) lastSlot = slot;
     }
-    VirtualProtect(vmt + 0xd8 / 8, 8 * PATOP_N, old, &old);
+    if (!VirtualProtect((char *)vmt + firstSlot, lastSlot - firstSlot + sizeof(void *), PAGE_EXECUTE_READWRITE, &old)) { logmsg("PATTERN ops: vmt not writable"); return; }
+    for (k = 0; k < PATOP_N; k++) {
+        g_patOrig[k] = (patop_t)vmt[patop_vmt_slot(k) / sizeof(void *)];
+        vmt[patop_vmt_slot(k) / sizeof(void *)] = (void *)PATOP_HOOKS[k];
+    }
+    VirtualProtect((char *)vmt + firstSlot, lastSlot - firstSlot + sizeof(void *), old, &old);
     memcpy(jmp + 2, &target, 8);
     if (VirtualProtect(mb, sizeof(jmp), PAGE_EXECUTE_READWRITE, &old)) {
         memcpy(mb, jmp, sizeof(jmp));
@@ -4089,7 +4244,11 @@ static void plug_undo(const char *key, int apply) {
         Slot *s = &g_slots[k];
         int u2, a2, b2;
         if (!s->hasUndo || !plug_param_unit(s->id, &u2, &a2, &b2) || u2 != unit || a2 != a || b2 != b) continue;
-        if (apply) { enqueue_apply(s->id, s->undo); n++; }
+        if (apply) {
+            Unit *u = unit_ptr(unit, a, b);
+            LONG gen = u ? u->applyGen : 0;
+            if (unit_poll_current(u, gen, GetTickCount())) { enqueue_local_revert(s->id, s->undo, gen); n++; }
+        }
         s->hasUndo = 0;
     }
     if (n) logmsg("LOCK %s denied: %d params snapped back", key, n);
@@ -4588,6 +4747,7 @@ static void drain_queue_mainthread(void) {
             if (g_qh != g_qt && g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0);
             break;
         }
+        if (it.mode == 1 && !unit_poll_current(param_unit(it.id), it.applyGen, GetTickCount())) continue;
         Slot *s = slot_by_id(it.id);
         if (s) {
             // Record the value before writing so the poller sees no change, and bump
@@ -4702,7 +4862,7 @@ static uint32_t container_of(uint32_t id) {
 #define BULK_MIN_CHANGES    24
 #define BULK_MIN_CONTAINERS 4
 
-typedef struct { Slot *s; uint32_t prev, v; } Change;
+typedef struct { Slot *s; uint32_t prev, v; LONG gen, applyGen; } Change;
 static Change g_changes[MAX_SLOTS];
 
 // True if FL's channel list no longer matches what the main thread last recorded.
@@ -4727,6 +4887,7 @@ static void schedule_units(DWORD now) {
         int a = i < nch ? i : (i - nch) / MAX_FX_SLOTS, b = i < nch ? 0 : (i - nch) % MAX_FX_SLOTS;
         Unit *u = unit_ptr(unit, a, b);
         if (!u) continue;
+        if (unit_applying(u, now)) continue;
         if (unit == U_FX && !u->inst && !u->identAt) continue;
         if (u->addAt && now - u->addAt > SETTLE_IDENT_MS) {
             u->addAt = 0; u->identAt = 0; u->lastAct = 0;
@@ -4802,18 +4963,21 @@ static DWORD WINAPI pollThread(LPVOID p) {
         n = g_nslot;
         for (i = 0; i < n; i++) {
             Slot *s = &g_slots[i];
+            Unit *u = param_unit(s->id);
+            LONG ug = u ? u->applyGen : 0;
+            if (ug & 1) continue;
             LONG g0 = s->gen;
             uint32_t v = read_value(s->id);
             if (s->gen != g0) continue;                 // raced with an apply; re-read next tick
             EnterCriticalSection(&g_slotLock);
+            if (s->gen != g0 || (u && u->applyGen != ug)) { LeaveCriticalSection(&g_slotLock); continue; }
             uint32_t prev = s->last;
             if (v != prev) s->last = v;
             LeaveCriticalSection(&g_slotLock);
             if (v != prev && v != REC_NONE && prev != REC_NONE) {
-                int unit, a, b;
-                Unit *u = unit_of_id(s->id, &unit, &a, &b) ? unit_ptr(unit, a, b) : NULL;
-                if (u && now < u->suppressUntil) continue;   // caused by a remote state load
-                g_changes[nc].s = s; g_changes[nc].prev = prev; g_changes[nc].v = v; nc++;
+                if (!unit_poll_current(u, ug, now)) continue;
+                g_changes[nc].s = s; g_changes[nc].prev = prev; g_changes[nc].v = v;
+                g_changes[nc].gen = g0; g_changes[nc].applyGen = ug; nc++;
             }
             if (s->lockedByMe && now - s->lastTouch > LOCK_IDLE_MS) {
                 send_lock("lock_release", s->id);
@@ -4824,16 +4988,18 @@ static DWORD WINAPI pollThread(LPVOID p) {
 
         // per-unit activity: remember it, and flag preset-sized bursts
         // (a huge tick is a project load, handled by the bulk guard below)
-        for (i = 0; i < nc && nc < 2000; i++) {
-            int unit, a, b, j, cnt = 0;
-            Unit *u;
-            if (!unit_of_id(g_changes[i].s->id, &unit, &a, &b) || !(u = unit_ptr(unit, a, b))) continue;
-            u->lastAct = now;
-            for (j = 0; j < nc; j++) {
-                int u2, a2, b2;
-                if (unit_of_id(g_changes[j].s->id, &u2, &a2, &b2) && u2 == unit && a2 == a && b2 == b) cnt++;
+        if (nc > 0 && nc < 2000) {
+            static FlimUnitBurstCount counts[MAX_CH + MAX_MIX * MAX_FX_SLOTS];
+            static uint32_t epoch;
+            uint32_t tick = flim_unit_bursts_begin(counts, sizeof(counts) / sizeof(counts[0]), &epoch);
+            for (i = 0; i < nc; i++) {
+                int unit, a, b, key;
+                Unit *u;
+                if (!unit_of_id(g_changes[i].s->id, &unit, &a, &b) || !(u = unit_ptr(unit, a, b))) continue;
+                key = unit == U_CH ? a : MAX_CH + a * MAX_FX_SLOTS + b;
+                u->lastAct = now;
+                if (flim_unit_bursts_hit(&counts[key], tick) >= BURST_PARAMS) u->burst = 1;
             }
-            if (cnt >= BURST_PARAMS) u->burst = 1;
         }
         schedule_units(now);
 
@@ -4856,20 +5022,21 @@ static DWORD WINAPI pollThread(LPVOID p) {
 
         for (i = 0; i < nc; i++) {
             Slot *s = g_changes[i].s;
+            if (s->gen != g_changes[i].gen || !unit_poll_current(param_unit(s->id), g_changes[i].applyGen, GetTickCount())) continue;
             char key[32];
             int unit, a, b;
             if (plug_param_unit(s->id, &unit, &a, &b)) {
                 // plugin params go under their plugin's lock
                 if (!plug_lock_param(unit, a, b, s, g_changes[i].prev, key, sizeof(key))) {
                     logmsg("LOCK %s held by another user: param 0x%08x snapped back", key, s->id);
-                    enqueue_apply(s->id, g_changes[i].prev);
+                    enqueue_local_revert(s->id, g_changes[i].prev, g_changes[i].applyGen);
                     enqueue_hint(key);
                     continue;
                 }
             } else {
                 if (s->lockedByPeer) {
                     // someone else holds this knob: snap our local edit back
-                    enqueue_apply(s->id, g_changes[i].prev);
+                    enqueue_local_revert(s->id, g_changes[i].prev, g_changes[i].applyGen);
                     continue;
                 }
                 if (!s->lockedByMe) { send_lock("lock_acquire", s->id); s->lockedByMe = 1; }
@@ -5437,67 +5604,59 @@ static void decline(const char *hex) {
     LeaveCriticalSection(&g_sampleLock);
 }
 
-// %FLStudioUserData% = <"Shared data" from FL's registry paths>\FL Studio
-static void fl_user_data(wchar_t *out, int cap) {
-    DWORD n = (DWORD)cap * 2;
-    size_t l;
+static int sample_path_join(wchar_t *out, int cap, const wchar_t *tail) {
+    size_t n = wcslen(out), add;
+    int separator;
+    while (*tail == L'\\' || *tail == L'/') tail++;
+    add = wcslen(tail);
+    separator = add && n && out[n - 1] != L'\\' && out[n - 1] != L'/';
+    if (n + separator + add >= (size_t)cap) { out[0] = 0; return 0; }
+    if (separator) out[n++] = L'\\';
+    memcpy(out + n, tail, (add + 1) * sizeof(wchar_t));
+    return 1;
+}
+
+// FL can resave downloaded samples under %ILSharedData%, using this root without "FL Studio".
+static int fl_shared_data(wchar_t *out, int cap) {
+    DWORD n;
+    LSTATUS status;
+    if (cap <= 0) return 0;
     out[0] = 0;
-    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Image-Line\\Shared\\Paths", L"Shared data", RRF_RT_REG_SZ, NULL, out, &n) != ERROR_SUCCESS || !out[0]) {
+    n = (DWORD)cap * sizeof(wchar_t);
+    status = RegGetValueW(HKEY_CURRENT_USER, L"Software\\Image-Line\\Shared\\Paths", L"Shared data",
+                         RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_ZEROONFAILURE, NULL, out, &n);
+    if (status == ERROR_MORE_DATA) return 0;
+    if (status != ERROR_SUCCESS || !out[0]) {
         DWORD k = GetEnvironmentVariableW(L"USERPROFILE", out, cap);
-        if (!k || k >= (DWORD)cap) out[0] = 0;
-        wcscat_s(out, cap, L"\\Documents\\Image-Line\\");
+        if (!k || k >= (DWORD)cap) { out[0] = 0; return 0; }
+        if (!sample_path_join(out, cap, L"Documents\\Image-Line")) return 0;
     }
-    l = wcslen(out);
-    if (l && out[l - 1] != L'\\') wcscat_s(out, cap, L"\\");
-    wcscat_s(out, cap, L"FL Studio");
+    return is_abs_path(out);
+}
+
+static int fl_user_data(wchar_t *out, int cap) {
+    return fl_shared_data(out, cap) && sample_path_join(out, cap, L"FL Studio");
 }
 // A sample path as FL writes it -> a local file path. 0 = not a transferable file
 // (factory data and other FL placeholders: every install has those).
 static int expand_path(const wchar_t *p, wchar_t *out, int cap) {
     static const wchar_t UD[] = L"%FLStudioUserData%";
-    size_t ul = wcslen(UD);
+    static const wchar_t SD[] = L"%ILSharedData%";
+    size_t ul;
+    if (cap <= 0) return 0;
     if (p[0] != L'%') { if (wcslen(p) >= (size_t)cap) return 0; wcscpy_s(out, cap, p); return is_abs_path(out); }
-    if (_wcsnicmp(p, UD, ul) != 0) return 0;
-    fl_user_data(out, cap);
-    if (wcslen(out) + wcslen(p + ul) >= (size_t)cap) return 0;
-    wcscat_s(out, cap, p + ul);
-    return 1;
+    if (_wcsnicmp(p, UD, wcslen(UD)) == 0) {
+        ul = wcslen(UD);
+        if (!fl_user_data(out, cap)) return 0;
+    } else if (_wcsnicmp(p, SD, wcslen(SD)) == 0) {
+        ul = wcslen(SD);
+        if (!fl_shared_data(out, cap)) return 0;
+    } else return 0;
+    return sample_path_join(out, cap, p + ul);
 }
 
 // ---- FLP / .fst images ----
-typedef int (*flpev_t)(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end);
-// Walk the events of an FLP image ("FLhd" header chunk, then one "FLdt" chunk). cb gets each
-// event: id, payload, and the event's byte range [at, end). Returns 0 if d is no FLP image.
-static int flp_walk(const unsigned char *d, size_t n, flpev_t cb, void *ctx) {
-    size_t o, hl;
-    if (!d || n < 22 || memcmp(d, "FLhd", 4) != 0) return 0;
-    hl = *(const uint32_t *)(d + 4);
-    o = 8 + hl;
-    if (o + 8 > n || memcmp(d + o, "FLdt", 4) != 0) return 0;
-    o += 8;
-    while (o < n) {
-        size_t at = o, len = 0;
-        int id = d[o++];
-        if (id < 64) len = 1;
-        else if (id < 128) len = 2;
-        else if (id < 192) len = 4;
-        else {
-            int s = 0;
-            for (;;) {
-                unsigned char b;
-                if (o >= n || s > 28) return 0;
-                b = d[o++];
-                len |= (size_t)(b & 0x7f) << s;
-                s += 7;
-                if (!(b & 0x80)) break;
-            }
-        }
-        if (o + len > n) return 0;
-        if (cb && !cb(ctx, id, d + o, len, at, o + len)) break;
-        o += len;
-    }
-    return 1;
-}
+#include "../common/flim_flp.h"
 
 static void ev_wstr(const unsigned char *p, size_t n, wchar_t *out, int cap) {
     size_t k = n / 2;
@@ -5608,7 +5767,7 @@ static void raw_collect(const unsigned char *v, size_t n, PathList *L) {
             }
 }
 
-static int collect_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
+static int collect_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, size_t at, size_t end) {
     PathList *L = (PathList *)ctx;
     wchar_t w[SAMPLE_PATH_MAX];
     (void)at; (void)end;
@@ -5736,7 +5895,7 @@ static int raw_rewrite(unsigned char *v, size_t n) {
 }
 
 // Caller holds g_sampleLock.
-static int rewrite_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
+static int rewrite_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, size_t at, size_t end) {
     RewriteCtx *c = (RewriteCtx *)ctx;
     wchar_t w[SAMPLE_PATH_MAX];
     int i;
@@ -5772,11 +5931,9 @@ static int rewrite_cb(void *ctx, int id, const unsigned char *p, size_t n, size_
 // Receiver: point the sample paths in an inbound .flp / .fst image at the local files.
 static void samples_rewrite(unsigned char **d, size_t *n) {
     RewriteCtx c;
-    size_t start;
+    size_t start, end;
     int ok;
-    if (!g_npmap || !*d || *n < 22 || memcmp(*d, "FLhd", 4) != 0) return;
-    start = 8 + *(const uint32_t *)(*d + 4) + 8;
-    if (start > *n) return;
+    if (!g_npmap || !flp_data_bounds(*d, *n, &start, &end)) return;
     memset(&c, 0, sizeof(c));
     c.d = *d;
     rw_put(&c, *d, start);
@@ -5784,7 +5941,9 @@ static void samples_rewrite(unsigned char **d, size_t *n) {
     ok = flp_walk(*d, *n, rewrite_cb, &c);
     LeaveCriticalSection(&g_sampleLock);
     if (!ok || !c.changed) { free(c.o); return; }
+    if (c.n - start > UINT32_MAX) { free(c.o); return; }
     *(uint32_t *)(c.o + start - 4) = (uint32_t)(c.n - start);        // FLdt chunk length
+    rw_put(&c, *d + end, *n - end);
     logmsg("SAMPLES paths rewritten to local files (%zu -> %zu bytes)", *n, c.n);
     free(*d);
     *d = c.o;
@@ -5813,7 +5972,7 @@ static int ver_cmp(const char *x, const char *y) {
     return 0;
 }
 
-static int version_cb(void *ctx, int id, const unsigned char *p, size_t n, size_t at, size_t end) {
+static int version_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, size_t at, size_t end) {
     char *out = (char *)ctx;
     (void)at; (void)end;
     if (id != EV_FL_VERSION) return 1;
@@ -6314,7 +6473,7 @@ static DWORD WINAPI netThread(LPVOID p) {
     NetConn c;
     char err[200], name[2 * sizeof(g_myName)], pw[600], own[600], hello[2048], sess[4] = "";
     unsigned char *buf = NULL;
-    DWORD cap = 0, len = 0;
+    size_t cap = 0, len = 0;
 
     if (r->host ? !parse_url(r->url, &u) : !parse_link(r->url, &u, sess)) {
         net_status(NET_ERR, r->host ? "Bad server address" : "Bad session link");
@@ -6369,13 +6528,23 @@ static DWORD WINAPI netThread(LPVOID p) {
     for (;;) {
         DWORD got = 0, e;
         WINHTTP_WEB_SOCKET_BUFFER_TYPE type;
-        if (cap - len < 65536) { cap = cap ? cap * 2 : 262144; buf = (unsigned char *)realloc(buf, cap); }
-        e = WinHttpWebSocketReceive(c.ws, buf + len, cap - len - 1, &got, &type);
+        if (r->gen != g_netGen) break;
+        if (!flim_ws_reserve(&buf, &cap, len)) {
+            logmsg("NET receive buffer allocation failed");
+            break;
+        }
+        e = WinHttpWebSocketReceive(c.ws, buf + len, (DWORD)(cap - len - 1), &got, &type);
         if (e) { logmsg("NET receive ended (%lu)", e); break; }
         if (type == WINHTTP_WEB_SOCKET_CLOSE_BUFFER_TYPE) {
             USHORT code = 0; char reason[124] = { 0 }; DWORD rl = 0;
             WinHttpWebSocketQueryCloseStatus(c.ws, &code, reason, sizeof(reason) - 1, &rl);
             logmsg("NET server closed the connection (%u %.*s)", code, (int)rl, reason);
+            break;
+        }
+        if (r->gen != g_netGen) break;
+        if (got > FLIM_WS_MAX_MESSAGE - len) {
+            logmsg("NET message exceeds %u bytes", FLIM_WS_MAX_MESSAGE);
+            WinHttpWebSocketShutdown(c.ws, WINHTTP_WEB_SOCKET_MESSAGE_TOO_BIG_CLOSE_STATUS, NULL, 0);
             break;
         }
         len += got;
@@ -6388,8 +6557,8 @@ static DWORD WINAPI netThread(LPVOID p) {
     EnterCriticalSection(&g_sendLock);
     if (g_ws == c.ws) g_ws = NULL;
     LeaveCriticalSection(&g_sendLock);
-    samples_disconnected();
     if (r->gen == g_netGen) {
+        samples_disconnected();
         net_reset();
         if (g_netErr[0]) net_status(NET_ERR, "%s", g_netErr);
         else net_status(NET_ERR, "Connection to %s lost", u.shown);
@@ -6405,6 +6574,7 @@ done:
 static void net_connect(const char *url, const char *pw, int host, const char *owner) {
     NetReq *r = (NetReq *)calloc(1, sizeof(NetReq));
     HANDLE th;
+    if (!r) { net_status(NET_ERR, "Not enough memory to connect"); return; }
     r->gen = InterlockedIncrement(&g_netGen);
     r->host = host;
     strncpy_s(r->url, sizeof(r->url), url, _TRUNCATE);
@@ -6416,6 +6586,11 @@ static void net_connect(const char *url, const char *pw, int host, const char *o
     }
     th = CreateThread(NULL, 0, netThread, r, 0, NULL);
     if (th) CloseHandle(th);
+    else {
+        SecureZeroMemory(r, sizeof(*r));
+        free(r);
+        net_status(NET_ERR, "Could not start the connection");
+    }
 }
 
 // Main thread. Sends a close frame; the net thread sees the server's reply and cleans up.
@@ -6427,6 +6602,7 @@ static void net_disconnect(void) {
         g_ws = NULL;
     }
     LeaveCriticalSection(&g_sendLock);
+    samples_disconnected();
     net_reset();
     net_status(NET_OFF, "Not connected");
 }

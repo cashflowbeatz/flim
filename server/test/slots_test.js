@@ -1,37 +1,56 @@
-// Session isolation / slot tests. Starts servers from dist/ (npm run build first): public mode
-// :8099 (owner key "ownerk", idle 4 s, no per-IP cap), :8098 (defaults, for the per-IP cap),
-// :8097 (3 s sessions, 4 s cooldown); self-hosted :8096 (FLIM_PASSWORD "hk") and :8095 (no password).
+// Session isolation / slot tests. Each server binds an OS-assigned loopback port.
 // usage (in server/):  npm run build && node test/slots_test.js
 const WebSocket = require("ws");
 const os = require("os");
+const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "flim-slots-test-"));
 const servers = [
-  { PORT: "8099", FLIM_PUBLIC: "1", FLIM_OWNER_KEY: "ownerk", FLIM_IDLE_MS: "4000", FLIM_MAX_CONNS_PER_IP: "500" },
-  { PORT: "8098", FLIM_PUBLIC: "1" },
-  { PORT: "8097", FLIM_PUBLIC: "1", FLIM_OWNER_KEY: "ownerk", FLIM_SESSION_MS: "3000", FLIM_COOLDOWN_MS: "4000", FLIM_MAX_CONNS_PER_IP: "500" },
-  { PORT: "8096", FLIM_PASSWORD: "hk", FLIM_SESSION_MS: "1000", FLIM_IDLE_MS: "1000" },
-  { PORT: "8095" },
-].map((env, i) =>
-  spawn(process.execPath, [path.join(__dirname, "..", "dist", "server.js")], {
-    env: { ...process.env, FLIM_OWNER_KEY: "", FLIM_PASSWORD: "", ...env,
-           FLIM_BLOB_DIR: path.join(os.tmpdir(), `flim-slots-test-${i}`) },
-    stdio: "ignore",
-  }));
-process.on("exit", () => servers.forEach((s) => s.kill()));
+  { FLIM_PUBLIC: "1", FLIM_OWNER_KEY: "ownerk", FLIM_IDLE_MS: "4000", FLIM_MAX_CONNS_PER_IP: "500" },
+  { FLIM_PUBLIC: "1" },
+  { FLIM_PUBLIC: "1", FLIM_OWNER_KEY: "ownerk", FLIM_SESSION_MS: "3000", FLIM_COOLDOWN_MS: "4000", FLIM_MAX_CONNS_PER_IP: "500" },
+  { FLIM_PASSWORD: "hk", FLIM_SESSION_MS: "1000", FLIM_IDLE_MS: "1000" },
+  {},
+].map((env, i) => {
+  const child = spawn(process.execPath, [path.join(__dirname, "..", "dist", "server.js")], {
+    env: { ...process.env, PORT: "0", FLIM_BIND: "127.0.0.1", FLIM_PROXY: "none", FLIM_PUBLIC: "0",
+           FLIM_OWNER_KEY: "", FLIM_PASSWORD: "", ...env, FLIM_BLOB_DIR: path.join(testRoot, String(i)) },
+    stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
+  });
+  child.ready = new Promise((resolve, reject) => {
+    let output = "";
+    const timeout = setTimeout(() => reject(new Error(`Server ${i} failed to start: ${output}`)), 10000);
+    child.stderr.on("data", (part) => output += part);
+    child.stdout.on("data", (part) => {
+      output += part;
+      const match = /listening on :(\d+)/.exec(output);
+      if (match) { child.port = Number(match[1]); clearTimeout(timeout); resolve(); }
+    });
+    child.on("error", (err) => { clearTimeout(timeout); reject(err); });
+    child.once("exit", () => { clearTimeout(timeout); reject(new Error(`Server ${i} exited: ${output}`)); });
+  });
+  return child;
+});
+process.on("exit", () => {
+  servers.forEach((s) => s.kill());
+  if (path.dirname(path.resolve(testRoot)) === path.resolve(os.tmpdir()) && path.basename(testRoot).startsWith("flim-slots-test-")) {
+    fs.rmSync(testRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});
 const crypto = require("crypto");
 const http = require("http");
-const BASE = "ws://localhost:8099";
+const serverUrl = (index) => `ws://127.0.0.1:${servers[index].port}`;
 let failed = 0;
 const ok = (c, what) => { console.log(`${c ? "PASS" : "FAIL"}  ${what}`); if (!c) failed++; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function client(name, base = BASE) {
+function client(name, base = serverUrl(0)) {
   const ws = new WebSocket(base);
   const c = { ws, name, msgs: [], closed: null };
   ws.on("message", (m) => c.msgs.push(JSON.parse(m.toString())));
   ws.on("close", (code) => (c.closed = code));
-  c.open = new Promise((r) => ws.on("open", r));
+  c.open = new Promise((r, reject) => { ws.on("open", r); ws.on("error", reject); });
   c.send = (o) => ws.send(JSON.stringify(o));
   c.user = { id: "id-" + name, name };
   c.wait = async (pred, ms = 3000) => {
@@ -56,7 +75,7 @@ async function join(name, session, pw, id, base) {
 }
 function req(method, path, key, body) {
   return new Promise((res) => {
-    const r = http.request({ host: "localhost", port: 8099, method, path, headers: { "x-flim-key": key, ...(body ? { "content-length": body.length } : {}) } },
+    const r = http.request({ host: "127.0.0.1", port: servers[0].port, method, path, headers: { "x-flim-key": key, ...(body ? { "content-length": body.length } : {}) } },
       (resp) => { let d = ""; resp.on("data", (x) => (d += x)); resp.on("end", () => res({ status: resp.statusCode, body: d })); });
     if (body) r.write(body);
     r.end();
@@ -64,7 +83,7 @@ function req(method, path, key, body) {
 }
 
 (async () => {
-  await sleep(1500); // servers starting
+  await Promise.all(servers.map((s) => s.ready));
   // hosting public slots
   const h1 = await host("H1", "pw1");
   ok(h1.welcome.t === "welcome" && h1.welcome.session === "01" && /^[0-9a-f]{64}$/.test(h1.welcome.blob), "first host gets 01 + blob key");
@@ -174,7 +193,7 @@ function req(method, path, key, body) {
   {
     const cs = [];
     for (let i = 0; i < 13; i++) {
-      const w = new WebSocket("ws://localhost:8098");
+      const w = new WebSocket(serverUrl(1));
       const c = { msgs: [], closed: null };
       w.on("message", (m) => c.msgs.push(JSON.parse(m.toString())));
       w.on("close", (code) => (c.closed = code));
@@ -188,7 +207,7 @@ function req(method, path, key, body) {
 
   // time limit + cooldown (:8097: 3 s sessions, 4 s cooldown)
   {
-    const T = "ws://localhost:8097";
+    const T = serverUrl(2);
     const th = await host("TH", "tp", undefined, T);
     const tj = await join("TJ", th.welcome.session, "tp", undefined, T);
     ok(th.welcome.ends_in > 0 && th.welcome.ends_in <= 3000, "short session: ends_in <= 3 s");
@@ -210,7 +229,7 @@ function req(method, path, key, body) {
 
   // self-hosted: one session, no limits; FLIM_SESSION_MS / FLIM_IDLE_MS are ignored there
   {
-    const P = "ws://localhost:8096";
+    const P = serverUrl(3);
     const nok = await host("S0", "sp", undefined, P);
     ok(nok.welcome.code === "owner_required", "self-hosted with password: hosting without it refused");
     const bad = await host("S1", "sp", "nope", P);
@@ -225,11 +244,11 @@ function req(method, path, key, body) {
     ok((await join("SY", "02", "sp", undefined, P)).welcome.code === "no_session", "self-hosted: no slot 02");
     await sleep(2500);
     ok(sh.closed === null && sj.closed === null, "self-hosted: no time limit / idle close");
-    const Q = "ws://localhost:8095";
+    const Q = serverUrl(4);
     const open = await host("O1", "op", undefined, Q);
     ok(open.welcome.session === "01", "self-hosted without password: anyone hosts 01");
   }
 
   console.log(failed ? `\n${failed} FAILED` : "\nall passed");
   process.exit(failed ? 1 : 0);
-})();
+})().catch((err) => { console.error(err); process.exit(1); });

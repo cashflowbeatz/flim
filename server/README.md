@@ -10,6 +10,10 @@ WebSocket relay for [flim](../README.md). It doesn't understand FL Studio. It:
 - stores **sample files** per session so each one is uploaded once and the others fetch only what
   they're missing (`src/blobs.ts`, plain HTTP on the same port).
 
+The supplied deployment is **Fly.io**, not a Cloudflare Worker. You can run this Node.js server
+behind Cloudflare Tunnel; see [Cloudflare and private testing](DEPLOYMENT.md). Changing server
+hosting does not add support for a new FL Studio build: that lives in the client's verified hooks.
+
 **Public mode** (`FLIM_PUBLIC=1`, the public test server flim.fly.dev): up to 8 sessions (`01`-`08`,
 first free one for each new host) plus the owner's `00` (only for a host that sends `FLIM_OWNER_KEY`,
 or `FLIM_PASSWORD`). Sessions are fully separate: ops, locks, projects and sample files never cross.
@@ -20,6 +24,8 @@ minutes (`FLIM_COOLDOWN_MS`; refused with `cooldown` + `retry_in`); sessions wit
 
 Limits: 8 people per session, 12 WebSockets per IP (`FLIM_MAX_CONNS_PER_IP`), 8 wrong passwords /
 owner keys per IP per 10 minutes, 400 messages/s per connection (bursts up to 4000).
+Slow peers are disconnected if queued outbound data would exceed 128 MiB. Broadcast messages are
+serialized once for all peers. Lock keys are limited to 256 characters and a session to 4096 locks.
 
 Sessions are kept in memory only. When the machine stops, they are gone; the next host starts a new
 one from their project.
@@ -36,24 +42,45 @@ Content-addressed by SHA-256, one folder per session (deleted when the session e
 
 | Variable | Default |
 |---|---|
-| `FLIM_BLOB_DIR` | `<system temp>/flim-blobs` |
+| `FLIM_BLOB_DIR` | `<system temp>/flim-blobs`; generated session folders live inside `sessions-v1/` |
 | `FLIM_BLOB_SESSION_MAX` | 2500 MB per session; its least recently used files are deleted above it |
 | `FLIM_BLOB_STORE_MAX` | 5 GB for all sessions together; uploads are refused (507) above it |
 | `FLIM_BLOB_FILE_MAX` | 2000 MB per file |
+
+An upload must fit both the file and session limit. In-progress uploads reserve their declared
+length against the store limit, so concurrent uploads cannot bypass it. Blob responses use
+`Cache-Control: private, no-store`. Keep one process per store directory; startup removes only
+generated session folders inside `sessions-v1/`, preserving the configured parent. Caches made
+by older versions directly under `FLIM_BLOB_DIR` are unused and may be removed manually while stopped.
 
 On fly.io the disk is reset when the machine stops, which is fine for a cache. Sample downloads
 count towards fly.io's outbound data transfer.
 
 ## Run locally
-Requires Node.js 20+.
+Use a supported Node.js LTS release (24 recommended; the Docker image uses 24).
 ```bash
-npm install
+npm ci
 npm run build
 npm start                 # :8080, or set PORT
 npm run dev               # auto-restarting dev mode (tsx watch)
 curl http://localhost:8080/health    # -> flim-server ok
 ```
-Set `FLIM_PASSWORD` so only you (or whoever you tell) can host. `npm test` runs the session tests.
+Set `FLIM_PASSWORD` so only you (or whoever you tell) can host. `npm test` builds and runs the
+hardening regressions and the session tests on OS-assigned loopback ports.
+`npm run benchmark:relay` compares the old per-recipient serialization loop with the current relay
+on this machine. It measures CPU work with seven simulated recipients, not internet or FL latency.
+
+| Variable | Default / purpose |
+|---|---|
+| `PORT` | `8080` |
+| `FLIM_BIND` | All interfaces (Node's default); Cloudflare Tunnel mode defaults to `127.0.0.1` and requires loopback |
+| `FLIM_PROXY` | `none`; `fly` trusts `Fly-Client-IP`, `cloudflare` trusts `CF-Connecting-IP` from local `cloudflared` |
+| `FLIM_LOG_OPS` | Off; `1` logs operation names for diagnosis without logging project/plugin payloads |
+
+Leave proxy mode `none` for a direct server. `fly` is for an origin reachable only through the Fly
+proxy; another reverse proxy must not let arbitrary clients supply trusted headers. The included
+`fly.toml` sets `FLIM_PROXY=fly`. Cloudflare mode is specifically for a connector on the same host;
+it rejects a non-loopback bind instead of exposing a header-trusting origin to the LAN.
 
 ## Deploy to fly.io
 ```bash

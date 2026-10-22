@@ -16,15 +16,21 @@ import http from "http";
 import os from "os";
 import path from "path";
 
-const ROOT = process.env.FLIM_BLOB_DIR ?? path.join(os.tmpdir(), "flim-blobs");
+const BASE = path.resolve(process.env.FLIM_BLOB_DIR ?? path.join(os.tmpdir(), "flim-blobs"));
+const ROOT = path.join(BASE, "sessions-v1");
 const FILE_MAX = Number(process.env.FLIM_BLOB_FILE_MAX ?? 2000 * 1024 * 1024);
 const SESSION_MAX = Number(process.env.FLIM_BLOB_SESSION_MAX ?? 2500 * 1024 * 1024);
 const STORE_MAX = Number(process.env.FLIM_BLOB_STORE_MAX ?? 5 * 1024 * 1024 * 1024);
 const HEX = /^[0-9a-f]{64}$/;
+let reservedBytes = 0;
 
-// Nothing survives a restart: sessions don't either.
-fs.rmSync(ROOT, { recursive: true, force: true });
+// Only remove our generated session directories, never the configured parent or unrelated files.
 fs.mkdirSync(ROOT, { recursive: true });
+for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
+  if (/^[0-9a-f]{32}$/.test(entry.name) && entry.isDirectory() && !entry.isSymbolicLink()) {
+    fs.rmSync(path.join(ROOT, entry.name), { recursive: true, force: true });
+  }
+}
 
 // The session's folder. Named by a hash of its key, so it can't be guessed from anything sent.
 export function blobDir(blobKey: string): string {
@@ -33,13 +39,14 @@ export function blobDir(blobKey: string): string {
 
 // Session ended: its files go with it.
 export function dropBlobs(blobKey: string): void {
-  fs.rm(blobDir(blobKey), { recursive: true, force: true }, () => {});
+  fs.rm(blobDir(blobKey), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }, () => {});
 }
 
 function dirSize(dir: string): number {
   let total = 0;
   try {
     for (const name of fs.readdirSync(dir)) {
+      if (!HEX.test(name)) continue; // In-flight uploads are counted by their reserved length.
       try {
         total += fs.statSync(path.join(dir, name)).size;
       } catch {
@@ -89,14 +96,17 @@ function readBody(req: http.IncomingMessage, max: number): Promise<string | null
   return new Promise((resolve) => {
     let n = 0;
     const parts: Buffer[] = [];
+    let tooLarge = false;
     req.on("data", (c: Buffer) => {
+      if (tooLarge) return;
       n += c.length;
       if (n > max) {
+        tooLarge = true;
+        parts.length = 0;
         resolve(null);
-        req.destroy();
       } else parts.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(parts).toString("utf8")));
+    req.on("end", () => resolve(tooLarge ? null : Buffer.concat(parts).toString("utf8")));
     req.on("error", () => resolve(null));
   });
 }
@@ -112,6 +122,7 @@ export function handleBlob(
   const m = /^\/blob\/([0-9a-f]{64})$/.exec(url);
   const isMissing = url === "/blobs/missing";
   if (!m && !isMissing) return false;
+  res.setHeader("cache-control", "private, no-store");
   const key = String(req.headers["x-flim-key"] ?? "");
   if (!HEX.test(key) || !sessionKeyOk(key)) {
     res.writeHead(401);
@@ -165,13 +176,16 @@ export function handleBlob(
     }
     const now = new Date();
     fs.utimes(file(hex), now, st.mtime, () => {}); // LRU: recently fetched files stay
-    fs.createReadStream(file(hex)).pipe(res);
+    const input = fs.createReadStream(file(hex));
+    input.on("error", () => res.destroy());
+    res.on("close", () => input.destroy());
+    input.pipe(res);
     return true;
   }
 
   if (req.method === "PUT") {
     const len = Number(req.headers["content-length"] ?? -1);
-    if (!(len >= 0) || len > FILE_MAX) {
+    if (!Number.isSafeInteger(len) || len < 0 || len > Math.min(FILE_MAX, SESSION_MAX)) {
       res.writeHead(413);
       res.end();
       req.resume();
@@ -183,35 +197,57 @@ export function handleBlob(
       req.resume();
       return true;
     }
-    if (storeSize() + len > STORE_MAX) {
+    if (storeSize() + reservedBytes + len > STORE_MAX) {
       console.log(`[blob] store full: refused ${hex.slice(0, 12)} (${len} B)`);
       res.writeHead(507);
       res.end();
       req.resume();
       return true;
     }
-    fs.mkdirSync(DIR, { recursive: true });
+    try {
+      fs.mkdirSync(DIR, { recursive: true });
+    } catch {
+      res.writeHead(500);
+      res.end();
+      req.resume();
+      return true;
+    }
+    reservedBytes += len;
+    let reserved = true;
+    const releaseReservation = () => {
+      if (!reserved) return;
+      reserved = false;
+      reservedBytes -= len;
+    };
     const tmp = path.join(DIR, `.${hex}.${process.pid}.${Math.random().toString(36).slice(2)}`);
     const out = fs.createWriteStream(tmp);
     const hash = crypto.createHash("sha256");
     let got = 0;
     let failed = false;
+    let completed = false;
     const fail = (code: number) => {
-      if (failed) return;
+      if (failed || completed) return;
       failed = true;
+      req.unpipe(out);
+      const cleanup = () => fs.unlink(tmp, () => releaseReservation());
+      if (out.closed) cleanup();
+      else out.once("close", cleanup);
       out.destroy();
-      fs.unlink(tmp, () => {});
-      if (!res.headersSent) {
+      req.resume();
+      if (!res.headersSent && !res.destroyed) {
         res.writeHead(code);
         res.end();
       }
     };
     req.on("data", (c: Buffer) => {
+      if (failed) return;
       got += c.length;
       if (got > len) return fail(400);
       hash.update(c);
     });
     req.on("error", () => fail(400));
+    req.on("aborted", () => fail(400));
+    res.on("close", () => { if (!res.writableFinished) fail(400); });
     req.pipe(out);
     out.on("error", () => fail(500));
     out.on("finish", () => {
@@ -223,9 +259,18 @@ export function handleBlob(
       if (!sessionKeyOk(key)) return fail(410); // the session ended during the upload
       fs.rename(tmp, file(hex), (err) => {
         if (err) return fail(500);
+        if (!sessionKeyOk(key)) {
+          fs.unlink(file(hex), () => releaseReservation());
+          return fail(410);
+        }
+        completed = true;
+        releaseReservation();
         console.log(`[blob] stored ${hex.slice(0, 12)} (${got} B)`);
-        res.writeHead(201);
-        res.end();
+        // A disconnect after rename must not remove a valid blob another uploader also uses.
+        if (!failed && !res.destroyed) {
+          res.writeHead(201);
+          res.end();
+        }
         try {
           evict(DIR);
         } catch {

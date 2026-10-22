@@ -10,7 +10,7 @@ STYLE DS_SHELLFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSM
 CAPTION "flim setup"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Where is FL Studio 2025 installed? (the folder that contains FL64.exe)", -1, 10, 10, 280, 10
+    LTEXT           "Where is FL Studio installed? (the folder that contains FL64.exe)", -1, 10, 10, 280, 10
     EDITTEXT        IDC_FLDIR, 10, 23, 224, 14, ES_AUTOHSCROLL
     PUSHBUTTON      "Browse...", IDC_BROWSE, 240, 23, 50, 14
     LTEXT           "", IDC_FLINFO, 10, 40, 280, 10

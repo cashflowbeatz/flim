@@ -1,0 +1,55 @@
+{
+  "format": "FLP/FST escaped 32-bit event identifiers",
+  "image_base": "0x400000",
+  "reference": {
+    "version": "25.2.3.5171",
+    "sha256": "54eff612a64c9eb047ee63f44204cc42678affdc270c64733bf997ecc0dccd35",
+    "reader": "0xaa9220",
+    "reader_escape_site": "0xaa928e",
+    "writer": "0xaa96e0"
+  },
+  "target": {
+    "version": "26.1.6.5639",
+    "sha256": "bc3637c3e41694c820865e757d88a42bdc15b6db4011582a2ef8f4d1b05a2d95",
+    "reader": "0xa9e830",
+    "reader_escape_site": "0xa9e89e",
+    "reader_extended_type_site": "0xa9e918",
+    "writer": "0xa9ecf0",
+    "preset_creator_event_site": "0xf4276b"
+  },
+  "observations": [
+    "Both inspected writers serialize IDs from 0 through 255 as one byte. Larger IDs are serialized as byte 0xac followed by the full little-endian uint32 ID.",
+    "Both inspected readers consume four more ID bytes after 0xac, then dispatch using the decoded ID. Escape decoding therefore does not require a version heuristic for these builds.",
+    "IDs through 255 retain the classic ranges: 0..63 byte, 64..127 word, 128..191 dword, 192..255 varint-length payload. For larger IDs the high nibble 0, 4, 8, or c selects these same four payload types. Other high nibbles have no payload handler in the inspected reader; flim rejects them.",
+    "The FL26 preset save path supplies extended ID 0xc0000101 to the string writer. Its serialized bytes ac 01 01 00 c0 are the complete ID, not event172 with a one-byte or three-byte payload.",
+    "Owned FL26 EQ preset (318 bytes) decodes to 12 events. Extended ID 0xc0000101 has a 54-byte payload; wrapper 212 has 52 bytes; plugin-data 213 has 108 bytes.",
+    "Owned FL26 Sampler preset (1114 bytes) decodes to 50 events. Its sample path is event 196 with 204 UTF16LE bytes, after the extended creator event. The legacy parser desynchronized before reaching it."
+  ],
+  "implementation": {
+    "c": "client/common/flim_flp.h",
+    "python": "client/dev/flp.py",
+    "bounds": "Validate header and declared FLdt length, all escaped IDs, fixed payloads and uint32 varint lengths. Do not scan for FLdt inside arbitrary data. C validates the full event stream before invoking callbacks.",
+    "rewrite": "Preserve unknown events byte-for-byte, including extended IDs, and preserve bytes after FLdt while updating only its own length. Reject malformed input before rewriting it."
+  },
+  "public_references": [
+    {
+      "url": "https://github.com/1ajh/FLIndexRenders/blob/main/flp_parser.py",
+      "observation": "Reports a three-byte event 172 payload for newer saves; that workaround aligns the observed creator string but does not recover the full ID. The inspected binary writer and reader establish the actual escape encoding."
+    },
+    {
+      "url": "https://github.com/clarkipeng/flpkit/blob/main/src/flpkit/detect.py",
+      "observation": "Reports a one-byte event 172 size override; that workaround invents an extra event from the extended-ID bytes. Used as a research lead, not copied into flim."
+    },
+    {
+      "url": "https://github.com/demberto/PyFLP/blob/master/pyflp/plugin.py",
+      "observation": "WrapperEvent 212 stores uint16 flags after 16 opaque bytes; _WrapperFlags.Visible is bit 0. The owned EQ A/B files differ at this documented plugin-editor visibility bit (0x0141 versus 0x0140). Other flag bits remain significant."
+    }
+  ],
+  "offline_validation": [
+    "Read-only installed FL Studio 2026 Data corpus sweep: all 8,738 .fst/.flp files parsed successfully, including 128 escaped extended events; zero parse errors. No preset contents were copied into the repository.",
+    "test_flp.py: 9 tests pass, including all extended payload kinds, real header shape, ordinary sample path after an extended ID, multibyte lengths, every truncated prefix, unknown type, overflow and chunk bounds.",
+    "t_flp.c: legacy and extended payload sizes, callback offsets, callback early stop, prevalidation before callbacks, overflow and truncated inputs pass.",
+    "t_samples.c: plugin path collection/rewriting, UTF16 sample path rewriting after extended creator ID, preservation of unknown extended event and trailing bytes, and unchanged malformed input pass."
+  ],
+  "runtime_scope": "The two owned runtime-saved presets were decoded read-only. End-to-end sample transfer must be tested separately by the runtime owner. No proprietary binary bytes or presets are included."
+}
