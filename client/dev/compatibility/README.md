@@ -38,6 +38,13 @@ callers, arguments and string assignments establish `0x11d9380`. The new build r
 previously verified FL 26 layouts described below. Aggregate operand counts alone were not
 treated as proof of a field's object identity.
 
+REA with Ghidra 12.1.4 independently analysed the updated engine's parameter dispatcher at
+`0x1046a70`, evidence `ev_59ac9ad838ddf20bb307631f624fdab73a4a6a5ea17a3ee8fd5277a56fee2ba7`.
+Its decompiler expressions corroborate mixer stride `0x1478`, effect offset `0x134c` and routing
+offset `0x394`. The body contains 25,243 bytes, 799 basic blocks and 102 callees. Value-flow output
+omitted 215 known edges and indirect calls remain partly unresolved. See [the Ghidra record](26.1.7.5654-ghidra.json)
+for exact target identity, analysis profile and coverage limits. Raw pseudocode stays local.
+
 Two disposable same-build pairs used one experimental client and a loopback-only relay. Both
 project joins returned `1` from FL's loader and settled before feature checks. All four test
 processes and the relay were stopped using their recorded PID, start time and executable path.

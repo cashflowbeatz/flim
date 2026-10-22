@@ -210,5 +210,14 @@
     "Not every pattern operation, automation, mouse arrow or lock-conflict combination was exercised",
     "Cloudflare deployment and Docker build were not run",
     "Low 32 bits of LoadLibraryW module address can rarely cause the launcher to fail closed"
-  ]
+  ],
+  "static_ghidra_followup": {
+    "record": "26.1.7.5654-ghidra.json",
+    "evidence_id": "ev_59ac9ad838ddf20bb307631f624fdab73a4a6a5ea17a3ee8fd5277a56fee2ba7",
+    "engine_sha256": "6d9c5ab09c1d5594012ac2c31cf9ed08e73f42164ed0964cccae10a95d9b8e02",
+    "address": "0x1046a70",
+    "mixer_layout_corroborated": true,
+    "value_flow_truncated": true,
+    "known_omitted_edges": 215
+  }
 }
