@@ -1,0 +1,83 @@
+FLIM UPSTREAM AUDIT AND FIXES
+22 October 2026
+
+Original: https://github.com/fckwader/flim
+Fork: https://github.com/cashflowbeatz/flim
+Upstream main: 33929572c4841946e15660973c4093012cb4a42b
+Local starting point: 2a68a12a8695c7b7aa76559ccaecdbf3a39733c9
+
+The original repository is already the base of this fork. Its public all-state
+issues and pull-request lists were empty when checked. No newer upstream commit
+needed merging. The fixes below came from source review and local reproductions.
+
+FIXED
+
+1. Lock expiry and renewal.
+   A lock older than 30 seconds could still reject an edit until the next timer
+   sweep. Traffic from its owner could revive it, and a new peer could receive
+   expired locks. Rejected edits also refreshed the sender's other locks.
+   Expiry is now checked at use and join; only accepted edits renew active locks.
+   Expired locks are released before reassignment, with notification to peers.
+   The fork's 4096-lock cap now discards expired entries before refusing a new
+   key. That cap-specific issue came from the earlier local hardening; upstream
+   did not have a lock cap.
+
+2. Host-only project and full-state replacement.
+   The native client accepts project.load, plug.full, notes.full and state.full
+   as host state, but the relay previously forwarded those ops from any member.
+   A member could replace other members' projects or full state while the host
+   ignored the same operation. The relay now returns not_leader for these four
+   operations from members. Normal edits and state.req remain available.
+
+3. Ambiguous operation payloads.
+   The native client finds control fields using substring searches. A nested
+   kind/t field could make a different operation look like a project load or
+   another control message. Even a property named prefix"kind could produce the
+   same substring after JSON serialization. The relay now rejects nested kind,
+   any t field inside an op, and property names containing quotes, backslashes
+   or control characters. Nested data, arrays and ordinary quoted string values
+   remain supported. This preserves the existing client wire format.
+
+4. Invalid numeric server settings.
+   NaN/Infinity, empty, negative or fractional values could disable quotas or
+   timers, reject all connections, or fail after startup had cleared the cache.
+   All numeric limits are now validated before cache cleanup or listening.
+   Byte/connection limits must be positive decimal safe integers; time limits
+   may be zero to disable a timer; PORT must be from 0 through 65535.
+
+VALIDATION
+
+- The unmodified original server's four TypeScript modules were independently
+  transpiled at the recorded upstream commit. The session/config regression
+  selection reproduced 13 failing cases out of 14. The one passing case was the
+  lock-cap check, since upstream had no cap. These are test cases, not 13 separate
+  defects. The pre-fix fork also failed the new session and wire/config checks.
+- The revised server passed 29 Node tests, including the existing blob abort/
+  rename race checks, plus 58 session/isolation checks. The eight startup tests
+  were also rerun explicitly in public mode; all passed.
+- npm audit reported zero known vulnerabilities across the installed dependencies.
+- With the revised server, FL 26.1.7.5654 passed 31/31 live feature checks and
+  FL 25.2.5.5319 passed 31/31. Both initial project loads returned success and
+  settled. The same previously verified client binaries were used, including a
+  fresh sample download on each run. No native client or hook table changed.
+- All four disposable FL processes and the loopback relay were stopped using
+  their saved PID, start time and executable path. Installed FL files and
+  unrelated processes were not modified. No public sessions were used for tests.
+
+Exact test-log hashes, client identities and the server source fingerprint are
+in audit.json. The source download includes those logs under validation/.
+
+SCOPE AND HANDOFF
+
+These fixes extend the earlier FL 25/26 port, parser, preset-race, sample-path,
+launcher, buffering, proxy and upload-quota fixes already present in this fork.
+The client remains experimental and supports exact verified FL builds only.
+Each session still requires everyone to use the same exact FL build. Long
+sessions, broad third-party plugin testing and internet behavior remain open.
+This is a targeted source audit; it does not establish that every bug is fixed.
+
+The supplied server targets Fly.io. Cloudflare Tunnel instructions are in
+DEPLOYMENT.md; no Cloudflare deployment or Docker build was performed. The
+native client's substring parser still needs the revised relay's validation.
+An old public relay does not acquire these fixes by updating the client alone.
+Changes and packages are local; nothing was pushed or deployed.

@@ -26,6 +26,8 @@ Limits: 8 people per session, 12 WebSockets per IP (`FLIM_MAX_CONNS_PER_IP`), 8 
 owner keys per IP per 10 minutes, 400 messages/s per connection (bursts up to 4000).
 Slow peers are disconnected if queued outbound data would exceed 128 MiB. Broadcast messages are
 serialized once for all peers. Lock keys are limited to 256 characters and a session to 4096 locks.
+Lock expiry is checked when editing, acquiring a lock, and joining, as well as by the periodic
+sweep. Only accepted edits renew active locks; cursor traffic and rejected operations do not.
 
 Sessions are kept in memory only. When the machine stops, they are gone; the next host starts a new
 one from their project.
@@ -52,6 +54,9 @@ length against the store limit, so concurrent uploads cannot bypass it. Blob res
 `Cache-Control: private, no-store`. Keep one process per store directory; startup removes only
 generated session folders inside `sessions-v1/`, preserving the configured parent. Caches made
 by older versions directly under `FLIM_BLOB_DIR` are unused and may be removed manually while stopped.
+Numeric limits must be decimal integers: positive byte/connection limits, nonnegative time limits,
+and a port from 0 to 65535 (0 asks the OS for an available port). Invalid settings stop startup before
+the cache is touched. A zero public time limit disables that timer; self-hosted timers stay disabled.
 
 On fly.io the disk is reset when the machine stops, which is fine for a cache. Sample downloads
 count towards fly.io's outbound data transfer.
@@ -109,3 +114,9 @@ blob key), then exchange `op`, `lock_acquire` / `lock_release` (→ `lock`, `loc
 (`"samples":[{"p":…,"h":<sha256>,"s":<bytes>}]`), fetched from `/blob/<h>`. Refusals are
 `{"t":"error","code":…}` (`full`, `no_session`, `bad_password`, `bad_owner`, `owner_required`, `in_use`, `session_full`,
 `too_many_attempts`, …) followed by close code 4001; an idle session ends with `idle` and code 4002.
+
+Only the host may send `project.load`, `plug.full`, `notes.full`, or `state.full`; members may request
+resynchronization with `state.req` and continue sending ordinary edits. Operation payloads may not
+contain `t`, nested `kind`, or property names containing quotes, backslashes, or control characters.
+These fields can confuse the native client's substring parser. Rejections return `bad_request` or
+`not_leader` without forwarding the operation. See [the upstream audit](AUDIT.txt) for regression evidence.

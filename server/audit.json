@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-22",
+  "status": "fixed_regressions_verified",
+  "original_repository": "https://github.com/fckwader/flim",
+  "fork_repository": "https://github.com/cashflowbeatz/flim",
+  "upstream_commit": "33929572c4841946e15660973c4093012cb4a42b",
+  "starting_fork_commit": "2a68a12a8695c7b7aa76559ccaecdbf3a39733c9",
+  "github_all_state_issues": 0,
+  "github_all_state_pull_requests": 0,
+  "findings_fixed": [
+    "Lock expiry is enforced at use and join, without revival by editing",
+    "Rejected ops and cursor traffic do not renew locks",
+    "Expired locks are purged before applying the local fork lock quota",
+    "Project/full-state ops are restricted to the host",
+    "Nested/disguised control fields are rejected before relay",
+    "Numeric limits are validated before cache cleanup or listening"
+  ],
+  "original_reproduction": {
+    "selection_cases": 14,
+    "failed_as_expected": 13,
+    "passed": 1,
+    "note": "Upstream had no lock cap, so the cap case passed."
+  },
+  "server_validation": {
+    "node_tests": 29,
+    "node_failures": 0,
+    "session_checks": 58,
+    "public_config_rerun_tests": 8,
+    "npm_audit_total_vulnerabilities": 0
+  },
+  "runtime_with_revised_relay": [
+    {
+      "version": "26.1.7.5654",
+      "passed": 31,
+      "failed": 0,
+      "log": "upstream-audit-26-runtime.log",
+      "project_join": "upstream-audit-26-project-join.log",
+      "pids": {
+        "A": 86460,
+        "B": 38844
+      }
+    },
+    {
+      "version": "25.2.5.5319",
+      "passed": 31,
+      "failed": 0,
+      "log": "upstream-audit-25-runtime.log",
+      "project_join": "upstream-audit-25-project-join.log",
+      "pids": {
+        "A": 119972,
+        "B": 33640
+      }
+    }
+  ],
+  "client_binaries_unchanged": {
+    "flim.exe": "5b32a5ecdac3401fbffc00383daa2233b4d8019d1e104c8b18183df55e5d1253",
+    "flim_engine.dll": "62d761244eb9943ea388a9cd93fc3d66e8f318669d5d7af157126cb2c01bfd22"
+  },
+  "server_source_sha256_normalized_lf": {
+    "blobs.ts": "ce5fe146838d5bb5e40b4808f61901efe1c7087a038f7f6a511e268cace5e402",
+    "config.ts": "224dd42669e56b17bf287008435ca59715404bc049aa6f4aa8f2ccca9e9d3ed9",
+    "protocol.ts": "749158bbba5323ad904db5846e570a15181170e3661fb38ff0a5d4523410e424",
+    "proxy.ts": "a05dd34e3a4b19d85126fe27711f851b5419cd320b681321004f39f40d865f70",
+    "server.ts": "9e337df4317ac87dfa7182aee007f8cc9f2985a8025c4aa1b23ba6db4c36a943",
+    "session.ts": "ee90999a6efea1abb6a4b56c8eb407f951e8264e77e6b0d9dce1aae6d864e8f7"
+  },
+  "owned_test_processes_and_relay_stopped": true,
+  "deployed": false,
+  "pushed": false,
+  "logs": [
+    {
+      "log": "upstream-original-before.log",
+      "sha256": "2d55f14d25d045e8ca8dd8698b95d0e60888118441d6fc2e43fc7e3d4d7ea5c5"
+    },
+    {
+      "log": "upstream-session-before.log",
+      "sha256": "41a6c450d57c914aa40f92ca950f0f919b66eb41cd4780f352043257254e8c0e"
+    },
+    {
+      "log": "upstream-wire-config-before.log",
+      "sha256": "4b77ab967e6b8a82a8b3273bea7eabff192b0e68de5883d53c0224e057e02a31"
+    },
+    {
+      "log": "upstream-server-final.log",
+      "sha256": "a191b62420fe5bd454b0b2da1e672a6fbcfc879792acc361d1c2a7658dc85bdf"
+    },
+    {
+      "log": "upstream-config-final.log",
+      "sha256": "771bec94ae4b896cc754a8ba95c32fa590d0b18b7b06351f3f33f8670105075b"
+    },
+    {
+      "log": "upstream-npm-audit.json",
+      "sha256": "840eec2548b32cde33e35526ae08c3d5d0d75b3b76aaaeb4c4b88801e107793f"
+    },
+    {
+      "log": "upstream-audit-26-runtime.log",
+      "sha256": "cc06a0ad5f5f02d3470c2e9ffbaa6af0c5eabe76c8dd6143ceea394813c80a27"
+    },
+    {
+      "log": "upstream-audit-26-project-join.log",
+      "sha256": "78766193081d87713ee34d81ee153dcd4307bca5ca4c34e916d1ec65b5aba803"
+    },
+    {
+      "log": "upstream-audit-25-runtime.log",
+      "sha256": "38194c031dd41b580d5f1972873d607714a1cca9ccb04494249a92bf3a161481"
+    },
+    {
+      "log": "upstream-audit-25-project-join.log",
+      "sha256": "e1553e87c74fadc6e52166b046cd07f9f3022a435011e0e856fd339b56541062"
+    },
+    {
+      "log": "upstream-audit-relay.stdout.log",
+      "sha256": "8273c79c87a6170ca3b546c8cb1651c4f4ddae6092b69c2df02c1fe089768e52"
+    }
+  ],
+  "limits": [
+    "Targeted audit, not proof that all defects are fixed",
+    "Client substring parser still depends on revised relay validation",
+    "Same exact FL build required in each session",
+    "No broad third-party plugin, long-session or remote network test",
+    "Docker and Cloudflare deployment not tested"
+  ]
+}

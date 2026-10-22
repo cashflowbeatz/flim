@@ -33,6 +33,29 @@ export interface Op {
   [k: string]: unknown;
 }
 
+export function validOp(value: unknown): value is Op {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const op = value as Record<string, unknown>;
+  if (typeof op.kind !== "string" || !op.kind || op.kind.length > 64 ||
+      (op.key !== undefined && (typeof op.key !== "string" || !op.key || op.key.length > 256))) return false;
+
+  // The native client searches serialized control fields. A nested kind or t would
+  // let one operation be interpreted as another, bypassing host-only checks.
+  const pending: object[] = [op];
+  while (pending.length) {
+    const current = pending.pop()!;
+    if (Array.isArray(current)) {
+      for (const child of current) if (child && typeof child === "object") pending.push(child);
+      continue;
+    }
+    for (const [key, child] of Object.entries(current)) {
+      if (/["\\\u0000-\u001f]/.test(key) || key === "t" || (key === "kind" && current !== op)) return false;
+      if (child && typeof child === "object") pending.push(child);
+    }
+  }
+  return true;
+}
+
 // ---- client -> server ----
 export type ClientMsg =
   // host: take the first free public slot (01..08) with a new session password. `owner` = the

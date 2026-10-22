@@ -2,11 +2,12 @@ import crypto from "crypto";
 import http from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { dropBlobs, handleBlob } from "./blobs";
-import { ClientMsg, PING_INTERVAL_MS, UserInfo } from "./protocol";
+import { ClientMsg, PING_INTERVAL_MS, UserInfo, validOp } from "./protocol";
 import { Client, Session, send } from "./session";
 import { clientIp, proxyMode } from "./proxy";
+import { limits } from "./config";
 
-const PORT = Number(process.env.PORT ?? 8080);
+const PORT = limits.port;
 const PROXY_MODE = proxyMode();
 const BIND = process.env.FLIM_BIND ?? (PROXY_MODE === "cloudflare" ? "127.0.0.1" : undefined);
 if (PROXY_MODE === "cloudflare" && BIND !== "127.0.0.1" && BIND !== "::1") {
@@ -30,12 +31,12 @@ const OWNER_KEY = process.env.FLIM_OWNER_KEY || process.env.FLIM_PASSWORD || "";
 if (PUBLIC && !OWNER_KEY) console.warn("FLIM_OWNER_KEY is not set: slot 00 can't be hosted.");
 if (!PUBLIC && !OWNER_KEY) console.warn("FLIM_PASSWORD is not set: anyone who knows the address can host.");
 
-const IDLE_MS = PUBLIC ? Number(process.env.FLIM_IDLE_MS ?? 5 * 60_000) : 0; // no message from anyone -> closed
-const SESSION_MS = PUBLIC ? Number(process.env.FLIM_SESSION_MS ?? 15 * 60_000) : 0;
-const COOLDOWN_MS = PUBLIC ? Number(process.env.FLIM_COOLDOWN_MS ?? 5 * 60_000) : 0;
+const IDLE_MS = PUBLIC ? limits.idleMs : 0; // no message from anyone -> closed
+const SESSION_MS = PUBLIC ? limits.sessionMs : 0;
+const COOLDOWN_MS = PUBLIC ? limits.cooldownMs : 0;
 const JOIN_TIMEOUT_MS = 20_000; // a connection must host/join this soon
 const MAX_MEMBERS = 8; // people per session (host included)
-const MAX_CONNS_PER_IP = Number(process.env.FLIM_MAX_CONNS_PER_IP ?? 12); // open WebSockets per IP: one visitor can't fill the machine
+const MAX_CONNS_PER_IP = limits.connectionsPerIp; // open WebSockets per IP: one visitor can't fill the machine
 const PW_MAX = 128;
 // Wrong passwords / owner keys per IP: after FAIL_MAX in FAIL_WINDOW_MS that IP is refused
 // until the window has passed.
@@ -239,13 +240,9 @@ function handleInSession(ws: WebSocket, client: Client, session: Session, msg: C
       session.projectSwap(client, msg.flp);
       break;
     case "op":
-      if (!msg.op || typeof msg.op !== "object" || Array.isArray(msg.op) ||
-          typeof msg.op.kind !== "string" || !msg.op.kind || msg.op.kind.length > 64 ||
-          (msg.op.key !== undefined && !validKey(msg.op.key))) return fail(ws, "bad_request", "Malformed op.");
-      if (msg.op.kind === "cur") { session.relayOp(client, msg.op); break; } // mouse position: frequent, not an edit
-      session.touchLocksOf(client.user.id); // editing keeps the user's locks fresh
+      if (!validOp(msg.op)) return fail(ws, "bad_request", "Malformed op.");
       session.relayOp(client, msg.op);
-      if (LOG_OPS) console.log(`[${session.code} op] ${client.user.name}: ${JSON.stringify(msg.op.kind)}`);
+      if (LOG_OPS && msg.op.kind !== "cur") console.log(`[${session.code} op] ${client.user.name}: ${JSON.stringify(msg.op.kind)}`);
       break;
     case "lock_acquire":
       if (!validKey(msg.key)) return fail(ws, "bad_request", "Malformed lock key.");

@@ -22,6 +22,7 @@ export function send(ws: WebSocket, msg: ServerMsg): void {
 // Allows a full 64 MiB project message while bounding queues for peers that stop reading.
 export const MAX_BUFFERED_BYTES = 128 * 1024 * 1024;
 const MAX_LOCKS = 4096;
+const LEADER_ONLY_OPS = new Set(["project.load", "plug.full", "notes.full", "state.full"]);
 
 export function sendSerialized(ws: WebSocket, data: string, bytes = Buffer.byteLength(data)): void {
   if (ws.readyState !== WebSocket.OPEN) return;
@@ -115,6 +116,7 @@ export class Session {
   }
 
   add(client: Client): void {
+    this.sweepLocks();
     this.clients.add(client);
     send(client.ws, {
       t: "welcome", session: this.code, role: client.role, you: client.user, peers: this.peers(), blob: this.blobKey,
@@ -149,26 +151,33 @@ export class Session {
   }
 
   relayOp(from: Client, op: Op): void {
+    if (LEADER_ONLY_OPS.has(op.kind) && from.user.id !== this.leaderId) {
+      send(from.ws, { t: "error", code: "not_leader", msg: "Only the party leader can replace the project or full state." });
+      return;
+    }
+    const now = Date.now();
     // Backstop: if the op targets a unit locked by someone else, reject it.
     if (op.key) {
-      const l = this.locks.get(op.key);
+      const l = this.activeLock(op.key, now);
       if (l && l.owner !== from.user.id) {
         send(from.ws, { t: "error", code: "locked", msg: `Unit ${op.key} is locked by ${l.owner}` });
         return;
       }
     }
+    if (op.kind !== "cur") this.touchLocksOf(from.user.id, now);
     this.seq += 1;
     this.broadcast({ t: "op", seq: this.seq, from: from.user.id, op }, from);
   }
 
   acquire(from: Client, key: UnitKey): void {
     const now = Date.now();
-    const existing = this.locks.get(key);
+    const existing = this.activeLock(key, now);
+    if (!existing && this.locks.size >= MAX_LOCKS) this.sweepLocks(now);
     if (!existing && this.locks.size >= MAX_LOCKS) {
       send(from.ws, { t: "error", code: "lock_limit", msg: "Too many active locks. Release a lock or wait for expiry." });
       return;
     }
-    if (existing && existing.owner !== from.user.id && now - existing.at < LOCK_TTL_MS) {
+    if (existing && existing.owner !== from.user.id) {
       send(from.ws, { t: "lock", key, granted: false, owner: existing.owner });
       return;
     }
@@ -185,21 +194,26 @@ export class Session {
     }
   }
 
-  // Safety sweep: drop locks whose owner went silent past the TTL.
-  sweepLocks(): void {
-    const now = Date.now();
-    for (const [key, l] of this.locks) {
-      if (now - l.at >= LOCK_TTL_MS) {
-        this.locks.delete(key);
-        this.broadcast({ t: "lock_released", key });
-      }
+  private activeLock(key: UnitKey, now: number): Lock | undefined {
+    const lock = this.locks.get(key);
+    if (lock && now - lock.at >= LOCK_TTL_MS) {
+      this.locks.delete(key);
+      this.broadcast({ t: "lock_released", key });
+      return undefined;
     }
+    return lock;
+  }
+
+  // The periodic sweep also notifies peers when no edit touches the expired key.
+  sweepLocks(now = Date.now()): void {
+    for (const key of this.locks.keys()) this.activeLock(key, now);
   }
 
   // Refresh a lock's timestamp while its owner keeps editing (op heartbeat).
-  touchLocksOf(userId: string): void {
-    const now = Date.now();
-    for (const l of this.locks.values()) if (l.owner === userId) l.at = now;
+  touchLocksOf(userId: string, now = Date.now()): void {
+    for (const [key, l] of this.locks) {
+      if (l.owner === userId && this.activeLock(key, now)) l.at = now;
+    }
   }
 
   remove(ws: WebSocket): void {

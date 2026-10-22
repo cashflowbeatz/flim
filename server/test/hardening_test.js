@@ -148,7 +148,11 @@ test("local server rejects malformed traffic and safely handles blob capacity an
   await t.test("malformed locks, snapshots and ops are rejected before relay", async () => {
     const invalid = [{ t: "lock_acquire", key: {} }, { t: "lock_release", key: "x".repeat(257) },
       { t: "snapshot", flp: {} }, { t: "project_swap", flp: 5 }, { t: "op", op: [] },
-      { t: "op", op: { kind: "param.set", key: {} } }];
+      { t: "op", op: { kind: "param.set", key: {} } },
+      { t: "op", op: { kind: "param.set", t: "welcome" } },
+      { t: "op", op: { kind: "param.set", extra: { kind: "project.load" } } },
+      { t: "op", op: { kind: "param.set", extra: { 'x"kind': "project.load" } } },
+      { t: "op", op: { kind: "param.set", items: [{ t: "lock_released" }] } }];
     member.msgs.length = 0;
     for (const msg of invalid) {
       host.msgs.length = 0; host.sendJson(msg);
@@ -157,6 +161,23 @@ test("local server rejects malformed traffic and safely handles blob capacity an
     assert.equal(member.msgs.some((m) => ["op", "lock", "snapshot", "project_swap"].includes(m.t)), false);
     host.sendJson({ t: "op", op: { kind: "param.set", value: 9 } });
     assert.equal((await member.waitFor((m) => m.t === "op")).op.value, 9);
+  });
+  await t.test("members cannot send host-only replacement ops, including nested control fields", async () => {
+    host.msgs.length = 0;
+    for (const kind of ["project.load", "plug.full", "notes.full", "state.full"]) {
+      member.msgs.length = 0;
+      member.sendJson({ t: "op", op: { kind, data: "test" } });
+      assert.equal((await member.waitFor((m) => m.t === "error")).code, "not_leader");
+    }
+    member.msgs.length = 0;
+    member.sendJson({ t: "op", op: { kind: "param.set", extra: { kind: "project.load" } } });
+    assert.equal((await member.waitFor((m) => m.t === "error")).code, "bad_request");
+    assert.equal(host.msgs.some((m) => m.t === "op"), false);
+    member.sendJson({ t: "op", op: { kind: "state.req" } });
+    assert.equal((await host.waitFor((m) => m.t === "op")).op.kind, "state.req");
+    member.msgs.length = 0;
+    host.sendJson({ t: "op", op: { kind: "project.load", data: "test" } });
+    assert.equal((await member.waitFor((m) => m.t === "op")).op.kind, "project.load");
   });
   await t.test("oversized missing lists receive HTTP 413 instead of a socket reset", async () => {
     assert.equal((await request("POST", "/blobs/missing", key, Buffer.alloc(1024 * 1024 + 1))).status, 413);

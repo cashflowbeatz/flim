@@ -15,12 +15,13 @@ import fs from "fs";
 import http from "http";
 import os from "os";
 import path from "path";
+import { limits } from "./config";
 
 const BASE = path.resolve(process.env.FLIM_BLOB_DIR ?? path.join(os.tmpdir(), "flim-blobs"));
 const ROOT = path.join(BASE, "sessions-v1");
-const FILE_MAX = Number(process.env.FLIM_BLOB_FILE_MAX ?? 2000 * 1024 * 1024);
-const SESSION_MAX = Number(process.env.FLIM_BLOB_SESSION_MAX ?? 2500 * 1024 * 1024);
-const STORE_MAX = Number(process.env.FLIM_BLOB_STORE_MAX ?? 5 * 1024 * 1024 * 1024);
+const FILE_MAX = limits.blobFile;
+const SESSION_MAX = limits.blobSession;
+const STORE_MAX = limits.blobStore;
 const HEX = /^[0-9a-f]{64}$/;
 let reservedBytes = 0;
 
