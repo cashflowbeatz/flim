@@ -10,7 +10,7 @@ build.bat
 ```
 Output: `out\flim.exe`, `out\flim_engine.dll`. Keep the two files in the same folder.
 
-For the experimental **FL 26.1.6.5639** port, use an ordinary Command Prompt:
+For experimental **FL 26.1.7.5654 and 26.1.6.5639** support, use an ordinary Command Prompt:
 
 ```bat
 set FLIM_EXPERIMENTAL_FL26=1

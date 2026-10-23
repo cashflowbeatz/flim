@@ -22,6 +22,9 @@ See [compatibility validation](client/dev/compatibility/README.md) for observed 
 The release links and public-test instructions below describe the upstream FL 25 release; they do
 not publish the new FL 26 client automatically.
 
+**Read [what changed in this fork](CHANGES.md)** for a plain-language explanation of each fix,
+examples of the problems it addresses, the exact test results and what you need to update.
+
 The supplied server runs on **Fly.io**. For your own server behind Cloudflare Tunnel, see
 [private testing and Cloudflare](server/DEPLOYMENT.md).
 The [upstream source audit](server/AUDIT.txt) documents fixes for lock expiry, host-only project
@@ -29,7 +32,7 @@ replacement, ambiguous protocol fields and invalid server settings. The [continu
 also covers releasing old project locks when switching projects and avoiding duplicate sample metadata checks.
 The [sample transfer audit](server/TRANSFER-AUDIT.txt) covers download races and protecting a new upload
 from its own cache eviction. Run this fork's revised server to receive these fixes; the upstream
-public server has not been updated by these local changes.
+public server is not updated by publishing this fork.
 
 ---
 
