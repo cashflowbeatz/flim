@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-23",
+  "status": "targeted_transfer_regressions_and_live_samples_verified",
+  "starting_commit": "a8513d41867f82d2dd6c3a2d62815f41c24ae2b8",
+  "node_version": "v25.5.0",
+  "changes": [
+    "Protect a new upload from its own session cache eviction",
+    "Open and inspect downloads asynchronously before sending success headers",
+    "Use the opened descriptor when eviction removes the pathname",
+    "Recheck session validity during asynchronous download lookup"
+  ],
+  "before_validation": {
+    "subcases": 5,
+    "failed_as_expected": 3,
+    "passed": 2,
+    "note": "Parent suite also fails; two further preservation subcases added after reproduction."
+  },
+  "server_validation": {
+    "node_tests": 44,
+    "node_failures": 0,
+    "session_checks": 58,
+    "new_transfer_subcases": 7
+  },
+  "runtime_with_revised_relay": [
+    {
+      "version": "26.1.7.5654",
+      "passed": 2,
+      "failed": 0,
+      "log": "transfer-fl26-runtime.log",
+      "project_join": "transfer-fl26-project-join.log",
+      "scope": "fresh sample download and cache content hash referenced by saved channel state",
+      "pids": {
+        "A": 108936,
+        "B": 107988
+      }
+    },
+    {
+      "version": "25.2.5.5319",
+      "passed": 2,
+      "failed": 0,
+      "log": "transfer-fl25-runtime.log",
+      "project_join": "transfer-fl25-project-join.log",
+      "scope": "fresh sample download and cache content hash referenced by saved channel state",
+      "pids": {
+        "A": 95060,
+        "B": 69564
+      }
+    }
+  ],
+  "runtime_harness_note": "The FL25 relay initially returned an empty Windows module path during identity capture. Its exact PID, creation time, executable and expected listener were checked and recorded before use; all owned identities were stopped.",
+  "client_binaries_unchanged": {
+    "flim.exe": "5b32a5ecdac3401fbffc00383daa2233b4d8019d1e104c8b18183df55e5d1253",
+    "flim_engine.dll": "62d761244eb9943ea388a9cd93fc3d66e8f318669d5d7af157126cb2c01bfd22"
+  },
+  "server_source_sha256_normalized_lf": {
+    "blobs.ts": "5cd2d09781eeeb9ad09d3cab677ec515fb8d9324233fdbc23e49927b1891f716",
+    "config.ts": "224dd42669e56b17bf287008435ca59715404bc049aa6f4aa8f2ccca9e9d3ed9",
+    "protocol.ts": "749158bbba5323ad904db5846e570a15181170e3661fb38ff0a5d4523410e424",
+    "proxy.ts": "a05dd34e3a4b19d85126fe27711f851b5419cd320b681321004f39f40d865f70",
+    "server.ts": "9e337df4317ac87dfa7182aee007f8cc9f2985a8025c4aa1b23ba6db4c36a943",
+    "session.ts": "14182f5c8064dd625b4bb0bdca35c6b635b322897f8e9eb2be6f3c109a264ce8"
+  },
+  "test_source_sha256_normalized_lf": {
+    "server/package.json": "6303b6219ffb7e4895ea0fbd4254faaac63be24fcb4d26fd01cdbcf9b178c0f7",
+    "server/test/blob_lifecycle_test.js": "02a29697877226d711bc991a9fdf7a87baad94b045b7370053353b2fe04b30b4"
+  },
+  "logs": [
+    {
+      "log": "transfer-before.log",
+      "sha256": "f1cb808376885c2cfdb87b559d87373065dc26ada1ef36126e8a088b2754abcd"
+    },
+    {
+      "log": "transfer-server-tests.log",
+      "sha256": "75ad03502452971674ba9eaffbc4ed91c745e1d5ff0a7c8f3658ef363a2515af"
+    },
+    {
+      "log": "transfer-stopped-identities.json",
+      "sha256": "51a2c532b1b4c1c607714d9d8a77202e2c9d657b035672b1636b975bc097ee5b"
+    },
+    {
+      "log": "transfer-fl26-runtime.log",
+      "sha256": "10ac3413f55e4fd1a84739f2858019637ad6b16116a28fef84c8ae1be2d384ff"
+    },
+    {
+      "log": "transfer-fl26-project-join.log",
+      "sha256": "c036a7b874721f7adace463d67f6633aed75e83f9b60e73dd76b72b636b04569"
+    },
+    {
+      "log": "transfer-relay26.stdout.log",
+      "sha256": "6d5c1176c7cca58d215df129490d4a71a03f1bea390b662587467c4a8db34a15"
+    },
+    {
+      "log": "transfer-fl25-runtime.log",
+      "sha256": "b926d108ddb052001a3eff14ccf14e0eea39bde1bb42da6a3bad04ea546b713a"
+    },
+    {
+      "log": "transfer-fl25-project-join.log",
+      "sha256": "c136c90ec5d3d8d236c4dbb65ac8b9e6d3dbc6ba8d276926295af21f46353cee"
+    },
+    {
+      "log": "transfer-relay25.stdout.log",
+      "sha256": "b22002fb9ff3224c1d42591f2cfb8f9352552b33689ac9852ff789668ffaabfc"
+    }
+  ],
+  "installed_target_hashes_rechecked": true,
+  "owned_test_processes_and_relays_stopped": true,
+  "installed_files_patched": false,
+  "unrelated_processes_modified": false,
+  "pushed": false,
+  "deployed": false,
+  "limits": [
+    "Same exact FL build required per session",
+    "Focused live sample checks only; prior 31-check runtime runs describe older relay commits",
+    "No remote-network, long-session, broad plugin or Linux runtime test in this pass",
+    "Upload accounting and eviction still scan synchronously",
+    "No measured end-to-end speed, audio CPU or latency improvement",
+    "Already streaming transfers are not revoked when a session ends"
+  ]
+}

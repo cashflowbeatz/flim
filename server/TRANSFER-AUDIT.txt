@@ -1,0 +1,69 @@
+FLIM SAMPLE TRANSFER AUDIT
+23 October 2026
+
+FIXES
+
+1. Preserve a successful upload during its own cache eviction.
+   Eviction sorted every stored file by access time, including the file that
+   had just finished uploading. If that file retained an older access time,
+   its own eviction pass could remove it immediately after HTTP 201. The
+   committed file is now excluded from that pass. It must still fit the file
+   and session limits. Other files remain eligible, and later uploads can
+   still evict this file. This does not make the cache permanent storage.
+
+2. Open downloads before announcing success.
+   The old GET handler performed a synchronous path stat, sent HTTP 200 and
+   then opened a stream. Eviction or session cleanup between stat and open
+   produced a reset connection. GET and HEAD now open asynchronously and use
+   descriptor metadata before sending headers. A missing file returns a
+   complete 404 response. Other filesystem failures return 500. Once opened,
+   the stream uses that descriptor, so removal of the path cannot change the
+   bytes or length being served. Disconnects close the descriptor.
+
+3. Recheck session validity during asynchronous download lookup.
+   A session ending while open/stat is pending now receives HTTP 410 before
+   headers or sample bytes are sent. The descriptor is closed. This does not
+   revoke a transfer already in progress when the session ends.
+
+GET/HEAD no longer perform a synchronous filesystem stat on the relay event
+loop. No end-to-end speed, audio CPU or latency improvement was measured.
+
+VALIDATION
+
+Three selected subcases failed against the previous relay: the newly committed
+file was evicted, removal before open reset the socket, and expiry during open
+returned sample bytes. Two preservation checks passed. Timing and filesystem
+callbacks are controlled locally so these races reproduce without waiting for
+a real disk failure or a long upload. The eviction fixture preserves the slow
+upload's older access time across platform-specific close/rename updates.
+
+The final suite passed 44 Node tests and all 58 session/isolation checks. Its
+seven new transfer subcases also cover HEAD/GET metadata, private responses,
+disconnect cleanup, reads from unlinked open files, and descriptor cleanup on
+metadata failure. Tests use a private temporary cache and loopback HTTP.
+
+Fresh live sample-transfer checks passed on FL 26.1.7.5654 and FL 25.2.5.5319:
+each receiver with local sample lookup disabled downloaded a new synthetic
+sample, and its saved channel state pointed to a cached file with matching
+SHA-256 content. These are two focused checks per build. The earlier 31-check
+feature runs are historical evidence for the preceding relay commits, not a
+new full-suite result for this change.
+
+All four disposable FL processes and both loopback relays were stopped by
+saved PID, creation time and executable path. Native binaries, hook tables,
+installed FL files and unrelated processes are unchanged.
+
+SCOPE
+
+Run the revised server to receive these fixes. No public relay was changed,
+and nothing was pushed or deployed. The client still requires the same exact
+FL build for every participant. The native binaries are unchanged.
+
+This is a targeted audit. Cache-wide accounting and eviction still perform
+synchronous scans during uploads; optimizing those safely needs separate
+concurrency and quota work. Long sessions, broad third-party plugins, remote
+network behavior and Linux runtime behavior were not tested in this pass.
+
+Exact current source fingerprints and fresh log hashes are in transfer-audit.json.
+continued-audit.json describes commit a8513d4; audit.json describes 2aceed3.
+Those earlier records are retained as historical evidence.

@@ -67,7 +67,7 @@ function storeSize(): number {
 }
 
 // Keep one session's folder under SESSION_MAX: drop its least recently used files.
-function evict(DIR: string): void {
+function evict(DIR: string, committed: string): void {
   let entries: { p: string; size: number; t: number }[] = [];
   for (const name of fs.readdirSync(DIR)) {
     if (!HEX.test(name)) continue;
@@ -83,6 +83,7 @@ function evict(DIR: string): void {
   entries = entries.sort((a, b) => a.t - b.t);
   for (const e of entries) {
     if (total <= SESSION_MAX) break;
+    if (e.p === committed) continue; // A successful PUT must survive its own eviction pass.
     try {
       fs.unlinkSync(e.p);
       total -= e.size;
@@ -169,23 +170,30 @@ export function handleBlob(
 
   const hex = m![1];
   if (req.method === "HEAD" || req.method === "GET") {
-    const st = exists(hex);
-    if (!st) {
-      res.writeHead(404);
+    const respond = (code: number) => {
+      if (res.destroyed) return;
+      res.writeHead(code);
       res.end();
-      return true;
-    }
-    res.writeHead(200, { "content-type": "application/octet-stream", "content-length": st.size });
-    if (req.method === "HEAD") {
-      res.end();
-      return true;
-    }
-    const now = new Date();
-    fs.utimes(file(hex), now, st.mtime, () => {}); // LRU: recently fetched files stay
-    const input = fs.createReadStream(file(hex));
-    input.on("error", () => res.destroy());
-    res.on("close", () => input.destroy());
-    input.pipe(res);
+    };
+    fs.open(file(hex), "r", (err, fd) => {
+      if (err) return respond(err.code === "ENOENT" ? 404 : 500);
+      const close = () => fs.close(fd, () => {});
+      if (res.destroyed) return close();
+      if (!sessionKeyOk(key)) { close(); return respond(410); }
+      fs.fstat(fd, (err, st) => {
+        if (res.destroyed) return close();
+        if (!sessionKeyOk(key)) { close(); return respond(410); }
+        if (err || !st.isFile()) { close(); return respond(err ? 500 : 404); }
+        // The descriptor pins the bytes across cache eviction before streaming begins.
+        res.writeHead(200, { "content-type": "application/octet-stream", "content-length": st.size });
+        if (req.method === "HEAD") { close(); res.end(); return; }
+        fs.utimes(file(hex), new Date(), st.mtime, () => {}); // LRU: recently fetched files stay
+        const input = fs.createReadStream(file(hex), { fd, autoClose: true });
+        input.on("error", () => res.destroy());
+        res.on("close", () => input.destroy());
+        input.pipe(res);
+      });
+    });
     return true;
   }
 
@@ -278,7 +286,7 @@ export function handleBlob(
           res.end();
         }
         try {
-          evict(DIR);
+          evict(DIR, file(hex));
         } catch {
           /* ignore */
         }

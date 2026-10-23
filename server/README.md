@@ -51,7 +51,11 @@ Content-addressed by SHA-256, one folder per session (deleted when the session e
 
 An upload must fit both the file and session limit. In-progress uploads reserve their declared
 length against the store limit, so concurrent uploads cannot bypass it. Blob responses use
-`Cache-Control: private, no-store`. Keep one process per store directory; startup removes only
+`Cache-Control: private, no-store`. A completed upload is protected from its own eviction pass;
+later uploads may still evict it. Downloads open the file before sending HTTP 200, so a file
+removed before open returns 404 and an expired session during lookup returns 410. An opened
+download can finish even if its cache path is removed. See [transfer validation](TRANSFER-AUDIT.txt).
+Keep one process per store directory; startup removes only
 generated session folders inside `sessions-v1/`, preserving the configured parent. Caches made
 by older versions directly under `FLIM_BLOB_DIR` are unused and may be removed manually while stopped.
 Numeric limits must be decimal integers: positive byte/connection limits, nonnegative time limits,

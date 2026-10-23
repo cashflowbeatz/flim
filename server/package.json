@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "test": "npm run build && node --test test/hardening_test.js test/blob_race_test.js test/blob_metadata_test.js test/session_regression_test.js test/config_test.js test/protocol_test.js && node test/slots_test.js",
+    "test": "npm run build && node --test test/hardening_test.js test/blob_race_test.js test/blob_metadata_test.js test/blob_lifecycle_test.js test/session_regression_test.js test/config_test.js test/protocol_test.js && node test/slots_test.js",
     "benchmark:relay": "npm run build && node test/relay_benchmark.js"
   },
   "dependencies": {
