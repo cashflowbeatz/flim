@@ -146,7 +146,7 @@ export class Session {
     }
     this.flp = flp;
     this.epoch += 1;
-    this.locks.clear();
+    this.releaseProjectLocks();
     this.broadcast({ t: "project_swap", flp, epoch: this.epoch }, from);
   }
 
@@ -164,7 +164,8 @@ export class Session {
         return;
       }
     }
-    if (op.kind !== "cur") this.touchLocksOf(from.user.id, now);
+    if (op.kind === "project.load") this.releaseProjectLocks();
+    else if (op.kind !== "cur") this.touchLocksOf(from.user.id, now);
     this.seq += 1;
     this.broadcast({ t: "op", seq: this.seq, from: from.user.id, op }, from);
   }
@@ -192,6 +193,13 @@ export class Session {
       this.locks.delete(key);
       this.broadcast({ t: "lock_released", key });
     }
+  }
+
+  private releaseProjectLocks(): void {
+    const keys = [...this.locks.keys()];
+    this.locks.clear();
+    // Existing native clients clear local ownership through individual release messages.
+    for (const key of keys) this.broadcast({ t: "lock_released", key });
   }
 
   private activeLock(key: UnitKey, now: number): Lock | undefined {

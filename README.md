@@ -25,7 +25,9 @@ not publish the new FL 26 client automatically.
 The supplied server runs on **Fly.io**. For your own server behind Cloudflare Tunnel, see
 [private testing and Cloudflare](server/DEPLOYMENT.md).
 The [upstream source audit](server/AUDIT.txt) documents fixes for lock expiry, host-only project
-replacement, ambiguous protocol fields and invalid server settings. Run this fork's revised server
+replacement, ambiguous protocol fields and invalid server settings. The [continued audit](server/CONTINUED-AUDIT.txt)
+also covers releasing old project locks when switching projects and avoiding duplicate sample metadata checks.
+Run this fork's revised server
 to receive those fixes; the upstream public server has not been updated by these local changes.
 
 ---

@@ -148,13 +148,18 @@ export function handleBlob(
       return true;
     }
     readBody(req, 1024 * 1024).then((body) => {
+      if (res.destroyed) return;
+      if (!sessionKeyOk(key)) {
+        res.writeHead(410);
+        res.end();
+        return;
+      }
       if (body === null) {
         res.writeHead(413);
         res.end();
         return;
       }
-      const missing = body
-        .split(/\s+/)
+      const missing = [...new Set(body.split(/\s+/))]
         .filter((h) => HEX.test(h) && !exists(h));
       res.writeHead(200, { "content-type": "text/plain" });
       res.end(missing.join("\n"));

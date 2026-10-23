@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-23",
+  "status": "targeted_regressions_and_runtime_verified",
+  "historical_audit_commit": "2aceed36b3cff5b0f88bb43308301bcf0a623fd2",
+  "starting_commit": "323bb8d",
+  "changes": [
+    "Release prior project locks before project.load or project_swap",
+    "Deduplicate sample metadata filesystem lookups and missing hashes",
+    "Recheck session validity after metadata body upload",
+    "Remove optional external file-sharing integration and package"
+  ],
+  "server_validation": {
+    "node_tests": 36,
+    "node_failures": 0,
+    "session_checks": 58
+  },
+  "python_validation": {
+    "tests": 48,
+    "failures": 0
+  },
+  "runtime_with_revised_relay": [
+    {
+      "version": "26.1.7.5654",
+      "passed": 31,
+      "failed": 0,
+      "log": "continued-fl26-runtime.log",
+      "project_join": "continued-fl26-project-join.log",
+      "pids": {
+        "A": 110080,
+        "B": 58560
+      }
+    },
+    {
+      "version": "25.2.5.5319",
+      "passed": 31,
+      "failed": 0,
+      "log": "continued-fl25-runtime.log",
+      "project_join": "continued-fl25-project-join.log",
+      "pids": {
+        "A": 103368,
+        "B": 121044
+      }
+    }
+  ],
+  "runtime_harness_note": "FL26 startup wait missed the member welcome log; relay membership, successful project open and all 31 feature checks confirmed the connection.",
+  "client_binaries_unchanged": {
+    "flim.exe": "5b32a5ecdac3401fbffc00383daa2233b4d8019d1e104c8b18183df55e5d1253",
+    "flim_engine.dll": "62d761244eb9943ea388a9cd93fc3d66e8f318669d5d7af157126cb2c01bfd22"
+  },
+  "server_source_sha256_normalized_lf": {
+    "blobs.ts": "cc8f15cd21e11b25bd9159db88b4be98fed8abfcb37b575d81a6a3e8becef779",
+    "config.ts": "224dd42669e56b17bf287008435ca59715404bc049aa6f4aa8f2ccca9e9d3ed9",
+    "protocol.ts": "749158bbba5323ad904db5846e570a15181170e3661fb38ff0a5d4523410e424",
+    "proxy.ts": "a05dd34e3a4b19d85126fe27711f851b5419cd320b681321004f39f40d865f70",
+    "server.ts": "9e337df4317ac87dfa7182aee007f8cc9f2985a8025c4aa1b23ba6db4c36a943",
+    "session.ts": "14182f5c8064dd625b4bb0bdca35c6b635b322897f8e9eb2be6f3c109a264ce8"
+  },
+  "test_source_sha256_normalized_lf": {
+    "server/package.json": "b59ad2654ec9fc632ef71b0792a00a361b18e3e2c730c5f0ec35acbf8f1bde7f",
+    "server/test/blob_metadata_test.js": "8aa4bfed8750388f4b27748c98969208593d4006ac847d22d64698e07d8c0d1d",
+    "server/test/session_regression_test.js": "8e46006079a59ff5d2cdb79ac7f1d45604d78beb47e11f8880b01019c70a136f",
+    "server/test/hardening_test.js": "4bc1d35fee8b596d6e018eb0c5393e865f1b9dff6364af03e37304da8bfc1e61"
+  },
+  "logs": [
+    {
+      "log": "continued-server-tests.log",
+      "sha256": "451599a0b562446d79a39ef2aa91204bd12695fae8840d2f68736d85df475a8f"
+    },
+    {
+      "log": "continued-python-tests.log",
+      "sha256": "57690148d503852cec78a04ab8fd967da202cf0a6769f28b15d1a43d83cf76f9"
+    },
+    {
+      "log": "continued-fl26-runtime.log",
+      "sha256": "1ccf9dc6bcf33ed52e79a5cb68131b24b3278d5764e57ea33985f5eded4abe1e"
+    },
+    {
+      "log": "continued-fl26-project-join.log",
+      "sha256": "9c22c30d5febea1009781d8a0d76b89a6099e3b1436eb82af43190550a3503ad"
+    },
+    {
+      "log": "continued-relay26.stdout.log",
+      "sha256": "35a6a45800c81031baa7cb2427c5a0aa8a1910118f9ac509771936ec494243e7"
+    },
+    {
+      "log": "continued-fl25-runtime.log",
+      "sha256": "76ebf6dba277f6f13e25ab538a797df75ba764b59dcacaece0af2fd1088d5faa"
+    },
+    {
+      "log": "continued-fl25-project-join.log",
+      "sha256": "7a4a30bfc2cca0c053e5070883e477c3f23bbb22ad0f54fd64f95c31b27838fd"
+    },
+    {
+      "log": "continued-relay25.stdout.log",
+      "sha256": "3cac9765c28d054476168212c01e8cd6317f1dda3276bcccd114c0519fe8285d"
+    }
+  ],
+  "installed_target_hashes_rechecked": true,
+  "owned_test_processes_and_relays_stopped": true,
+  "installed_files_patched": false,
+  "unrelated_processes_modified": false,
+  "pushed": false,
+  "deployed": false,
+  "limits": [
+    "Same exact FL build required per session",
+    "No long-session, remote-network or broad third-party plugin test",
+    "Targeted audit, not proof every defect is fixed",
+    "No native client changes; revised server required for relay fixes"
+  ]
+}

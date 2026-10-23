@@ -1,0 +1,60 @@
+FLIM CONTINUED RELAY AUDIT
+23 October 2026
+
+This extends the historical audit in AUDIT.txt. That audit's fingerprints and
+runtime logs describe commit 2aceed3. Current fingerprints and fresh test-log
+hashes are in continued-audit.json.
+
+FIXES
+
+1. Project switching releases old edit locks.
+   Native clients send project.load when the host replaces the project. The
+   relay previously retained locks from the old project, so reused unit IDs
+   could reject edits until expiry. Legacy project_swap cleared the relay's
+   map but left clients unaware. Both paths now broadcast individual
+   lock_released messages before the replacement, including to the host.
+   Existing clients already understand this message. Member project loads
+   remain rejected; ordinary full-state synchronization preserves locks.
+
+2. Duplicate sample metadata avoids repeated disk checks.
+   POST /blobs/missing now checks each distinct valid hash once and returns
+   each missing hash once. Authentication, body limits and ordering of first
+   occurrences are preserved. This reduces filesystem calls for duplicate
+   input; no overall audio or network speedup is claimed.
+
+3. Expired sessions cannot complete a sample metadata query.
+   The handler rechecks session validity after receiving the request body.
+   If the session ended in the meantime, it returns HTTP 410 without querying
+   storage. A destroyed response is ignored.
+
+The optional external file-sharing integration and its separate package were
+removed. Native project/sample transfer continues through the existing relay.
+No installed application or personal sharing configuration was changed.
+
+VALIDATION
+
+- TypeScript build, all 36 Node tests and 58 session checks passed.
+- New unit and real WebSocket regressions cover lock release order, immediate
+  ID reuse, host authority and preservation of locks during full-state updates.
+- New loopback HTTP checks prove one stat per distinct valid hash and HTTP 410
+  without filesystem checks if a session ends during body upload.
+- All 48 client/dev Python tests passed after the integration removal.
+- FL 26.1.7.5654 and FL 25.2.5.5319 each passed all 31 live feature checks with
+  the revised relay. Both initial project joins opened successfully and settled;
+  each receiver downloaded a fresh sample and verified its content.
+- The previously verified native binaries and hook tables are unchanged.
+- Four disposable FL processes and two loopback relay processes were stopped
+  using saved PID, creation time and executable path. Installed FL files and
+  unrelated processes were not modified.
+
+USAGE AND LIMITS
+
+Run this revised server to obtain the relay fixes. Updating the client alone
+does not update the upstream public relay. The server targets Fly.io; the
+Cloudflare Tunnel instructions remain in DEPLOYMENT.md. Nothing was deployed
+or pushed. The current client supports both tested FL versions, but everyone
+in one session must use the same exact FL build.
+
+This was a targeted audit. Broad plugin coverage, long sessions, internet
+latency and mixed concurrent edits still need additional testing. Historical
+checks in AUDIT.txt were not rerun unless listed here.

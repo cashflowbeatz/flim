@@ -95,3 +95,48 @@ test("only the host can broadcast project and full-state replacements", (t) => {
   session.relayOp(member, { kind: "plug.state" });
   assert.deepEqual(host.ws.sent.map((m) => m.op.kind), ["state.req", "plug.state"]);
 });
+
+test("loading a new project releases old locks before relaying the project", (t) => {
+  const { host, member, session } = fixture(t);
+  session.acquire(host, "param:1");
+  session.acquire(member, "plug:ch:0");
+  host.ws.sent.length = member.ws.sent.length = 0;
+  session.relayOp(host, { kind: "project.load", data: "new-project" });
+  assert.deepEqual(member.ws.sent.map((m) => m.t), ["lock_released", "lock_released", "op"]);
+  assert.deepEqual(host.ws.sent.map((m) => m.t), ["lock_released", "lock_released"]);
+  const newcomer = client("newcomer");
+  session.add(newcomer);
+  assert.deepEqual(newcomer.ws.sent.find((m) => m.t === "lock_state").locks, []);
+  session.acquire(member, "param:1");
+  assert.equal(member.ws.sent.at(-1).granted, true, "new project can immediately reuse an old unit ID");
+  session.acquire(host, "plug:ch:0");
+  assert.equal(host.ws.sent.at(-1).granted, true);
+});
+
+test("a member's rejected project load cannot clear anyone's locks", (t) => {
+  const { host, member, session } = fixture(t);
+  session.acquire(host, "param:1");
+  host.ws.sent.length = member.ws.sent.length = 0;
+  session.relayOp(member, { kind: "project.load", data: "rejected" });
+  assert.equal(member.ws.sent.at(-1).code, "not_leader");
+  assert.equal(host.ws.sent.length, 0);
+  session.acquire(member, "param:1");
+  assert.equal(member.ws.sent.at(-1).granted, false);
+});
+
+test("full-state updates preserve locks while project_swap releases them", (t) => {
+  const { host, member, session } = fixture(t);
+  session.acquire(member, "param:1");
+  for (const kind of ["plug.full", "notes.full", "state.full"]) {
+    session.relayOp(host, { kind, data: "state" });
+    session.acquire(host, "param:1");
+    assert.equal(host.ws.sent.at(-1).granted, false, kind);
+  }
+  host.ws.sent.length = member.ws.sent.length = 0;
+  session.projectSwap(host, "new-project");
+  assert.deepEqual(member.ws.sent.map((m) => m.t), ["lock_released", "project_swap"]);
+  assert.equal(member.ws.sent.at(-1).epoch, 1);
+  assert.equal(host.ws.sent[0].t, "lock_released");
+  session.acquire(host, "param:1");
+  assert.equal(host.ws.sent.at(-1).granted, true);
+});

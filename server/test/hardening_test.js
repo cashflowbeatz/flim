@@ -182,6 +182,22 @@ test("local server rejects malformed traffic and safely handles blob capacity an
   await t.test("oversized missing lists receive HTTP 413 instead of a socket reset", async () => {
     assert.equal((await request("POST", "/blobs/missing", key, Buffer.alloc(1024 * 1024 + 1))).status, 413);
   });
+  await t.test("a project switch clears old locks over the real WebSocket protocol", async () => {
+    host.msgs.length = member.msgs.length = 0;
+    host.sendJson({ t: "lock_acquire", key: "param:42" });
+    await member.waitFor((m) => m.t === "lock" && m.key === "param:42");
+    member.sendJson({ t: "lock_acquire", key: "plug:ch:1" });
+    await host.waitFor((m) => m.t === "lock" && m.key === "plug:ch:1");
+    host.msgs.length = member.msgs.length = 0;
+    host.sendJson({ t: "op", op: { kind: "project.load", data: "next-project" } });
+    await member.waitFor((m) => m.t === "op");
+    assert.deepEqual(member.msgs.map((m) => m.t), ["lock_released", "lock_released", "op"]);
+    member.msgs.length = 0;
+    member.sendJson({ t: "lock_acquire", key: "param:42" });
+    assert.equal((await member.waitFor((m) => m.t === "lock")).granted, true);
+    member.sendJson({ t: "lock_release", key: "param:42" });
+    await member.waitFor((m) => m.t === "lock_released");
+  });
   await t.test("a blob larger than the session cache is refused before it can evict itself", async () => {
     const data = Buffer.alloc(65, 1);
     assert.equal((await request("PUT", `/blob/${digest(data)}`, key, data)).status, 413);
