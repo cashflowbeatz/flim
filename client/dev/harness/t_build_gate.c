@@ -75,6 +75,22 @@ int main(void) {
     }
     assert(old25a && old25b);
 
+    /* Negotiation permits only the declared older host, preserving the original version. */
+    for (i = 0; i < builds; i++) for (j = 0; j < builds; j++) {
+        g_fl = k_flBuilds[i];
+        assert(WideCharToMultiByte(CP_UTF8, 0, k_flBuilds[j].build, -1, other, 32, NULL, NULL));
+        strcpy_s(g_hostFlBuild, sizeof(g_hostFlBuild), other);
+        g_compatReady = 1;
+        begin_image(1); version_bytes(other, strlen(other)); n = finish_image();
+        assert(WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, current, 32, NULL, NULL));
+        expect(i == j ? FLP_BUILD_MATCH : ver_cmp(other, current) < 0 ? FLP_BUILD_FORWARD : FLP_BUILD_MISMATCH,
+               image, n, other);
+        /* A substituted project from another build must not inherit the host's permission. */
+        strcpy_s(g_hostFlBuild, sizeof(g_hostFlBuild), "25.0.0.1");
+        expect(FLP_BUILD_MISMATCH, image, n, other);
+        g_compatReady = 0;
+    }
+
     g_fl = k_flBuilds[0];
     assert(WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, current, 32, NULL, NULL));
     expect(FLP_BUILD_INVALID, NULL, 0, NULL);

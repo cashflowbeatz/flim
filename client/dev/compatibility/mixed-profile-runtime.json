@@ -1,0 +1,446 @@
+{
+  "schema_version": 3,
+  "status": "experimental_profile_and_mixed_session_subset_validated",
+  "date": "2026-10-23",
+  "targets": [
+    {
+      "version": "25.2.5.5319",
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FL64.exe",
+      "sha256": "4743d610c860a4387c2632fd9603d921685270a00313039492ad17492cc81604",
+      "signature": "Valid"
+    },
+    {
+      "version": "25.2.5.5319",
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FLEngine_x64.dll",
+      "sha256": "1b7e2381f2853ee590bff74429fb8aa5540d33a5b33c0c5e41ec01c03fe0c7ac",
+      "signature": "Valid"
+    },
+    {
+      "version": "26.1.7.5654",
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FL64.exe",
+      "sha256": "a1f3f53cb8ee1bb80fdfe1814876e268730f8b6bdba95e3d4a8bcba6600255e6",
+      "signature": "Valid"
+    },
+    {
+      "version": "26.1.7.5654",
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FLEngine_x64.dll",
+      "sha256": "6d9c5ab09c1d5594012ac2c31cf9ed08e73f42164ed0964cccae10a95d9b8e02",
+      "signature": "Valid"
+    }
+  ],
+  "supported_builds": {
+    "default": [
+      "25.2.5.5319",
+      "25.2.3.5171",
+      "25.1.6.4997"
+    ],
+    "experimental": [
+      "26.1.7.5654",
+      "26.1.6.5639",
+      "25.2.5.5319",
+      "25.2.3.5171",
+      "25.1.6.4997"
+    ]
+  },
+  "environment": {
+    "os": "Windows x64",
+    "topology": "loopback relay, three disposable pairs: FL25/FL26 mixed, FL25 same-build, FL26 same-build",
+    "same_experimental_client_for_all_runs": true,
+    "installed_files_patched": false,
+    "unrelated_processes_modified": false,
+    "owned_test_processes_and_relay_stopped": true
+  },
+  "client_binaries": {
+    "flim.exe": "6d7657ca7b930aea645cf7a6d173484b7d087cd7b9bab8568032694b381fcf6e",
+    "flim_engine.dll": "f7edea438236065050eb02759eacc08883c93276d1ce9e3adc5f662ceb47bb52"
+  },
+  "standard_client_binaries": {
+    "flim.exe": "d19ec8afdccd443ddfb94281eca0d7eb7c6a5ba03a6538196917b01bc52b4b95",
+    "flim_engine.dll": "127e2f5742437366802febf5527dcf784bd45cf3461714276eaff0642d5719ee"
+  },
+  "profiles": {
+    "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+    "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+  },
+  "tested_source_sha256_normalized_lf": {
+    "client/build.bat": "079a81fc863969ae7943b5aac1a588023b2a20cae1fad138d33cbd4bcd5a0231",
+    "client/common/flim_compat.h": "6fe9c22a855d32b14070403e4dfca837fe190554cce30c30e950b95a7df2ffb6",
+    "client/common/flim_config.h": "acf2cf4c0e7da75fa809b3d18602de2446fed3b5cb2352c6d0371d4998c8b54f",
+    "client/common/flim_flp.h": "2bc9dbb9ceecccb4a9cce465720119ff96efb33fcccd860a3985bbe292e00b6d",
+    "client/common/flim_json.h": "4748c1e311f53b1b461e34c79c3481199204a679d649ef73066730b0a34818fe",
+    "client/common/flim_profile.h": "e9b8524ae83d96e0c577a89f5eac239cfff92bdf33bcffbd31f9b76a32328d75",
+    "client/common/flim_res.h": "26b16c7d2b6cde779e5ba58dc119e6b35d77fc9730105805ac0e532be33a4d4b",
+    "client/common/flim_unit_bursts.h": "39239486c8ea78c442f40a4360c5598ec290907d7a8e6afa95297cd4bb23242f",
+    "client/common/flim_version.h": "a3d137924f8e05c2b010441bdfd1c8b0b9aae035309d680e6511afa5346fce9e",
+    "client/common/flim_ws_buffer.h": "d11a1dc45bd9167fb8b000033499af6ff6f595ed2b09ad403c1e1e4936ac9c14",
+    "client/dev/feature_test.py": "181b0c63fa3bb0bfb0e0ecffad7239ef6f76bb8fd790eb2a2d23783a0061db76",
+    "client/dev/fl.py": "bd2d42341cdb2d50056a3904d13a7d2696d9a08dc17c2deb66fb94655034b505",
+    "client/dev/flbuild.py": "61c95f1376398ef29343138dbd662fae7b0c6989db504950e17cb1e7c1b55c1f",
+    "client/dev/flp.py": "b58c2152a4bb987e3ee69d2dfc7b249fc5e25f8040e111c9a34410bf73d10deb",
+    "client/dev/flre.py": "2cbb8739ba003b009e9b6b1c4eadef78e19b4ca8baed31cd9c5c0fb1a62c8435",
+    "client/dev/harness/build.bat": "7fad52aa052a3d6b9b7b86ae85609d2e78c4cf2148bf8563f76028db8d55a2b7",
+    "client/dev/harness/t_build_gate.c": "28acb542277b741222c2a6a5d083bca04359ec84b5b26c2c2470a6f797e72652",
+    "client/dev/harness/t_compat.c": "d6188242608fcf6a06aef074b343e5023d8e5a17ce4823be33c1c7eb3f640969",
+    "client/dev/harness/t_flp.c": "d2b4c3c2d5b6a21fd25815c62c7f9e0fa7d976b6b2093616b7334997431d5e97",
+    "client/dev/harness/t_injection.c": "885f98f5bb716b3500a75382fd0a751505072e77917ce49fe5c0cf7c8f84f1c1",
+    "client/dev/harness/t_launcher.c": "8006616894f2d8d9bb3811f558e5622af35eb732d07ee6b71741f722dd55a791",
+    "client/dev/harness/t_metadata.c": "776c8d1213863de34205053b7ffaa5daf486ac6fbbb25ae720adc80cdb8159a2",
+    "client/dev/harness/t_patops.c": "69ad9725a0c803d6d598fab023848d2ac7bcf49b115c62da98375b83ae34b31a",
+    "client/dev/harness/t_plugin_apply.c": "113f175bc80f7b9f2a6a52c7c8eab1c4e02e3ec1e0ebde2d5b41524f406a0ebb",
+    "client/dev/harness/t_profile_loader.c": "f80737076cd12681fbd0711ea65191ccec6238fa441416baf8d5c289a8c8b7da",
+    "client/dev/harness/t_profiles.c": "b0edc9944a72d1859df74d28cdb21af48034f007308eb35768d3d30db3ab0390",
+    "client/dev/harness/t_samples.c": "f051d925f7f637dcdca7e58df6e86cea89c4f594a5b23a3817b892c8a7a25dd4",
+    "client/dev/harness/t_ws_buffer.c": "fcc710d45771a2e76dab59721981c8aa8575f4414759c7b0e41b64e3f5e379e0",
+    "client/dev/inspect_layout.py": "c9cc87c889f22c0310e19b71a11709229098e4fde1933147755313c72b02897d",
+    "client/dev/mk.py": "067a57f42686382f4e241243b71e43b2a6ce53a633cc460e38443d7d6664176f",
+    "client/dev/paths.py": "d4545fc3a4462eae6061686553ef8039d25612189bd63977e8764b2645842f42",
+    "client/dev/probe/build.bat": "0a64faf5237be697e414a371931ca8761dd2c8afba88c500585376b104214e30",
+    "client/dev/probe/probe.c": "d0df569f50f267ed1a1b2097deb78b36c4221b9d6509c18283f5edfe6c634d71",
+    "client/dev/profiles.py": "01b07309a8b16c640bb8884e46c3dbde74dc78ef89fe7d765a4d52a863330c55",
+    "client/dev/sigscan.py": "b95ca1569e392ab374c26ccc242781384816b7fc7977c1c650fc079408aa7d64",
+    "client/dev/survey.py": "5c0bec2edddc2396634da32fac10760fabd4e87892adcd7e7210e920ce83e093",
+    "client/dev/test_feature_state.py": "79afef400143e6a466d07d3d23ee560f36b266322cc0697e5cdb86dabed3d42e",
+    "client/dev/test_flp.py": "6ec4b7fad4117d1eba3d0314c1a308efa3579798b83305d9970ad1cd9338934a",
+    "client/dev/test_inspect_layout.py": "a5617bbb03c78e419524b1a5abcbe5734de330c4296009933e795b0eaa6ec7ea",
+    "client/dev/test_process_ownership.ps1": "9849f67bc3843ec39aeb3e7c4631d6989c133dc931f0361e2a36385af493e8bb",
+    "client/dev/test_profiles.py": "86de6b7c0bd0096ae3d61181bda05bf963aba86e17066fd604e94845b7a94ef7",
+    "client/dev/test_restart_ownership.ps1": "60efbc2dba87789997dd107435e456d03b4b9629d1c73f004ab5ed2d7acd7988",
+    "client/dev/test_static_tools.py": "5218ae7d5493feabc0278d9abfb8a496672ce1f0143311cbedf6d30a584a5432",
+    "client/dev/test_unit_activity.py": "92ef967d63f3ed5b72057fd7285a06adc656811c2a90fdb0a9b8c7dc1c26da34",
+    "client/dev/tlv.py": "60e7a02334cc0711995c8b3e5566fac67bd8b1944910b2aea4990b47239191a9",
+    "client/engine/flim_engine.c": "7263908f5838fcb0bc5efb282353d4c6e26c9464ad84e8c2bb3a9dee9276bc7e",
+    "client/gen_icon.py": "08d7fc1e95726d8e09471cc458584643db3e30180f24a1293b7a012e9b6431da",
+    "client/launcher/flim.c": "bc47ddaa954719e64b94dc3e2f95d41b29eec6ff24bfacfd823c9c0451ce3387",
+    "client/msvc_env.bat": "685dbfc235877bed2483bdde568873da2596c55cfeaee47ca8862b972da32e45",
+    "client/restart_test.ps1": "3eff59b559ba5b21b883def1d5232b97b76a394903c7d98cb45ce15a9bc7e578",
+    "server/package-lock.json": "107a4cfc3ff1ae8a9367a115aad195202cccd19ad69cda7fcd475f5f0fa6c9af",
+    "server/package.json": "04681830dadfd629a7769e01ddbb425d367cebf719808b172945c5558b225b17",
+    "server/src/blobs.ts": "5cd2d09781eeeb9ad09d3cab677ec515fb8d9324233fdbc23e49927b1891f716",
+    "server/src/compatibility.ts": "f85708b4b312be9be86d2eb753b1e994769865b8c7f0fe25b31306e738186e1b",
+    "server/src/config.ts": "224dd42669e56b17bf287008435ca59715404bc049aa6f4aa8f2ccca9e9d3ed9",
+    "server/src/protocol.ts": "0d3df2b420ebb1e96616dc7a6e80260d23400dce441b54f391c3d7a90b9573ed",
+    "server/src/proxy.ts": "a05dd34e3a4b19d85126fe27711f851b5419cd320b681321004f39f40d865f70",
+    "server/src/server.ts": "4d45d7b24c6a4d5162f9b5ff1d14cf91869ba3b7bce19c3e124c7daa6eb8c114",
+    "server/src/session.ts": "6b606e60e0d237f3c9eaafa1a00df96664329a0b7eb88c7b4840c344d726f3a0",
+    "server/test/blob_lifecycle_test.js": "02a29697877226d711bc991a9fdf7a87baad94b045b7370053353b2fe04b30b4",
+    "server/test/blob_metadata_test.js": "8aa4bfed8750388f4b27748c98969208593d4006ac847d22d64698e07d8c0d1d",
+    "server/test/blob_race_test.js": "64a63475a48ff53ae563ab948909ef9b3be918bd8a3fad2cd2fece29aad04806",
+    "server/test/compatibility_test.js": "c6f5c415281a7572de5e394ad1e420a95c0251a68c210a41f080783382047088",
+    "server/test/config_test.js": "0370c9ca8fbe9569e4cfe538ab1dfc4bd36209d526a088b02522cb856c05009e",
+    "server/test/hardening_test.js": "4bc1d35fee8b596d6e018eb0c5393e865f1b9dff6364af03e37304da8bfc1e61",
+    "server/test/protocol_test.js": "b3e85423e2b9bb95670efec265745c0242aa763f93e593d2c3217b728ff20027",
+    "server/test/relay_benchmark.js": "1aee5707ac08704038395d838a061eabb3ca0251e9330490a600ffcd145a0be9",
+    "server/test/session_regression_test.js": "8e46006079a59ff5d2cdb79ac7f1d45604d78beb47e11f8880b01019c70a136f",
+    "server/test/slots_test.js": "cb71e3077da8527253ade29827e79e8b335c443b8fc6d1a6fc985381fb21bbde"
+  },
+  "runtime": [
+    {
+      "host_fl": "25.2.5.5319",
+      "member_fl": "26.1.7.5654",
+      "passed": 34,
+      "failed": 0,
+      "log": "final-mixed-runtime.log",
+      "sha256": "d9b2a7c22591c67d206b905b399f10a2cbbed625b97a0c31b7bebdc95fc9bd08",
+      "checks": [
+        "channel volume (REC)",
+        "mixer volume (REC)",
+        "mixer mute",
+        "mixer track name",
+        "mixer track color",
+        "mixer routing",
+        "channel add",
+        "channel name",
+        "channel delete",
+        "pattern names + notes",
+        "pattern op: insert",
+        "pattern op: delete (msgbox hook)",
+        "time signature set in A",
+        "project time signature",
+        "playlist marker",
+        "playlist track name",
+        "pattern time signature (pattern 1)",
+        "note delete",
+        "piano roll layout offsets          hwnd 0x14e13da TEventEditForm, ticks/px 1.000, grid 829x518 at 78,79, vscroll 1006",
+        "playlist layout offsets            hwnd 0x941ece TEventEditForm, ticks/px 6.400, grid 1286x850 at 273,75, vscroll 0",
+        "effect added in A",
+        "effect plugin in B",
+        "effect identity/wrapper/sound",
+        "effect removed in B",
+        "reorder fixture replicated",
+        "channel reorder in A",
+        "channel reorder in B",
+        "clip added in A",
+        "clip in B (position, pattern, length, track)",
+        "sample downloaded by B",
+        "B's channel uses the downloaded file",
+        "member channel volume reaches host",
+        "member pattern name reaches host",
+        "member note reaches host"
+      ],
+      "project_join": {
+        "log": "final-mixed-engine.log",
+        "sha256": "ac709b590ef4ab6aad7ca326468a5ecfb82443a989826bd557e188ca734d8781",
+        "loaded": true,
+        "settled": true
+      },
+      "owned_processes": [
+        {
+          "pid": 34784,
+          "start_time_utc_ticks": "639283632354078203",
+          "exe": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FL64.exe",
+          "role": "A",
+          "launcher_pid": 105152
+        },
+        {
+          "pid": 96132,
+          "start_time_utc_ticks": "639283632419537019",
+          "exe": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FL64.exe",
+          "role": "B",
+          "launcher_pid": 36592
+        }
+      ]
+    },
+    {
+      "host_fl": "25.2.5.5319",
+      "member_fl": "25.2.5.5319",
+      "passed": 34,
+      "failed": 0,
+      "log": "final-same25-runtime.log",
+      "sha256": "9397f084f905ad875fb6b2caabb075da93c7a3241746d94d80ff3c70e883c327",
+      "checks": [
+        "channel volume (REC)",
+        "mixer volume (REC)",
+        "mixer mute",
+        "mixer track name",
+        "mixer track color",
+        "mixer routing",
+        "channel add",
+        "channel name",
+        "channel delete",
+        "pattern names + notes",
+        "pattern op: insert",
+        "pattern op: delete (msgbox hook)",
+        "time signature set in A",
+        "project time signature",
+        "playlist marker",
+        "playlist track name",
+        "pattern time signature (pattern 1)",
+        "note delete",
+        "piano roll layout offsets          hwnd 0x141758 TEventEditForm, ticks/px 1.000, grid 829x518 at 78,79, vscroll 1006",
+        "playlist layout offsets            hwnd 0xa220c4 TEventEditForm, ticks/px 6.400, grid 1286x850 at 273,75, vscroll 0",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "reorder fixture replicated",
+        "channel reorder in A",
+        "channel reorder in B",
+        "clip added in A",
+        "clip in B (position, pattern, length, track)",
+        "sample downloaded by B",
+        "B's channel uses the downloaded file",
+        "member channel volume reaches host",
+        "member pattern name reaches host",
+        "member note reaches host"
+      ],
+      "project_join": {
+        "log": "final-same25-engine.log",
+        "sha256": "96a8be1dd02310aca5808e327aa6248ea2b0a9681d1df65d0d316e133aa3972a",
+        "loaded": true,
+        "settled": true
+      },
+      "owned_processes": [
+        {
+          "pid": 114200,
+          "start_time_utc_ticks": "639283632775202463",
+          "exe": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FL64.exe",
+          "role": "A",
+          "launcher_pid": 75764
+        },
+        {
+          "pid": 78752,
+          "start_time_utc_ticks": "639283632842858525",
+          "exe": "C:\\Program Files\\Image-Line\\FL Studio 2025\\FL64.exe",
+          "role": "B",
+          "launcher_pid": 116036
+        }
+      ]
+    },
+    {
+      "host_fl": "26.1.7.5654",
+      "member_fl": "26.1.7.5654",
+      "passed": 34,
+      "failed": 0,
+      "log": "final-same26-runtime.log",
+      "sha256": "054a6851c430bd856198bf7bfc9d80157f5ddee284440158407af6cc90aed06f",
+      "checks": [
+        "channel volume (REC)",
+        "mixer volume (REC)",
+        "mixer mute",
+        "mixer track name",
+        "mixer track color",
+        "mixer routing",
+        "channel add",
+        "channel name",
+        "channel delete",
+        "pattern names + notes",
+        "pattern op: insert",
+        "pattern op: delete (msgbox hook)",
+        "time signature set in A",
+        "project time signature",
+        "playlist marker",
+        "playlist track name",
+        "pattern time signature (pattern 1)",
+        "note delete",
+        "piano roll layout offsets          hwnd 0x181294 TEventEditForm, ticks/px 1.000, grid 888x555 at 79,79, vscroll 987",
+        "playlist layout offsets            hwnd 0x31011c TEventEditForm, ticks/px 6.400, grid 1289x850 at 273,75, vscroll 0",
+        "effect added in A",
+        "effect plugin in B",
+        "effect state (local visibility excluded)",
+        "effect removed in B",
+        "reorder fixture replicated",
+        "channel reorder in A",
+        "channel reorder in B",
+        "clip added in A",
+        "clip in B (position, pattern, length, track)",
+        "sample downloaded by B",
+        "B's channel uses the downloaded file",
+        "member channel volume reaches host",
+        "member pattern name reaches host",
+        "member note reaches host"
+      ],
+      "project_join": {
+        "log": "final-same26-engine.log",
+        "sha256": "04c2e19964bc9b7da656fa7eca854930494b8c095ef4eaa19201be6f417d71ef",
+        "loaded": true,
+        "settled": true
+      },
+      "owned_processes": [
+        {
+          "pid": 121552,
+          "start_time_utc_ticks": "639283633173217690",
+          "exe": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FL64.exe",
+          "role": "A",
+          "launcher_pid": 102656
+        },
+        {
+          "pid": 64064,
+          "start_time_utc_ticks": "639283633237309951",
+          "exe": "C:\\Program Files\\Image-Line\\FL Studio 2026\\FL64.exe",
+          "role": "B",
+          "launcher_pid": 79076
+        }
+      ]
+    }
+  ],
+  "refusal_checks": [
+    {
+      "name": "newer member opaque preset",
+      "passed": true,
+      "log": "final-mixed-member-guard.log",
+      "sha256": "d8f613ac9b2cede379eea9c6f8d2b1596fbe5f49e81854e7a77c7adbec8301a8",
+      "observed": "FL26 local preset remains; FL25 host slot stays empty; member compatibility fault ends sharing"
+    },
+    {
+      "name": "older member rejected before project disclosure",
+      "passed": true,
+      "log": "final-reversed-engine.log",
+      "sha256": "e67c68e80fa4b85416b266fd43688872dfe32f1e40025e28771abd9e8d164c36",
+      "observed": "FL26 host welcomed; FL25 member refused before welcome or PROJECT received"
+    }
+  ],
+  "offline": {
+    "python_tests": 57,
+    "node_tests": 56,
+    "slot_session_checks": 58,
+    "ownership_checks": 20,
+    "native_harnesses": 14,
+    "profile_parser_checks": 94,
+    "native_negotiation_checks": 25,
+    "build_gate_checks": {
+      "default": 138,
+      "experimental": 234
+    },
+    "standard_and_experimental_builds": "passed without compiler warnings",
+    "external_profile_fixture": "uncompiled 25.9.9.65000 accepted using synthetic PE never executed; missing/corrupt profiles and modified engine hash refused",
+    "profile_export": "both checked-in profiles reproduced against exact installed signed engines",
+    "logs": [
+      {
+        "log": "mixed-profile-python.log",
+        "sha256": "56811703a3737d886d427721b223ebb93f7b5a1f38e7ca87ee34ea759fc8a4b9"
+      },
+      {
+        "log": "mixed-profile-server.log",
+        "sha256": "a838c437c91f4aa8a2d5bbc54d825eb148435a03b565e45da24dddd9dd34af9e"
+      },
+      {
+        "log": "mixed-profile-native.log",
+        "sha256": "7b357489c79bf9c1484fcae407c0f0ef08fe69c3359b601d9704942dc1c224ae"
+      },
+      {
+        "log": "mixed-profile-native-build.log",
+        "sha256": "23cd04fe9521481b2a16d4a2642d0ddbecb3a8458ecc62e81ea976ef6f1b9981"
+      },
+      {
+        "log": "mixed-profile-normal-build.log",
+        "sha256": "46b7bd370b62663d194bd6642824f856cb40e13235c11ef1a45ed61be1407048"
+      },
+      {
+        "log": "mixed-profile-experimental-build.log",
+        "sha256": "a46b69345ed269f7ca553afa324172442cb6eca00efa188bb91b69669528d186"
+      },
+      {
+        "log": "mixed-profile-ownership.log",
+        "sha256": "954f35754cbeb637b0d5e812adf3208da08833ce88f652f41cd4988524786dda"
+      }
+    ]
+  },
+  "policy": {
+    "protocol": 1,
+    "wire": "flim-25-26-v1",
+    "oldest_build_hosts": true,
+    "project_stamp_rewritten": false,
+    "unknown_builds_need_reviewed_profile": true,
+    "opaque_states": "host exact build only; project/full replacements host-only",
+    "client_claims_not_remote_binary_attestation": true
+  },
+  "effect_comparison": {
+    "same_build": "All parsed serialized events except wrapper212 local editor-visibility bit0; unchanged plugin213 payload compared",
+    "mixed_build": "Plugin identity201, wrapper212 excluding local visibility, and complete plugin213 bytes compared. Other writer metadata explicitly outside this comparison."
+  },
+  "sample_verification": "Fresh synthetic WAV per pair; member local lookup disabled; saved channel path resolves to cache file with matching SHA256",
+  "historical_validation": {
+    "record": "25-26-runtime.json",
+    "note": "Different historical binaries and same-build-only policy; not current test results"
+  },
+  "earlier_attempts": [
+    {
+      "log": "mixed-pair-v1-runtime.log",
+      "sha256": "081fc995ea494cd95b139e7dd2e91dd078fc64a7afb5c847d5145ea6d1a87317",
+      "scope": "pre-final native build",
+      "outcome": "32/34; exposed lost local rename near channel deletion and version-specific effect writer metadata; fixed and covered by final runs"
+    },
+    {
+      "log": "mixed-pair-v2-guards.log",
+      "sha256": "2a6d1563315117e1d843564608ae87768c439b9f7b4171767872c2decc7aa3ab",
+      "scope": "pre-final helper error",
+      "outcome": "Wrong main-form pointer in optional direct-loader helper caused owned test host to exit; corrected helper; no installed binaries changed"
+    },
+    {
+      "log": "mixed-pair-v3-guards-final.log",
+      "sha256": "7450ee9713b9186479e6208c7596ee92611603a4371c98877833975d96a4ad11",
+      "scope": "optional direct-loader integration test",
+      "outcome": "Host loaded older template, but helper bypassed normal FL open notification, so end-to-end old-file snapshot was not established; not counted as a passing check"
+    }
+  ],
+  "limits": [
+    "Additional unknown FL25/26 builds still require correct mappings, ABI/layout and wire review plus runtime tests; no universal-build guarantee",
+    "Profiles are trusted maintainer data, not independently proven by hashing or numeric range checks",
+    "Older retained build rows were checked synthetically, not rerun live on this client",
+    "Old-file snapshot writer path was changed in source; optional direct-loader probe did not establish the normal UI opening flow end-to-end",
+    "No project/preset down-conversion, broad third-party plugin matrix, audio-render comparison, long-session soak or internet load/latency benchmark",
+    "Not every pattern operation, automation, cursor-render or lock-conflict combination exercised",
+    "Standard client compiled and passed offline checks; live pairs used experimental client",
+    "Docker/Cloudflare deployment not tested; no server deployed or merged"
+  ]
+}

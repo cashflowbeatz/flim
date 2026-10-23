@@ -15,10 +15,16 @@ samples) is kept in sync over the internet. It works a bit like [Drawpile](https
 This fork adds an opt-in port for **FL Studio 26.1.7.5654 and 26.1.6.5639 on Windows x64**. Build it with
 `FLIM_EXPERIMENTAL_FL26=1`; the resulting launcher and engine are in `client/out-experimental`.
 The same experimental client also supports FL **25.2.5.5319, 25.2.3.5171 and 25.1.6.4997**;
-the default build includes those three FL 25 tables. Other builds require a separate verified table.
-Everyone in a session must use the **same exact FL build**. Supporting FL 25 and FL 26 in one client
-does not make newer FL project files loadable in older FL versions.
-See [compatibility validation](client/dev/compatibility/README.md) for observed behavior and remaining tests.
+the default build includes those three FL 25 tables. Reviewed external profiles can add more FL 25/26
+builds without recompiling the client. Unknown builds still need their own mapping and tests.
+
+**Different supported builds can share a session when the oldest build hosts.** Update everyone's
+client and relay. Newer members can send supported notes, parameter and naming edits; only people
+on the host's exact build can send whole presets or create channels. Project replacement remains host-only. A newer
+member making an incompatible edit stops sharing and keeps the local edit. flim does not convert
+newer projects or presets for an older FL loader.
+See [build support and mixed sessions](BUILD-COMPATIBILITY.md) for setup and restrictions, and
+[compatibility validation](client/dev/compatibility/README.md) for test evidence.
 The release links and public-test instructions below describe the upstream FL 25 release; they do
 not publish the new FL 26 client automatically.
 
@@ -132,7 +138,7 @@ at the same pattern or arrangement. The arrows can't be clicked and never get in
 
 - **Client:** Windows 10 or 11 (64-bit). The default build supports FL **25.2.5.5319**, **25.2.3.5171** and
   **25.1.6.4997**; the experimental build additionally supports **26.1.7.5654** and **26.1.6.5639** (Help → About).
-  All participants in a session must use the same exact build.
+  Update everyone's client and relay, and let the oldest supported build host. Mixed sessions restrict whole presets and channel creation; see [the policy](BUILD-COMPATIBILITY.md).
   Have a different build? See [Other FL Studio builds](#other-fl-studio-builds).
 - **Server:** a supported Node.js LTS release (Node.js 24 is the container default) on Windows,
   Linux or macOS, reachable by the participants.
@@ -328,8 +334,9 @@ server/                 flim-server (Node.js + TypeScript, WebSocket + HTTP)
   the session may have ended (host left, or 5 minutes without activity).
 - **"All sessions are in use"**: the server's session(s) are taken. Try again later.
 - **"Server password needed"**: the server has `FLIM_PASSWORD` set. Ctrl+click **Host** and enter it.
-- **"Everyone in a session needs the same FL Studio build"**: the host's FL build differs from yours.
-  See [Other FL Studio builds](#other-fl-studio-builds).
+- **Build compatibility refusal**: update everyone's client and the relay, and let the oldest
+  supported FL build host. Newer members cannot send whole presets or project replacements.
+  See [build support and mixed sessions](BUILD-COMPATIBILITY.md).
 - **Something didn't sync or FL crashed**: please open an issue and attach `%TEMP%\flim_engine.log`.
 
 ---
@@ -341,22 +348,22 @@ update. So flim keeps a table for each FL build it knows. Check yours under **He
 
 | Build | Status |
 |---|---|
-| **26.1.7.5654** | Experimental; this fork's 31 runtime feature checks pass. |
+| **26.1.7.5654** | Experimental; current runtime validation is linked below. |
 | **26.1.6.5639** | Experimental table retained; 31 runtime feature checks passed before the installed FL update. |
-| **25.2.5.5319** | This fork's 31 runtime feature checks pass using the same experimental client as FL 26. |
+| **25.2.5.5319** | Current runtime validation uses the same experimental client as FL 26. |
 | **25.2.3.5171** | Original reference table retained; synthetic hook checks pass. |
 | **25.1.6.4997** | Original upstream table retained; synthetic hook checks pass. |
 
-**Everyone in a session needs the same build.** FL Studio can't safely load projects and plugin
-states from a newer FL, and both travel in a session. So if the host's build differs from yours,
-flim doesn't load the host's project: it tells you and leaves the session.
+The installed FL 25.2.5.5319 host and FL 26.1.7.5654 member passed **34/34 mixed-session checks**,
+including supported edits back to the host. Same-build checks and exact binary identities are in
+[the validation record](client/dev/compatibility/mixed-profile-runtime.json).
 
 **Your build isn't listed?** `flim.exe` tells you when it starts. If you start FL anyway, flim stays
 off and FL runs as usual: nothing breaks, it just doesn't sync. What you can do:
 1. **Ask for it:** [open an issue](../../issues) with your exact build number (Help → About). Adding
-   a build means mapping flim's table onto it and testing it, which is mostly automated.
-2. **Add it yourself:** the tools in `client/dev/` map the table from 25.2.3.5171 onto another build
-   and test the result. See "Adding an FL build" in [client/dev/README.md](client/dev/README.md).
+   a build means reviewing its addresses, layouts and behavior; signature matches alone are insufficient.
+2. **Add a reviewed profile:** see [the profile workflow](BUILD-COMPATIBILITY.md#adding-another-build).
+   Profiles bind a complete mapping to the exact engine hash; changing only the hash is unsafe.
 3. **Use 25.2.3.5171** if you have it installed.
 
 ---

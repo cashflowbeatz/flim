@@ -113,6 +113,21 @@ class EffectStateTests(unittest.TestCase):
         self.assertEqual(normalized[0], (0xc0000101, b'head'))
         self.assertEqual(normalized[1:], shared_effect_state(base))
 
+    def test_mixed_comparison_scopes_version_metadata_but_keeps_sound(self):
+        a = fst((159, struct.pack('<I', 5319)), (169, struct.pack('<I', 7)),
+                (201, b'Delay'), (212, wrapper(0xb0)), (213, b'sound'))
+        b = fst((159, struct.pack('<I', 5654)), (169, struct.pack('<I', 15)),
+                (201, b'Delay'), (212, wrapper(0xb1)), (213, b'sound'))
+        self.assertNotEqual(shared_effect_state(a), shared_effect_state(b))
+        self.assertEqual(shared_effect_state(a, True), shared_effect_state(b, True))
+        for identity, settings, sound in ((b'Other', wrapper(), b'sound'),
+                                          (b'Delay', wrapper(0xb2), b'sound'),
+                                          (b'Delay', wrapper(), b'different')):
+            changed = fst((201, identity), (212, settings), (213, sound))
+            self.assertNotEqual(shared_effect_state(a, True), shared_effect_state(changed, True))
+        with self.assertRaisesRegex(ValueError, 'identity missing'):
+            shared_effect_state(preset(), True)
+
     def test_missing_saved_file_or_required_events_is_rejected(self):
         for source in (None, b'', fst(), fst((212, wrapper())), fst((213, b'plugin'))):
             with self.subTest(source=source):

@@ -121,6 +121,48 @@ blob key), then exchange `op`, `lock_acquire` / `lock_release` (→ `lock`, `loc
 
 Only the host may send `project.load`, `plug.full`, `notes.full`, or `state.full`; members may request
 resynchronization with `state.req` and continue sending ordinary edits. Operation payloads may not
-contain `t`, nested `kind`, or property names containing quotes, backslashes, or control characters.
+contain `t`, nested `kind`, `source_fl`, `host_fl`, `compat`, `compatibility`, or property names containing quotes, backslashes, or control characters.
 These fields can confuse the native client's substring parser. Rejections return `bad_request` or
 `not_leader` without forwarding the operation. See [the upstream audit](AUDIT.txt) for regression evidence.
+
+### Sessions with different FL Studio builds
+
+Compatibility-aware clients add this field to their `host` or `join` message:
+
+```json
+"compat": { "protocol": 1, "fl": "25.2.5.5319", "wire": "flim-25-26-v1" }
+```
+
+The version must contain all four numbers with no extra characters or leading zeroes. Each number
+must be 0–65535, and the major version must be 25 or 26. The relay accepts only this reviewed wire
+format. A client needs a verified profile for its installed FL engine before advertising it; this
+handshake does not discover hooks or prove that an arbitrary FL build works.
+
+**The person with the oldest FL Studio build must host.** Newer FL Studio builds can open older
+projects; the relay prevents someone on an older build joining a newer host before sharing the
+project. This applies to patch builds as well as FL 25 versus FL 26. Everyone must run a
+compatibility-aware flim client; older flim clients can still use their own separate sessions.
+
+The negotiated `welcome` and every `presence` update include:
+
+```json
+"compatibility": { "protocol": 1, "host_fl": "25.2.5.5319", "wire": "flim-25-26-v1", "mixed": true }
+```
+
+`mixed` changes when people join or leave. Peers include their `fl` build, and relayed operations
+include a top-level `source_fl` set by the relay from the sender's admitted build. Clients cannot
+override it through an operation payload. Version claims come from the client handshake; the server
+cannot inspect a remote FL installation or certify plugin compatibility.
+
+In a mixed-build session, notes, playlist clips, supported parameters and other known shared edits
+can travel in both directions. Channel creation (`chan.add`) and plugin presets (`plug.state`) must
+come from someone using the host's exact build, because these include opaque FL data that an older
+build may not understand. Full project and state replacements remain host-only. Unknown operation
+kinds receive `compatibility` errors. Rejected edits are neither forwarded nor counted as accepted
+edits and do not renew locks. The native client must stop the connection if an incompatible local
+edit has already happened, so people do not unknowingly continue with different projects.
+
+Matching FL builds retain ordinary bidirectional presets and channel creation. Mixed sessions still
+need compatible plugins, available sample files and projects the receiving FL build can open. The
+relay does not translate project or plugin formats. The automated relay tests verify admission,
+message ordering and these restrictions using simulated clients; native FL testing is separate.

@@ -6,6 +6,7 @@ import { ClientMsg, PING_INTERVAL_MS, UserInfo, validOp } from "./protocol";
 import { Client, Session, send } from "./session";
 import { clientIp, proxyMode } from "./proxy";
 import { limits } from "./config";
+import { validCompatibility } from "./compatibility";
 
 const PORT = limits.port;
 const PROXY_MODE = proxyMode();
@@ -168,6 +169,9 @@ function handlePreSession(ws: WebSocket, conn: Conn, msg: ClientMsg): void {
     return refuse(ws, "too_many_attempts", "Too many wrong passwords. Try again in a few minutes.");
   }
   const user = sanitizeUser(msg.user);
+  if (msg.compat !== undefined && !validCompatibility(msg.compat)) {
+    return refuse(ws, "compatibility", "This flim client does not have a supported FL Studio 25/26 compatibility descriptor.");
+  }
   const password = typeof msg.password === "string" ? msg.password : "";
   if (!password || password.length > PW_MAX) {
     return refuse(ws, "bad_request", `The session password must be 1 to ${PW_MAX} characters.`);
@@ -201,7 +205,7 @@ function handlePreSession(ws: WebSocket, conn: Conn, msg: ClientMsg): void {
       slot = PUBLIC_SLOTS.find((s) => !sessions.has(s));
       if (!slot) return refuse(ws, "full", `All ${PUBLIC_SLOTS.length} sessions are in use. Try again later.`);
     }
-    const client: Client = { ws, user, role: "leader", alive: true, ip: conn.ip };
+    const client: Client = { ws, user, role: "leader", alive: true, ip: conn.ip, compat: msg.compat };
     conn.client = client;
     conn.session = openSession(slot, password, client);
     console.log(`[${slot}] hosted by ${user.name}`);
@@ -220,11 +224,13 @@ function handlePreSession(ws: WebSocket, conn: Conn, msg: ClientMsg): void {
   }
   if (session.hasUser(user.id)) return refuse(ws, "id_in_use", "You are already in this session.");
   if (session.size >= MAX_MEMBERS) return refuse(ws, "session_full", `That session already has ${MAX_MEMBERS} people.`);
-  const client: Client = { ws, user, role: "member", alive: true, ip: conn.ip };
+  const client: Client = { ws, user, role: "member", alive: true, ip: conn.ip, compat: msg.compat };
+  const compatibilityError = session.admissionError(client);
+  if (compatibilityError) return refuse(ws, "compatibility", compatibilityError);
+  if (!session.add(client)) return refuse(ws, "compatibility", "This client cannot join that FL Studio session.");
   conn.client = client;
   conn.session = session;
   session.touch();
-  session.add(client);
   console.log(`[${slot}] ${user.name} joined; peers=${session.size}`);
 }
 

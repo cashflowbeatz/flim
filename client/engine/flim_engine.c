@@ -63,15 +63,8 @@
 // 25.2.3.5171 is the reference, found by hand. Other rows are mapped from it with dev/sigscan.py
 // (function signatures, call sites, function order, globals by their references, offset drift) and
 // then tested in FL.
-typedef struct {
-    const wchar_t *build;
-    int msgbox;            // FL's message box: 1 = wrapper MSGBOX (text, flags, cb) -> MSGBOX_CORE (text, flags, 3, cb);
-                           // 2 = no wrapper: MSGBOX is the core itself (text, flags, cb)
-    uint64_t REC, MUTE, MIXARR, MIXCNT, MAINFORM, SAVEPRESET, LOADPRESET, HASPLUGIN, GETPLUGIN, INTFCLEAR, ADDCHAN, DELCHAN, RESOLVER, CHANLIST, MOVECHAN, MOVEOBJ, MOVEARG, CHANFILT, PATARR, NOTEARR, NOTEDEL, NOTELOCK, GRIDREFRESH, FLPROJ, MAINOBJ, SETPROJ, SAVEPROJ, BUSYBEGIN, BUSYEND, PROJNAME, ARRS, ARRCUR, PLFORM, PLREFRESH, HINT, MIXNAME, MIXCOLOR, UIUPDATE, MIXOBJ, SETROUTE, ROUTEUPD, PATNAME, PATCOLOR, PATREFRESH, PLTRACK, MARKADD, MARKTYPE, DYNSETLEN, MARKREFRESH, MARKSORT, PATLENUPD, PATMARKS, SONGLOCK, MODIFIED, TSNUM, TSDEN, TSSET, TSCTLS, MSGBOX, MSGBOX_CORE, PRFORM, CURPAT;
-    uint32_t CH_SELECTED, CH_GRID, FORM_BUSY, PAT_STRIDE, PLFORM_PATS, PL_MARKSEL, ED_TICKSPERPX, ED_HSCROLL, PR_GRID, PL_GRID, GRID_VSCROLL;
-    uint32_t MIX_STRIDE, MIX_SLOTS_OFF, MIX_ROUTE;
-    uint32_t FLPROJ_LOAD_SLOT, PATOP_CLONE_SLOT, PATOP_DELETE_SLOT, PATOP_REARRANGE_SLOT, PATOP_EDIT_SLOT, PATOP_INSERT_SLOT, PATOP_SPLIT_SLOT;
-} FlBuild;
+#include "../common/flim_profile.h"
+#include "../common/flim_json.h"
 
 static const FlBuild k_flBuilds[] = {
     {   // FL Studio 2025 (25.2.3.5171): the reference
@@ -553,7 +546,7 @@ typedef void (*setenabled_t)(int track, int enabled);
 static void retry_pending(void);
 static void send_full_state(void);
 static void send_notes_full(void);
-static void notes_rebaseline(void);
+static void notes_rebaseline(int channels_only);
 static void proj_begin(const char *why);
 static void clips_rebaseline(void);
 static int  unit_before_send(const char *key, int isPat, int idx, const unsigned char *d, unsigned n);
@@ -568,13 +561,14 @@ static void plug_agreed_set(int unit, int a, int b, const unsigned char *d, size
 static void plug_agreed_reset(int channels, int fx);
 static void plug_revert_state(int unit, int a, int b);
 static void plug_undo(const char *key, int apply);
-static void meta_rebaseline(void);
+static void meta_rebaseline(int channels_only);
 static wchar_t *dstr_keep(const wchar_t *s);
 static int int_after(const char *p, const char *end, const char *key, int *out);
+static int compat_outgoing(const char *msg);
 static void ws_send(const char *msg);
 static void ws_send_samples(char *msg, const unsigned char *blob, size_t n);
 static void samples_rewrite(unsigned char **d, size_t *n);
-typedef enum { FLP_BUILD_INVALID = -1, FLP_BUILD_MATCH, FLP_BUILD_MISMATCH } FlpBuildCheck;
+typedef enum { FLP_BUILD_INVALID = -1, FLP_BUILD_MATCH, FLP_BUILD_MISMATCH, FLP_BUILD_FORWARD } FlpBuildCheck;
 static FlpBuildCheck flp_check_build(const unsigned char *d, size_t n, char *theirs, char *mine);
 
 typedef struct {
@@ -595,6 +589,14 @@ static setenabled_t g_setEnabled = NULL;
 static char  *g_flBase = NULL;
 static int    g_chanPlugN[MAX_CH];
 static int    g_fxN[MAX_MIX][MAX_FX_SLOTS];
+static CRITICAL_SECTION g_lifecycleLock;
+static volatile LONG g_netGen = 0;
+static __declspec(thread) LONG g_workGen;
+static __declspec(thread) int g_workBound;
+static LONG session_generation(void) { return g_workBound ? g_workGen : g_netGen; }
+static int session_current(void) { return !g_workBound || g_workGen == g_netGen; }
+static volatile LONG g_compatReady = 0, g_compatMixed = 0, g_compatFault = 0;
+static char g_hostFlBuild[32];
 static volatile LONG g_isLeader = 0;
 static volatile LONG g_patDepth = 0;   // a pattern op is running (main thread; its dialogs pump messages): scans wait
 static rec_t  g_rec = NULL;
@@ -716,6 +718,7 @@ enum { SNAP_BASELINE, SNAP_IF_DIFF, SNAP_FORCE, SNAP_ADD, SNAP_COLLECT };
 #define QCAP 16384
 typedef struct {
     int type;
+    LONG sessionGen;
     uint32_t id, v;          // T_PARAM
     LONG applyGen;          // local T_PARAM revert: reject after a remote preset load
     int unit, a, b;          // unit kind + (channel) or (track, slot)
@@ -862,10 +865,11 @@ static void b64enc(const unsigned char *in, int n, char *out) {
 
 // One text message, now. WinHTTP allows one send at a time per socket: g_sendLock serializes.
 // Everything else calls ws_send (samples section), which keeps ops behind ones waiting for samples.
-static void ws_send_now(const char *msg) {
+static void ws_send_now(const char *msg, LONG generation) {
     DWORD e = 0;
+    if (generation != g_netGen || !compat_outgoing(msg)) return;
     EnterCriticalSection(&g_sendLock);
-    if (g_ws) e = WinHttpWebSocketSend(g_ws, WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, (PVOID)msg, (DWORD)strlen(msg));
+    if (generation == g_netGen && g_ws) e = WinHttpWebSocketSend(g_ws, WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, (PVOID)msg, (DWORD)strlen(msg));
     LeaveCriticalSection(&g_sendLock);
     if (e) logmsg("send failed (%lu)", e);
 }
@@ -999,14 +1003,22 @@ out:
 }
 
 // ---------------- main-thread task queue ----------------
+static void discard_task(const QItem *it) {
+    if (it->type == T_LOAD || it->type == T_ADDCH) { if (it->path) { DeleteFileA(it->path); free(it->path); } }
+    else if (it->type == T_UNITREVERT || it->type == T_PROJLOAD || it->type == T_HINT || it->type == T_META || it->type == T_PATOP) free(it->path);
+    else if (it->type == T_ORDER || it->type == T_FXSYNC || it->type == T_NOTES || it->type == T_NOTESYNC || it->type == T_CLIPS) free(it->order);
+}
+
 static void enqueue(const QItem *it) {
+    LONG generation = session_generation();
+    if (generation != g_netGen) { discard_task(it); return; }
     EnterCriticalSection(&g_qLock);
     if (it->type == T_LOAD) {
         // a newer state for a unit that still has a load queued replaces it (latest wins)
         int i;
         for (i = g_qh; i != g_qt; i = (i + 1) % QCAP) {
             QItem *q = &g_q[i];
-            if (q->type == T_LOAD && q->unit == it->unit && q->a == it->a && q->b == it->b) {
+            if (q->sessionGen == generation && q->type == T_LOAD && q->unit == it->unit && q->a == it->a && q->b == it->b) {
                 DeleteFileA(q->path); free(q->path);
                 q->path = it->path; q->mode = it->mode;
                 LeaveCriticalSection(&g_qLock);
@@ -1016,8 +1028,8 @@ static void enqueue(const QItem *it) {
         }
     }
     int nt = (g_qt + 1) % QCAP;
-    if (nt != g_qh) { g_q[g_qt] = *it; g_qt = nt; }
-    else logmsg("queue full, dropped task type %d", it->type);
+    if (nt != g_qh) { g_q[g_qt] = *it; g_q[g_qt].sessionGen = generation; g_qt = nt; }
+    else { discard_task(it); logmsg("queue full, dropped task type %d", it->type); }
     LeaveCriticalSection(&g_qLock);
     if (g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0); // wake the main thread
 }
@@ -1365,7 +1377,7 @@ static void do_delch(const QItem *it) {
     __try { g_delChannel((unsigned)it->a, 0, DELCHAN_FLAGS); } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("chan.del faulted"); }
     units_shift_after_delete(it->a, n);
     known_from_list();
-    notes_rebaseline();
+    notes_rebaseline(1);
     logmsg("CHAN deleted index %d (remote)", it->a);
 }
 
@@ -1485,7 +1497,7 @@ static void do_order(const QItem *it) {
         InterlockedIncrement(&g_structGen);
     }
     known_from_list();
-    notes_rebaseline();
+    notes_rebaseline(1);
     logmsg("CHAN reordered (remote): %d moves, %s", steps, ok ? "order matches" : "ORDER MISMATCH");
 }
 
@@ -1554,7 +1566,7 @@ static void do_struct(void) {
             known_from_list();
         } else if (!deleted) logmsg("CHAN list changed in an unsupported way (count %d -> %d)", g_nChKnown, n);
         known_from_list();
-        notes_rebaseline();          // the peer replays the same structural change
+        notes_rebaseline(1);          // the peer replays the same structural change
         InterlockedIncrement(&g_structGen);
     }
     // plugin identity (add/replace) per channel and mixer slot
@@ -1693,11 +1705,11 @@ static unsigned char *notes_copy(int p, unsigned *n) {
 }
 
 // Take the current note state of every pattern as already known (no sends).
-static void notes_rebaseline(void) {
+static void notes_rebaseline(int channels_only) {
     int p;
     for (p = 1; p < MAX_PAT; p++) { g_patSeen[p] = g_patHash[p] = notes_hash(p); g_patChangedAt[p] = 0; }
     clips_rebaseline();          // audio clips reference channels: same structural events
-    meta_rebaseline();           // channel names/colors move with their channels
+    meta_rebaseline(channels_only); // channel changes must preserve unrelated pending metadata
     units_capture_all();         // and it is the state a lock conflict reverts to
 }
 
@@ -1840,7 +1852,7 @@ static void scan_notes(DWORD now) {
     int p, np = 0, i;
     if (now - last < NOTES_SCAN_MS || g_patDepth) return;
     last = now;
-    if (!g_notesReady) { notes_rebaseline(); g_notesReady = 1; return; }
+    if (!g_notesReady) { notes_rebaseline(0); g_notesReady = 1; return; }
     for (p = 1; p < MAX_PAT; p++) {
         uint64_t h = notes_hash(p);
         if (h != g_patSeen[p]) { g_patSeen[p] = h; g_patChangedAt[p] = now; }
@@ -2325,10 +2337,20 @@ static uint64_t meta_hash(int type, int i) {
     return h > 2 ? h : 3;
 }
 
-static void meta_rebaseline(void) {
+static void meta_rebaseline(int channels_only) {
     int t, i;
     for (t = 0; t < M_NTYPES; t++)
+        if (!channels_only || t == M_CHAN)
         for (i = 0; i < meta_cap(t); i++) { g_mSeen[t][i] = g_mHash[t][i] = meta_hash(t, i); g_mAt[t][i] = 0; }
+}
+
+static void meta_observe(DWORD now) {
+    int t, i;
+    for (t = 0; t < M_NTYPES; t++)
+        for (i = 0; i < meta_cap(t); i++) {
+            uint64_t h = meta_hash(t, i);
+            if (h != g_mSeen[t][i]) { g_mSeen[t][i] = h; g_mAt[t][i] = now; }
+        }
 }
 
 // After applying a remote change: FL's setters touch other entities too (a mixer rename
@@ -2439,11 +2461,10 @@ static void scan_meta(DWORD now) {
     int t, i, np = 0;
     if (now - last < META_SCAN_MS || g_patDepth) return;
     last = now;
-    if (!g_metaReady) { meta_rebaseline(); g_metaReady = 1; return; }
+    if (!g_metaReady) { meta_rebaseline(0); g_metaReady = 1; return; }
+    meta_observe(now);
     for (t = 0; t < M_NTYPES; t++)
         for (i = 0; i < meta_cap(t); i++) {
-            uint64_t h = meta_hash(t, i);
-            if (h != g_mSeen[t][i]) { g_mSeen[t][i] = h; g_mAt[t][i] = now; }
             if (!g_mAt[t][i] || now - g_mAt[t][i] < META_SETTLE_MS) continue;
             g_mAt[t][i] = 0;
             if (g_mSeen[t][i] == g_mHash[t][i]) continue;
@@ -2568,6 +2589,7 @@ static void do_meta(const QItem *it) {
     }
     if ((q = strstr(m, "\"c\":")) != NULL) { color = (uint32_t)strtoul(q + 4, NULL, 10); hasC = 1; }
     hasL = int_after(m, NULL, "\"l\":", &len);
+    meta_observe(now); // Preserve local edits that arrived before the next scanner tick.
     __try {
         switch (t) {
         case M_MIX: {
@@ -3456,7 +3478,8 @@ static volatile DWORD g_projSince = 0;
 static volatile DWORD g_closingUntil = 0;      // FL is closing: never broadcast what teardown does
 static volatile DWORD g_lastHookTick = 0;
 static CRITICAL_SECTION g_heldLock;            // member: ops that arrived during a project load
-static char **g_held = NULL;
+typedef struct { char *msg; LONG gen; } HeldMsg;
+static HeldMsg *g_held = NULL;
 static int    g_nheld = 0, g_capheld = 0;
 
 #define PROJ_SETTLE_MS  1500    // quiet time after FL's load before baselines are re-taken
@@ -3593,7 +3616,7 @@ static void proj_rebaseline(void) {
     for (i = 0; i < n; i++) g_chU[i].inst = plugin_inst(items[i]);
     for (t = 0; t < mix_count() && t < MAX_MIX; t++)
         for (s = 0; s < MAX_FX_SLOTS; s++) g_fxU[t][s].inst = plugin_inst(fx_obj(t, s));
-    notes_rebaseline();
+    notes_rebaseline(0);
     rescan();
     for (k = 0; k < g_nslot; k++) {
         EnterCriticalSection(&g_slotLock);
@@ -3659,7 +3682,7 @@ static void leader_project_loaded(void) {
                 wcscpy_s(cur, MAX_PATH, flim);
             } else logmsg("PROJECT could not create %S (error %lu); staying on the original", flim, GetLastError());
         }
-        d = read_file_w(cur, &n);
+        d = project_snapshot(&n);
         if (d) { send_project(d, n, base_name(cur)); free(d); return; }
     }
     d = project_snapshot(&n);
@@ -3673,14 +3696,14 @@ static void proj_end(void) {
 }
 
 static void replay_held(void) {
-    char **h;
+    HeldMsg *h;
     int n, i;
     EnterCriticalSection(&g_heldLock);
     h = g_held; n = g_nheld;
     g_held = NULL; g_nheld = g_capheld = 0;
     LeaveCriticalSection(&g_heldLock);
     if (n) logmsg("PROJECT replaying %d ops that arrived during the load", n);
-    for (i = 0; i < n; i++) { handle_msg(h[i]); free(h[i]); }
+    for (i = 0; i < n; i++) { if (h[i].gen == g_netGen) handle_msg(h[i].msg); free(h[i].msg); }
     free(h);
 }
 
@@ -3778,8 +3801,7 @@ static void on_project_load(const char *m) {
             net_disconnect();
             net_status(NET_ERR, "Host project build could not be verified");
             net_alert("The host sent an invalid project snapshot, or its FL Studio build could not be verified.\n\n"
-                      "flim left the session without loading it. Everyone in a session needs the same exact "
-                      "FL Studio build. Have the host save the project again before reconnecting.");
+                      "flim left the session without loading it. Have the host save the project again before reconnecting.");
             return;
         }
         if (check == FLP_BUILD_MISMATCH) {
@@ -3787,12 +3809,13 @@ static void on_project_load(const char *m) {
             free(d);
             net_disconnect();
             net_status(NET_ERR, "Host has another FL build (%s)", theirs);
-            net_alert("Everyone in a session needs the same FL Studio build.\n\n"
-                      "The host has %s, you have %s, so flim left the session. Use the same FL build, "
-                      "or have someone with your build host.", theirs, mine);
+            net_alert("This project was saved by FL %s; your FL is %s.\n\n"
+                      "Use the oldest FL build as the host. flim will not load a newer project into an older FL, "
+                      "or a project whose build differs from the negotiated host.", theirs, mine);
             return;
         }
     }
+    logmsg("PROJECT compatible with FL %S (host %s); original version event preserved", g_fl.build, g_hostFlBuild);
     samples_rewrite(&d, &n);
     if (name[0]) {
         DWORD k = GetEnvironmentVariableW(L"USERPROFILE", dir, MAX_PATH);
@@ -3806,7 +3829,7 @@ static void on_project_load(const char *m) {
     free(d);
     // supersede anything queued or held from the previous project
     EnterCriticalSection(&g_heldLock);
-    for (i = 0; i < g_nheld; i++) free(g_held[i]);
+    for (i = 0; i < g_nheld; i++) free(g_held[i].msg);
     g_nheld = 0;
     LeaveCriticalSection(&g_heldLock);
     InterlockedExchange(&g_projBusy, 1);
@@ -3825,8 +3848,9 @@ static void on_project_load(const char *m) {
 static int hold_if_loading(const char *m) {
     if (!g_projBusy || g_isLeader || !strstr(m, "\"t\":\"op\"")) return 0;
     EnterCriticalSection(&g_heldLock);
-    if (g_nheld == g_capheld) { g_capheld = g_capheld ? g_capheld * 2 : 64; g_held = (char **)realloc(g_held, sizeof(char *) * g_capheld); }
-    g_held[g_nheld++] = _strdup(m);
+    if (g_nheld == g_capheld) { g_capheld = g_capheld ? g_capheld * 2 : 64; g_held = (HeldMsg *)realloc(g_held, sizeof(HeldMsg) * g_capheld); }
+    g_held[g_nheld].gen = session_generation();
+    g_held[g_nheld++].msg = _strdup(m);
     LeaveCriticalSection(&g_heldLock);
     return 1;
 }
@@ -3939,7 +3963,7 @@ static uint64_t patop_common(int k, void *self, uint64_t a, uint64_t b, uint64_t
         ws_send(m);
         logmsg("PATTERN op sent: %.200s", m);
     }
-    notes_rebaseline();
+    notes_rebaseline(0);
     return r;
 }
 #define PATOP_HOOK(k) static uint64_t patop_hook##k(void *s, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e) \
@@ -4056,7 +4080,7 @@ static void do_patop(const QItem *it) {
     InterlockedDecrement(&g_patDepth);
     InterlockedExchange(&g_mbAuto, 0);
     InterlockedExchange(&g_patRemote, 0);
-    notes_rebaseline();
+    notes_rebaseline(0);
     logmsg("PATTERN op applied: slot 0x%x, %d patterns (first %d)", slot, n, pats[0]);
 }
 
@@ -4868,10 +4892,16 @@ static void units_capture_all(void) {
 }
 
 static void run_task(const QItem *it) {
+    LONG previousGen = g_workGen; int previousBound = g_workBound;
     int remoteHeavy = it->type == T_LOAD || it->type == T_ADDCH || it->type == T_DELCH || it->type == T_FXCLEAR;
+    EnterCriticalSection(&g_lifecycleLock);
+    if (it->sessionGen != g_netGen) { discard_task(it); LeaveCriticalSection(&g_lifecycleLock); return; }
+    g_workBound = 1; g_workGen = it->sessionGen;
     if (remoteHeavy) wguard_begin();
     run_task_inner(it);
     if (remoteHeavy) wguard_pass();
+    g_workGen = previousGen; g_workBound = previousBound;
+    LeaveCriticalSection(&g_lifecycleLock);
 }
 
 static void run_task_inner(const QItem *it) {
@@ -4915,10 +4945,9 @@ static void drain_queue_mainthread(void) {
         it = g_q[g_qh]; g_qh = (g_qh + 1) % QCAP;
         LeaveCriticalSection(&g_qLock);
 
-        if (g_projBusy && it.type != T_PROJLOAD && it.type != T_PROJDONE && it.type != T_PROJSNAP) {
-            if (it.type == T_LOAD || it.type == T_ADDCH) { if (it.path) { DeleteFileA(it.path); free(it.path); } }
-            else if (it.type == T_UNITREVERT || it.type == T_PROJLOAD || it.type == T_HINT || it.type == T_META || it.type == T_PATOP) free(it.path);
-            else if (it.type == T_ORDER || it.type == T_FXSYNC || it.type == T_NOTES || it.type == T_NOTESYNC || it.type == T_CLIPS) free(it.order);
+        if (it.sessionGen != g_netGen ||
+            (g_projBusy && it.type != T_PROJLOAD && it.type != T_PROJDONE && it.type != T_PROJSNAP)) {
+            discard_task(&it);
             continue;
         }
 
@@ -4931,7 +4960,8 @@ static void drain_queue_mainthread(void) {
             if (g_qh != g_qt && g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0);
             break;
         }
-        if (it.mode == 1 && !unit_poll_current(param_unit(it.id), it.applyGen, GetTickCount())) continue;
+        EnterCriticalSection(&g_lifecycleLock);
+        if (it.sessionGen != g_netGen || (it.mode == 1 && !unit_poll_current(param_unit(it.id), it.applyGen, GetTickCount()))) { LeaveCriticalSection(&g_lifecycleLock); continue; }
         Slot *s = slot_by_id(it.id);
         if (s) {
             // Record the value before writing so the poller sees no change, and bump
@@ -4944,6 +4974,7 @@ static void drain_queue_mainthread(void) {
         uint32_t r = write_value(it.id, it.v);
         if (s) InterlockedIncrement(&s->gen);
         logmsg("APPLY id=0x%08x v=%u ret=%u", it.id, it.v, r);
+        LeaveCriticalSection(&g_lifecycleLock);
     }
     InterlockedExchange(&g_inHook, 0);
 }
@@ -5112,6 +5143,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
     DWORD lastScan = GetTickCount(), lastBeat = GetTickCount();
     LONG seenGen = g_structGen;
     for (;;) {
+        g_workBound = 1; g_workGen = InterlockedCompareExchange(&g_netGen, 0, 0);
         DWORD now = GetTickCount();
         if (now - lastBeat > 30000) {
             int depth = (g_qt - g_qh + QCAP) % QCAP;
@@ -5168,7 +5200,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
                 s->lockedByMe = 0;
             }
         }
-        if (g_structGen != gen0) { Sleep(POLL_MS); continue; }   // indices moved mid-tick
+        if (!session_current() || g_structGen != gen0) { Sleep(POLL_MS); continue; }   // indices moved mid-tick
 
         // per-unit activity: remember it, and flag preset-sized bursts
         // (a huge tick is a project load, handled by the bulk guard below)
@@ -5273,16 +5305,18 @@ static void send_full_state(void) {
 // Inbound values for ids this FL doesn't have yet (still loading, plugin not
 // scanned yet) wait here and are retried after each rescan.
 #define MAX_PEND 8192
-typedef struct { uint32_t id, v; } Pend;
+typedef struct { uint32_t id, v; LONG sessionGen; } Pend;
 static Pend g_pend[MAX_PEND];
 static int  g_npend = 0;
 
 static void pend_put(uint32_t id, uint32_t v) {
     int i;
+    LONG gen = session_generation();
+    if (!session_current()) return;
     EnterCriticalSection(&g_qLock);
     for (i = 0; i < g_npend && g_pend[i].id != id; i++) {}
-    if (i < g_npend) g_pend[i].v = v;
-    else if (g_npend < MAX_PEND) { g_pend[g_npend].id = id; g_pend[g_npend].v = v; g_npend++; }
+    if (i < g_npend) { g_pend[i].v = v; g_pend[i].sessionGen = gen; }
+    else if (g_npend < MAX_PEND) { g_pend[g_npend].id = id; g_pend[g_npend].v = v; g_pend[g_npend].sessionGen = gen; g_npend++; }
     LeaveCriticalSection(&g_qLock);
 }
 
@@ -5298,9 +5332,12 @@ static int route_inbound(uint32_t id, uint32_t v, int onlyIfDiff) {
 
 static void retry_pending(void) {
     int i, kept = 0, applied = 0;
+    EnterCriticalSection(&g_lifecycleLock);
+    if (!session_current()) { LeaveCriticalSection(&g_lifecycleLock); return; }
     EnterCriticalSection(&g_qLock);
     for (i = 0; i < g_npend; i++) {
         Pend p = g_pend[i];
+        if (p.sessionGen != g_netGen) continue;
         if (add_slot(p.id)) {
             Slot *s = slot_by_id(p.id);
             if (!s || s->last != p.v) { enqueue_apply(p.id, p.v); applied++; }
@@ -5308,6 +5345,7 @@ static void retry_pending(void) {
     }
     g_npend = kept;
     LeaveCriticalSection(&g_qLock);
+    LeaveCriticalSection(&g_lifecycleLock);
     if (applied) logmsg("pending: applied %d, still waiting %d", applied, kept);
 }
 
@@ -5428,9 +5466,17 @@ static const struct { const char *code, *status, *alert; } k_netErrors[] = {
       "The session was closed after 5 minutes without activity.\n\nHost again to start a new one." },
 };
 
+static void compat_fail(const char *why);
+
 static void net_server_error(const char *m) {
     char pat[48];
     int i;
+    if (strstr(m, "\"code\":\"compatibility\"")) {
+        FlJson root = {m, strlen(m)}, value; char why[512];
+        if (!fj_get(root, "msg", &value) || !fj_text(value, why, sizeof(why)))
+            strcpy_s(why, sizeof(why), "The server refused an incompatible FL build or edit. Use the oldest build as host and update flim on all computers.");
+        compat_fail(why); return;
+    }
     uint32_t ms = 0;
     if ((jget_u32(m, "cooldown", &ms) || jget_u32(m, "retry_in", &ms)) && ms) g_coolUntil = GetTickCount64() + ms;
     if (strstr(m, "\"code\":\"time_up\"")) {
@@ -5469,8 +5515,91 @@ static void hosted_ready(void) {
     if (g_netBar) PostMessageW(g_netBar, WM_FLIM_HOSTED, 0, 0);
 }
 
+// Shut down the socket here; the receive thread owns queue/connection cleanup. Avoid
+// clearing queues while the outbox holds its lock or the FL main thread is applying an op.
+static void compat_fail(const char *why) {
+    EnterCriticalSection(&g_sendLock);
+    if (!session_current() || InterlockedCompareExchange(&g_compatFault, 1, 0)) { LeaveCriticalSection(&g_sendLock); return; }
+    InterlockedExchange(&g_compatReady, 0);
+    logmsg("COMPAT stopped session: %s", why);
+    strcpy_s(g_netErr, sizeof(g_netErr), "FL build compatibility: session stopped");
+    net_alert("%.280s\n\nflim stopped sharing. Your local changes remain in your FL project.", why);
+    if (g_ws) WinHttpWebSocketShutdown(g_ws, WINHTTP_WEB_SOCKET_POLICY_VIOLATION_CLOSE_STATUS, NULL, 0);
+    LeaveCriticalSection(&g_sendLock);
+}
+
+static int compat_accept(const char *m) {
+    FlJson root = {m, strlen(m)}, c, value;
+    char host[32], wire[64], mine[32]; int mixed;
+    if (!fj_get(root, "compatibility", &c) || !fj_get(c, "protocol", &value) || !fj_is(value, "1") ||
+        !fj_get(c, "host_fl", &value) || !fj_text(value, host, sizeof(host)) || !flim_version_family(host) ||
+        !fj_get(c, "wire", &value) || !fj_text(value, wire, sizeof(wire)) || strcmp(wire, FLIM_WIRE) ||
+        !fj_get(c, "mixed", &value) || (!fj_is(value, "true") && !fj_is(value, "false")) ||
+        !WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || !flim_version_family(mine)) {
+        compat_fail("This server cannot verify FL 25/26 compatibility. Update the relay and every participant's flim client.");
+        return 0;
+    }
+    mixed = fj_is(value, "true");
+    if (flim_version_cmp(host, mine) > 0 || (g_compatReady && strcmp(host, g_hostFlBuild)) ||
+        (!mixed && strcmp(host, mine))) {
+        compat_fail("The host must use the oldest FL build in the session. A newer host project cannot be loaded into an older FL.");
+        return 0;
+    }
+    if (!session_current()) return 0;
+    if (!g_compatReady) strcpy_s(g_hostFlBuild, sizeof(g_hostFlBuild), host);
+    InterlockedExchange(&g_compatMixed, mixed);
+    InterlockedExchange(&g_compatReady, 1);
+    logmsg("COMPAT protocol=1 host=%s local=%s mixed=%d wire=%s", host, mine, mixed, wire);
+    return 1;
+}
+
+static int compat_outgoing(const char *msg) {
+    FlJson root = {msg, strlen(msg)}, value, op; char type[24], kind[65], mine[32];
+    if (!fj_get(root, "t", &value) || !fj_text(value, type, sizeof(type))) return 0;
+    if (strcmp(type, "op")) return 1;
+    if (!g_compatReady || g_compatFault) return 0;
+    if (!fj_get(root, "op", &op) || !fj_get(op, "kind", &value) || !fj_text(value, kind, sizeof(kind))) return 0;
+    if (!g_compatMixed) return 1;
+    if (!flim_wire_known(kind)) { compat_fail("This edit has no agreed format for mixed FL builds."); return 0; }
+    if (flim_wire_opaque(kind)) {
+        if (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || strcmp(mine, g_hostFlBuild)) {
+            compat_fail("Plugin replacement, preset changes and adding channels from a newer FL cannot be shared with an older FL. Ask the oldest-build host to make that edit.");
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int compat_incoming(const char *msg) {
+    FlJson root = {msg, strlen(msg)}, value, op; char type[24], kind[65], source[32], mine[32];
+    if (!session_current() || g_compatFault || !fj_get(root, "t", &value) || !fj_text(value, type, sizeof(type))) return 0;
+    if (!strcmp(type, "welcome") || !strcmp(type, "presence")) return compat_accept(msg);
+    if (strcmp(type, "op")) return 1;
+    if (!g_compatReady || !fj_get(root, "source_fl", &value) || !fj_text(value, source, sizeof(source)) ||
+        !flim_version_family(source) || !fj_get(root, "op", &op) || !fj_get(op, "kind", &value) ||
+        !fj_text(value, kind, sizeof(kind))) {
+        compat_fail("The relay sent an edit without a verified sender build."); return 0;
+    }
+    if (g_compatMixed && (!flim_wire_known(kind) || (flim_wire_opaque(kind) && strcmp(source, g_hostFlBuild)))) {
+        compat_fail("The relay sent an edit that is incompatible with this mixed-build session."); return 0;
+    }
+    if (flim_wire_opaque(kind) &&
+        (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || flim_version_cmp(source, mine) > 0)) {
+        compat_fail("A newer FL project or plugin state cannot be loaded by this FL build."); return 0;
+    }
+    return 1;
+}
+
+static void handle_msg_inner(const char *m);
 static void handle_msg(const char *m) {
+    EnterCriticalSection(&g_lifecycleLock);
+    if (session_current()) handle_msg_inner(m);
+    LeaveCriticalSection(&g_lifecycleLock);
+}
+
+static void handle_msg_inner(const char *m) {
     uint32_t id, v;
+    if (!compat_incoming(m)) return;
     int unit, a, b;
     char *path;
     if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"project.load\"")) {
@@ -5615,8 +5744,8 @@ static void handle_msg(const char *m) {
 
 typedef struct { wchar_t *path; uint64_t size; FILETIME mt; char hex[65]; } HashEnt;
 typedef struct { wchar_t *from, *to; } PathMap;
-typedef struct OutItem { char *msg; unsigned char *blob; size_t blobn; struct OutItem *next; } OutItem;
-typedef struct InItem { char *msg; struct InItem *next; } InItem;
+typedef struct OutItem { LONG gen; char *msg; unsigned char *blob; size_t blobn; struct OutItem *next; } OutItem;
+typedef struct InItem { LONG gen; char *msg; struct InItem *next; } InItem;
 
 static HashEnt *g_hashes;  static int g_nhash, g_caphash;    // content hash per local file (path+size+mtime)
 static PathMap *g_pmap;    static int g_npmap, g_cappmap;    // receiver: path in peer data -> local file
@@ -5758,6 +5887,7 @@ static int find_by_hash(const char *hex, wchar_t *out, int cap) {
 static void map_set(const wchar_t *from, const wchar_t *to) {
     int i;
     EnterCriticalSection(&g_sampleLock);
+    if (!session_current()) { LeaveCriticalSection(&g_sampleLock); return; }
     for (i = 0; i < g_npmap && wcscmp(g_pmap[i].from, from) != 0; i++) {}
     if (!to) {
         if (i < g_npmap) { free(g_pmap[i].from); free(g_pmap[i].to); g_pmap[i] = g_pmap[--g_npmap]; }
@@ -6134,44 +6264,16 @@ static void samples_rewrite(unsigned char **d, size_t *n) {
     *n = c.n;
 }
 
-// ---- same FL build for everyone ----
-// An older FL asks "continue loading anyway?" in the middle of loading a project or preset saved
-// by a newer FL (25.1: its own Yes / No / Get latest version box), and "Yes" there, inside a load
-// flim makes, crashes FL (25.1.6.4997: a double free right after it; FL's own File > Open
-// survives). Marking the data with the older version doesn't help: FL then calls the newer data
-// invalid. Projects go leader -> member, but plugin / channel states go both ways, so a session
-// needs one FL build. The leader's project carries the leader's (FLP event 199): a member with a
-// different build doesn't load it, says why and leaves.
+// FL's older loader can crash on newer projects. A negotiated session may load a verified
+// older host's snapshot forward; the version event itself is never rewritten.
 #define EV_FL_VERSION 199
 
 // a.b.c.d compared numerically: <0, 0, >0
-static int ver_cmp(const char *x, const char *y) {
-    int i;
-    for (i = 0; i < 4; i++) {
-        long a = strtol(x, (char **)&x, 10), b = strtol(y, (char **)&y, 10);
-        if (a != b) return a < b ? -1 : 1;
-        if (*x == '.') x++;
-        if (*y == '.') y++;
-    }
-    return 0;
-}
+static int ver_cmp(const char *x, const char *y) { return flim_version_cmp(x, y); }
 
 typedef struct { char version[32]; int seen, invalid; } FlpVersion;
 
-static int valid_fl_version(const char *v) {
-    int part;
-    for (part = 0; part < 4; part++) {
-        unsigned int value = 0;
-        if (*v < '0' || *v > '9') return 0;
-        do {
-            value = value * 10 + (unsigned int)(*v++ - '0');
-            if (value > 65535) return 0;
-        } while (*v >= '0' && *v <= '9');
-        if (part < 3) { if (*v++ != '.') return 0; }
-        else if (*v) return 0;
-    }
-    return 1;
-}
+static int valid_fl_version(const char *v) { unsigned parts[4]; return flim_version_parse(v, parts); }
 
 static int version_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, size_t at, size_t end) {
     FlpVersion *state = (FlpVersion *)ctx;
@@ -6196,7 +6298,11 @@ static FlpBuildCheck flp_check_build(const unsigned char *d, size_t n, char *the
         return FLP_BUILD_INVALID;
     if (!d || !flp_walk(d, n, version_cb, &state) || !state.seen || state.invalid) return FLP_BUILD_INVALID;
     strcpy_s(theirs, 32, state.version);
-    return ver_cmp(theirs, mine) ? FLP_BUILD_MISMATCH : FLP_BUILD_MATCH;
+    if (g_compatReady && strcmp(theirs, g_hostFlBuild)) return FLP_BUILD_MISMATCH;
+    if (!ver_cmp(theirs, mine)) return FLP_BUILD_MATCH;
+    if (g_compatReady && flim_version_family(theirs) && flim_version_family(mine) &&
+        !strcmp(theirs, g_hostFlBuild) && ver_cmp(theirs, mine) < 0) return FLP_BUILD_FORWARD;
+    return FLP_BUILD_MISMATCH;
 }
 
 // ---- blob store (HTTP) ----
@@ -6214,7 +6320,7 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
     HANDLE f = INVALID_HANDLE_VALUE;
     size_t pl;
     EnterCriticalSection(&g_sampleLock);
-    if (!g_blobOn) { LeaveCriticalSection(&g_sampleLock); return 0; }
+    if (!session_current() || !g_blobOn) { LeaveCriticalSection(&g_sampleLock); return 0; }
     u = g_blobUrl;
     strcpy_s(key, sizeof(key), g_blobKey);
     LeaveCriticalSection(&g_sampleLock);
@@ -6412,9 +6518,9 @@ done:
     return out;
 }
 
-static void out_push(char *msg, unsigned char *blob, size_t n) {   // caller holds g_outLock
+static void out_push(char *msg, unsigned char *blob, size_t n, LONG generation) {   // caller holds g_outLock
     OutItem *it = (OutItem *)calloc(1, sizeof(OutItem));
-    it->msg = msg; it->blob = blob; it->blobn = n;
+    it->gen = generation; it->msg = msg; it->blob = blob; it->blobn = n;
     if (g_outTail) g_outTail->next = it; else g_outHead = it;
     g_outTail = it;
 }
@@ -6422,20 +6528,23 @@ static void out_push(char *msg, unsigned char *blob, size_t n) {   // caller hol
 // Every op goes through here: straight out, unless something is queued in the outbox
 // (an op waiting for its samples) -- then behind it, to keep the order.
 static void ws_send(const char *msg) {
+    LONG generation = session_generation();
+    if (generation != g_netGen || !compat_outgoing(msg)) return;
     EnterCriticalSection(&g_outLock);
-    if (g_outBusy || g_outHead) out_push(_strdup(msg), NULL, 0);
-    else ws_send_now(msg);
+    if (g_outBusy || g_outHead) out_push(_strdup(msg), NULL, 0, generation);
+    else ws_send_now(msg, generation);
     LeaveCriticalSection(&g_outLock);
 }
 
 // An op whose data (an .flp / .fst image) may reference samples. Takes ownership of msg.
 static void ws_send_samples(char *msg, const unsigned char *blob, size_t n) {
     unsigned char *copy;
-    if (!g_ws) { free(msg); return; }
+    LONG generation = session_generation();
+    if (generation != g_netGen || !g_ws || !compat_outgoing(msg)) { free(msg); return; }
     copy = (unsigned char *)malloc(n ? n : 1);
     if (n) memcpy(copy, blob, n);
     EnterCriticalSection(&g_outLock);
-    out_push(msg, copy, n);
+    out_push(msg, copy, n, generation);
     LeaveCriticalSection(&g_outLock);
     SetEvent(g_outEvt);
 }
@@ -6453,14 +6562,16 @@ static DWORD WINAPI outThread(LPVOID p) {
             if (!g_outHead) g_outTail = NULL;
             g_outBusy = 1;
             LeaveCriticalSection(&g_outLock);
-            if (it->blob) {
+            g_workBound = 1; g_workGen = it->gen;
+            if (session_current() && it->blob) {
                 char *m2 = samples_attach(it->msg, it->blob, it->blobn);
                 if (m2) { free(it->msg); it->msg = m2; }
             }
             EnterCriticalSection(&g_outLock);        // direct senders wait: nothing overtakes this one
-            ws_send_now(it->msg);
+            ws_send_now(it->msg, it->gen);
             LeaveCriticalSection(&g_outLock);
             free(it->msg); free(it->blob); free(it);
+            g_workBound = 0;
         }
     }
 }
@@ -6568,13 +6679,14 @@ static void samples_resolve(const char *m) {
 }
 
 // Every inbound message comes through here (receive thread).
-static void inbox_msg(const char *m) {
+static void inbox_msg(const char *m, LONG generation) {
     int queue;
+    if (generation != g_netGen) return;
     EnterCriticalSection(&g_inLock);
     queue = g_inBusy || g_inHead || strstr(m, "\"samples\":[") != NULL;
     if (queue) {
         InItem *it = (InItem *)calloc(1, sizeof(InItem));
-        it->msg = _strdup(m);
+        it->gen = generation; it->msg = _strdup(m);
         if (g_inTail) g_inTail->next = it; else g_inHead = it;
         g_inTail = it;
     }
@@ -6596,9 +6708,11 @@ static DWORD WINAPI inThread(LPVOID p) {
             if (!g_inHead) g_inTail = NULL;
             g_inBusy = 1;
             LeaveCriticalSection(&g_inLock);
-            if (strstr(it->msg, "\"samples\":[")) samples_resolve(it->msg);
-            handle_msg(it->msg);
+            g_workBound = 1; g_workGen = it->gen;
+            if (session_current() && strstr(it->msg, "\"samples\":[")) samples_resolve(it->msg);
+            if (session_current()) handle_msg(it->msg);
             free(it->msg); free(it);
+            g_workBound = 0;
         }
     }
 }
@@ -6616,6 +6730,7 @@ static void samples_key(const char *hex) {
     int i;
     for (i = 0; i < 64; i++) if (!isxdigit((unsigned char)hex[i])) return;
     EnterCriticalSection(&g_sampleLock);
+    if (!session_current()) { LeaveCriticalSection(&g_sampleLock); return; }
     memcpy(g_blobKey, hex, 64);
     g_blobKey[64] = 0;
     InterlockedExchange(&g_blobOn, 1);
@@ -6641,7 +6756,6 @@ static void samples_disconnected(void) {
 // receive loop. Each connect / disconnect bumps g_netGen; a thread whose generation is stale
 // (the user disconnected or reconnected meanwhile) no longer touches the status.
 typedef struct { LONG gen; int host; char url[512]; char pw[256]; char owner[256]; } NetReq;
-static volatile LONG g_netGen = 0;
 static volatile LONG g_pollStarted = 0;
 
 static void json_esc(const char *in, char *out, int cap) {
@@ -6657,6 +6771,17 @@ static void json_esc(const char *in, char *out, int cap) {
 
 // Forget every lock: they belong to the connection (the server drops them on disconnect).
 static void net_reset(void) {
+    int heldIndex;
+    EnterCriticalSection(&g_qLock);
+    g_npend = 0;
+    LeaveCriticalSection(&g_qLock);
+    EnterCriticalSection(&g_heldLock);
+    for (heldIndex = 0; heldIndex < g_nheld; heldIndex++) free(g_held[heldIndex].msg);
+    g_nheld = 0;
+    LeaveCriticalSection(&g_heldLock);
+    proj_end();
+    InterlockedExchange(&g_compatReady, 0);
+    InterlockedExchange(&g_compatMixed, 0);
     EnterCriticalSection(&g_netTextLock);
     g_nfocus = 0;                                         // where the others were: belongs to the session
     g_session[0] = 0;
@@ -6667,7 +6792,10 @@ static void net_reset(void) {
     int i;
     InterlockedExchange(&g_isLeader, 0);
     EnterCriticalSection(&g_slotLock);
-    for (i = 0; i < g_nslot; i++) { g_slots[i].lockedByMe = 0; g_slots[i].lockedByPeer = 0; }
+    for (i = 0; i < g_nslot; i++) {
+        g_slots[i].lockedByMe = g_slots[i].lockedByPeer = 0;
+        g_slots[i].hasUndo = 0; g_slots[i].undo = 0;
+    }
     LeaveCriticalSection(&g_slotLock);
     EnterCriticalSection(&g_ulockLock);
     for (i = 0; i < g_nulocks; i++) { g_ulocks[i].mine = g_ulocks[i].granted = g_ulocks[i].peer = 0; g_ulocks[i].owner[0] = 0; }
@@ -6679,9 +6807,10 @@ static DWORD WINAPI netThread(LPVOID p) {
     NetReq *r = (NetReq *)p;
     NetUrl u;
     NetConn c;
-    char err[200], name[2 * sizeof(g_myName)], pw[600], own[600], hello[2048], sess[4] = "";
+    char err[200], name[2 * sizeof(g_myName)], pw[600], own[600], hello[2048], sess[4] = "", localFl[32];
     unsigned char *buf = NULL;
     size_t cap = 0, len = 0;
+    g_workBound = 1; g_workGen = r->gen;
 
     if (r->host ? !parse_url(r->url, &u) : !parse_link(r->url, &u, sess)) {
         net_status(NET_ERR, r->host ? "Bad server address" : "Bad session link");
@@ -6694,9 +6823,11 @@ static DWORD WINAPI netThread(LPVOID p) {
         if (r->gen == g_netGen) net_status(NET_ERR, "Can't connect: %s", err);
         goto done;
     }
+    EnterCriticalSection(&g_lifecycleLock);
     EnterCriticalSection(&g_sendLock);
     if (r->gen != g_netGen) {                       // cancelled while connecting
         LeaveCriticalSection(&g_sendLock);
+        LeaveCriticalSection(&g_lifecycleLock);
         net_close_handles(&c);
         goto done;
     }
@@ -6710,23 +6841,28 @@ static DWORD WINAPI netThread(LPVOID p) {
     strcpy_s(g_hostPw, sizeof(g_hostPw), r->host ? r->pw : "");
     LeaveCriticalSection(&g_netTextLock);
     LeaveCriticalSection(&g_sendLock);
+    InterlockedExchange(&g_compatFault, 0);
     samples_connected(&u);
+    LeaveCriticalSection(&g_lifecycleLock);
     if (r->host) net_status(NET_CONNECTING, "Hosting on %s...", u.shown);
     else net_status(NET_CONNECTING, "Joining %s/%s...", u.shown, sess);
 
+    if (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, localFl, 32, NULL, NULL) || !flim_version_family(localFl)) {
+        compat_fail("This FL build has no compatible wire profile."); goto done;
+    }
     json_esc(g_myName, name, sizeof(name));
     json_esc(r->pw, pw, sizeof(pw));
     if (r->host) {
         json_esc(r->owner, own, sizeof(own));
         sprintf_s(hello, sizeof(hello),
-            "{\"t\":\"host\",\"password\":\"%s\"%s%s%s,\"user\":{\"id\":\"%s\",\"name\":\"%s\"}}",
-            pw, own[0] ? ",\"owner\":\"" : "", own, own[0] ? "\"" : "", g_myId, name);
+            "{\"t\":\"host\",\"password\":\"%s\"%s%s%s,\"user\":{\"id\":\"%s\",\"name\":\"%s\"},\"compat\":{\"protocol\":1,\"fl\":\"%s\",\"wire\":\"" FLIM_WIRE "\"}}",
+            pw, own[0] ? ",\"owner\":\"" : "", own, own[0] ? "\"" : "", g_myId, name, localFl);
         SecureZeroMemory(own, sizeof(own));
         logmsg("hosting on %s%s as %s (%s)", u.shown, r->owner[0] ? " (owner: session 00)" : "", g_myName, g_myId);
     } else {
         sprintf_s(hello, sizeof(hello),
-            "{\"t\":\"join\",\"session\":\"%s\",\"password\":\"%s\",\"user\":{\"id\":\"%s\",\"name\":\"%s\"}}",
-            sess, pw, g_myId, name);
+            "{\"t\":\"join\",\"session\":\"%s\",\"password\":\"%s\",\"user\":{\"id\":\"%s\",\"name\":\"%s\"},\"compat\":{\"protocol\":1,\"fl\":\"%s\",\"wire\":\"" FLIM_WIRE "\"}}",
+            sess, pw, g_myId, name, localFl);
         logmsg("joining session %s on %s as %s (%s)", sess, u.shown, g_myName, g_myId);
     }
     ws_send(hello);
@@ -6758,19 +6894,22 @@ static DWORD WINAPI netThread(LPVOID p) {
         len += got;
         if (type == WINHTTP_WEB_SOCKET_UTF8_FRAGMENT_BUFFER_TYPE || type == WINHTTP_WEB_SOCKET_BINARY_FRAGMENT_BUFFER_TYPE)
             continue;                               // more of the same message follows
-        if (type == WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE) { buf[len] = 0; inbox_msg((char *)buf); }
+        if (type == WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE) { buf[len] = 0; inbox_msg((char *)buf, r->gen); }
         len = 0;
     }
 
+    EnterCriticalSection(&g_lifecycleLock);
     EnterCriticalSection(&g_sendLock);
     if (g_ws == c.ws) g_ws = NULL;
-    LeaveCriticalSection(&g_sendLock);
     if (r->gen == g_netGen) {
+        InterlockedIncrement(&g_netGen);
+        LeaveCriticalSection(&g_sendLock);
         samples_disconnected();
         net_reset();
         if (g_netErr[0]) net_status(NET_ERR, "%s", g_netErr);
         else net_status(NET_ERR, "Connection to %s lost", u.shown);
-    }
+    } else LeaveCriticalSection(&g_sendLock);
+    LeaveCriticalSection(&g_lifecycleLock);
     net_close_handles(&c);
 done:
     free(buf);
@@ -6783,7 +6922,14 @@ static void net_connect(const char *url, const char *pw, int host, const char *o
     NetReq *r = (NetReq *)calloc(1, sizeof(NetReq));
     HANDLE th;
     if (!r) { net_status(NET_ERR, "Not enough memory to connect"); return; }
+    EnterCriticalSection(&g_lifecycleLock);
+    EnterCriticalSection(&g_sendLock);
     r->gen = InterlockedIncrement(&g_netGen);
+    if (g_ws) { WinHttpWebSocketShutdown(g_ws, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, NULL, 0); g_ws = NULL; }
+    InterlockedExchange(&g_compatReady, 0);
+    LeaveCriticalSection(&g_sendLock);
+    samples_disconnected(); net_reset();
+    LeaveCriticalSection(&g_lifecycleLock);
     r->host = host;
     strncpy_s(r->url, sizeof(r->url), url, _TRUNCATE);
     strncpy_s(r->pw, sizeof(r->pw), pw ? pw : "", _TRUNCATE);
@@ -6803,8 +6949,9 @@ static void net_connect(const char *url, const char *pw, int host, const char *o
 
 // Main thread. Sends a close frame; the net thread sees the server's reply and cleans up.
 static void net_disconnect(void) {
-    InterlockedIncrement(&g_netGen);
+    EnterCriticalSection(&g_lifecycleLock);
     EnterCriticalSection(&g_sendLock);
+    InterlockedIncrement(&g_netGen);
     if (g_ws) {
         WinHttpWebSocketShutdown(g_ws, WINHTTP_WEB_SOCKET_SUCCESS_CLOSE_STATUS, NULL, 0);
         g_ws = NULL;
@@ -6813,6 +6960,7 @@ static void net_disconnect(void) {
     samples_disconnected();
     net_reset();
     net_status(NET_OFF, "Not connected");
+    LeaveCriticalSection(&g_lifecycleLock);
 }
 
 // ---------------- splash ----------------
@@ -6908,9 +7056,14 @@ static DWORD WINAPI engineMain(LPVOID p) {
                            HIWORD(fi->dwFileVersionLS), LOWORD(fi->dwFileVersionLS));
             free(buf);
         }
-        for (i = 0; i < (int)(sizeof(k_flBuilds) / sizeof(k_flBuilds[0])); i++)
+        static wchar_t profileBuild[32];
+        wchar_t why[256];
+        int profile = flim_profile_load(g_hinst, path, ver, &g_fl, profileBuild, why, 256);
+        if (profile < 0) { logmsg("FL build %S: %S; flim stays off", ver, why); return 0; }
+        if (!profile) for (i = 0; i < (int)(sizeof(k_flBuilds) / sizeof(k_flBuilds[0])); i++)
             if (wcscmp(k_flBuilds[i].build, ver) == 0) g_fl = k_flBuilds[i];
-        if (!g_fl.build) { logmsg("FL build %S is not supported: flim stays off", ver); return 0; }
+        if (!g_fl.build) { logmsg("FL build %S needs a verified compatibility profile: flim stays off", ver); return 0; }
+        if (profile) logmsg("FL build %S: verified external compatibility profile (SHA-256 matched)", ver);
         logmsg("FL build %S: using its address table", ver);
     }
     g_flBase = (char *)fl;
@@ -7019,6 +7172,7 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved) {
         InitializeCriticalSection(&g_sendLock);
         InitializeCriticalSection(&g_slotLock);
         InitializeCriticalSection(&g_qLock);
+        InitializeCriticalSection(&g_lifecycleLock);
         InitializeCriticalSection(&g_heldLock);
         InitializeCriticalSection(&g_ulockLock);
         InitializeCriticalSection(&g_netTextLock);

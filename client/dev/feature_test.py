@@ -64,11 +64,12 @@ def arrangement(p):
 
 def t_params(a, b, v):
     REC = v.REC
+    vb = mk.V(b)
     a.call(REC, 0, 6400, 1 | 16)                                   # channel 1 volume
-    check('channel volume (REC)', lambda: b.call(REC, 0, 0, 2), 6400)
+    check('channel volume (REC)', lambda: b.call(vb.REC, 0, 0, 2), 6400)
     mid = 0x70000000 + (1 << 22) + 0x1fc0                          # mixer insert 1 volume
     a.call(REC, mid, 7000, 1 | 16)
-    check('mixer volume (REC)', lambda: b.call(REC, mid, 0, 2), 7000)
+    check('mixer volume (REC)', lambda: b.call(vb.REC, mid, 0, 2), 7000)
 
 
 def t_mixer(a, b, v):
@@ -179,12 +180,14 @@ def plugin_state(p, v, obj, tag):
     return open(path, 'rb').read()
 
 
-def shared_effect_state(data):
+def shared_effect_state(data, plugin_payload_only=False):
     """Keep sound and wrapper state; editor visibility belongs to each participant."""
     from flp import events
     if not data: raise ValueError('FL did not save the effect preset')
     out = []
     for event, value in events(data):
+        if plugin_payload_only and event not in (201, 212, 213):
+            continue
         if event == 212:
             if len(value) < 18: raise ValueError('Truncated effect wrapper')
             value = bytearray(value)
@@ -193,6 +196,8 @@ def shared_effect_state(data):
         out.append((event, value))
     if not any(e == 212 for e, _ in out) or not any(e == 213 for e, _ in out):
         raise ValueError('Effect wrapper/plugin data missing')
+    if plugin_payload_only and not any(e == 201 for e, _ in out):
+        raise ValueError('Effect plugin identity missing')
     return out
 
 
@@ -205,9 +210,10 @@ def t_fx(a, b, v):
     check('effect added in A', lambda: a.call(v.HASPLUGIN, slot(a, v)) & 0xff, 1, 3)
     check('effect plugin in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 1, 15)
     sa = plugin_state(a, v, slot(a, v), 'a')
-    check('effect state (local visibility excluded)',
-          lambda: shared_effect_state(plugin_state(b, vb, slot(b, vb), 'b')),
-          shared_effect_state(sa), 10)
+    mixed = v.build != vb.build
+    check('effect identity/wrapper/sound' if mixed else 'effect state (local visibility excluded)',
+          lambda: shared_effect_state(plugin_state(b, vb, slot(b, vb), 'b'), mixed),
+          shared_effect_state(sa, mixed), 10)
     a.call(v.LOADPRESET, a.mkstr(FL_DIRS[v.build] + r'\Data\System\(delete) effect.fst'), MASK_FX, slot(a, v), 0)
     check('effect removed in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 0, 15)
 
@@ -327,8 +333,22 @@ def t_sample(a, b, v, fst=None):
     a.call(v.DELCHAN, last, 0, 3)
 
 
+def t_returnpath(a, b, v):
+    """Member-to-host edits must use each process's own build-specific function addresses."""
+    vb = mk.V(b)
+    b.call(vb.REC, 0, 6100, 1 | 16)
+    check('member channel volume reaches host', lambda: a.call(v.REC, 0, 0, 2), 6100)
+    b.call(vb.PATNAME, 4, b.mkstr('Member pattern'))
+    check('member pattern name reaches host', lambda: mk.pats(a, 4)[3][1], 'Member pattern')
+    arr = b.call(vb.NOTEARR, 4, 1)
+    rec = b.alloc(24)
+    b.w(rec, struct.pack('<IHHIHHBBBBBBBB', 0, 0x4000, 0, 192, 67, 0, 120, 0, 64, 0, 64, 100, 128, 128))
+    b.cmd('call %x %d %d' % (b.q(b.q(arr) + 8), arr, rec))
+    check('member note reaches host', lambda: mk.pats(a, 4)[3][2], 1)
+
+
 STEPS = dict(params=t_params, mixer=t_mixer, channels=t_channels, patterns=t_patterns, song=t_song, patmarks=t_patmarks,
-             notedel=t_notedel, layout=t_layout, fx=t_fx, reorder=t_reorder, clips=t_clips, sample=t_sample)
+             notedel=t_notedel, layout=t_layout, fx=t_fx, reorder=t_reorder, clips=t_clips, sample=t_sample, returnpath=t_returnpath)
 
 if __name__ == '__main__':
     for pid in (A, B): fl.inject(pid)

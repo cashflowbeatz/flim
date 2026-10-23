@@ -44,7 +44,11 @@ int main(void) {
     QItem load = {0};
     Unit *u = &g_fxU[1][0];
     Slot *s;
+    InitializeCriticalSection(&g_lifecycleLock);
     InitializeCriticalSection(&g_qLock);
+    InitializeCriticalSection(&g_heldLock);
+    InitializeCriticalSection(&g_netTextLock);
+    InitializeCriticalSection(&g_ulockLock);
     InitializeCriticalSection(&g_slotLock);
     g_flBase = (char *)image;
     g_fl.MIXARR = IMG_BASE + 8; g_fl.MIXCNT = IMG_BASE + 16;
@@ -70,6 +74,24 @@ int main(void) {
     assert(writes == 1 && test_value == 43);
     enqueue_local_revert(id, 42, u->applyGen); drain_queue_mainthread();
     assert(writes == 2 && test_value == 42);
+    /* A reconnect invalidates both queued writes and work still owned by an old worker. */
+    enqueue_apply(id, 99);
+    InterlockedIncrement(&g_netGen);
+    drain_queue_mainthread();
+    assert(writes == 2 && test_value == 42);
+    g_workBound = 1; g_workGen = g_netGen - 1;
+    enqueue_apply(id, 100);
+    g_workBound = 0;
+    drain_queue_mainthread();
+    assert(writes == 2 && test_value == 42);
+    pend_put(id, 101);
+    InterlockedIncrement(&g_netGen);
+    retry_pending(); drain_queue_mainthread();
+    assert(g_npend == 0 && writes == 2 && test_value == 42);
+    pend_put(id, 44);
+    retry_pending(); drain_queue_mainthread();
+    assert(g_npend == 0 && writes == 3 && test_value == 44);
+    test_value = 42; writes = 2;
     fail_load = 1;
     do_load(&load);
     assert(u->applyGen == 4); /* An FL fault must not leave the unit permanently busy. */
@@ -79,6 +101,15 @@ int main(void) {
     u->suppressUntil = 15;
     assert(unit_applying(u, 0xfffffff0u));
     assert(!unit_applying(u, 15));
+    s->hasUndo = 1; s->undo = 123; s->lockedByMe = s->lockedByPeer = 1;
+    net_reset();
+    assert(!s->hasUndo && !s->undo && !s->lockedByMe && !s->lockedByPeer);
+    /* Channel deletion/reorder must not consume unrelated local metadata edits. */
+    g_mHash[M_PAT][4] = 10; g_mSeen[M_PAT][4] = 11; g_mAt[M_PAT][4] = 123;
+    g_mHash[M_MIX][1] = 20; g_mSeen[M_MIX][1] = 21; g_mAt[M_MIX][1] = 124;
+    meta_rebaseline(1);
+    assert(g_mHash[M_PAT][4] == 10 && g_mSeen[M_PAT][4] == 11 && g_mAt[M_PAT][4] == 123);
+    assert(g_mHash[M_MIX][1] == 20 && g_mSeen[M_MIX][1] == 21 && g_mAt[M_MIX][1] == 124);
     puts("Plugin apply guard, stale queue rejection, cooldown wrap, and fault cleanup: OK");
     return 0;
 }

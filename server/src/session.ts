@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { WebSocket } from "ws";
 import { LOCK_TTL_MS, Op, PeerInfo, Role, ServerMsg, UnitKey, UserInfo } from "./protocol";
+import { Compatibility, compareFlVersions, SessionCompatibility, validCompatibility } from "./compatibility";
 
 export interface Client {
   ws: WebSocket;
@@ -8,6 +9,7 @@ export interface Client {
   role: Role;
   alive: boolean; // for ping/pong liveness
   ip: string;
+  compat?: Compatibility;
 }
 
 interface Lock {
@@ -23,6 +25,11 @@ export function send(ws: WebSocket, msg: ServerMsg): void {
 export const MAX_BUFFERED_BYTES = 128 * 1024 * 1024;
 const MAX_LOCKS = 4096;
 const LEADER_ONLY_OPS = new Set(["project.load", "plug.full", "notes.full", "state.full"]);
+const SHARED_OPS = new Set([
+  "project.load", "plug.full", "notes.full", "state.full", "state.req", "plug.state", "chan.add", "chan.del",
+  "notes.set", "clips.set", "meta.set", "pat.op", "focus", "cur", "fx.clear", "chan.order", "param.set",
+]);
+const OPAQUE_OPS = new Set(["plug.state", "chan.add"]);
 
 export function sendSerialized(ws: WebSocket, data: string, bytes = Buffer.byteLength(data)): void {
   if (ws.readyState !== WebSocket.OPEN) return;
@@ -46,6 +53,8 @@ export class Session {
   private pwHash: Buffer;
   private ended = false;
   private clients = new Set<Client>();
+  private builds = new Map<Client, Compatibility | undefined>();
+  private readonly hostCompatibility: Compatibility | undefined;
   private locks = new Map<UnitKey, Lock>();
   private seq = 0;
   private flp: string | null = null;
@@ -53,6 +62,8 @@ export class Session {
   private onEmpty: () => void;
 
   constructor(code: string, password: string, leader: Client, endsAt: number | null, onEmpty: () => void) {
+    if (leader.compat !== undefined && !validCompatibility(leader.compat)) throw new Error("Invalid host compatibility descriptor");
+    this.hostCompatibility = leader.compat ? { ...leader.compat } : undefined;
     this.code = code;
     this.endsAt = endsAt;
     this.pwHash = sha(password);
@@ -85,6 +96,7 @@ export class Session {
       c.ws.close(4002, code);
     }
     this.clients.clear();
+    this.builds.clear();
     this.locks.clear();
     this.flp = null;
     this.finish();
@@ -101,7 +113,24 @@ export class Session {
   }
 
   private peers(): PeerInfo[] {
-    return [...this.clients].map((c) => ({ id: c.user.id, name: c.user.name, role: c.role }));
+    return [...this.clients].map((c) => ({ id: c.user.id, name: c.user.name, role: c.role,
+      ...(this.builds.get(c) ? { fl: this.builds.get(c)!.fl } : {}) }));
+  }
+
+  private compatibility(): SessionCompatibility | undefined {
+    const host = this.hostCompatibility;
+    return host ? { protocol: host.protocol, host_fl: host.fl, wire: host.wire,
+      mixed: [...this.builds.values()].some((build) => build!.fl !== host.fl) } : undefined;
+  }
+
+  admissionError(client: Client): string | null {
+    const build = client.compat, host = this.hostCompatibility;
+    if (build !== undefined && !validCompatibility(build)) return "Invalid FL compatibility descriptor.";
+    if (!!build !== !!host) return "Everyone must use the same compatibility-aware flim client. Update flim and start a new session.";
+    if (build && host && compareFlVersions(build.fl, host.fl) < 0) {
+      return `The host uses FL Studio ${host.fl}. The person with the oldest FL Studio build must host a mixed-build session.`;
+    }
+    return null;
   }
 
   private broadcast(msg: ServerMsg, except?: Client): void {
@@ -115,16 +144,29 @@ export class Session {
     return undefined;
   }
 
-  add(client: Client): void {
+  add(client: Client): boolean {
+    if (this.clients.has(client)) {
+      send(client.ws, { t: "error", code: "bad_request", msg: "This client is already in the session." });
+      return false;
+    }
+    const error = this.admissionError(client);
+    if (error) {
+      send(client.ws, { t: "error", code: "compatibility", msg: error });
+      return false;
+    }
     this.sweepLocks();
     this.clients.add(client);
+    this.builds.set(client, client.compat ? { ...client.compat } : undefined);
+    const compatibility = this.compatibility();
     send(client.ws, {
       t: "welcome", session: this.code, role: client.role, you: client.user, peers: this.peers(), blob: this.blobKey,
       ends_in: this.endsAt === null ? 0 : Math.max(1, this.endsAt - Date.now()),
+      ...(compatibility ? { compatibility } : {}),
     });
     send(client.ws, { t: "snapshot", flp: this.flp, epoch: this.epoch });
     send(client.ws, { t: "lock_state", locks: [...this.locks].map(([key, l]) => ({ key, owner: l.owner })) });
-    this.broadcast({ t: "presence", peers: this.peers() }, client);
+    this.broadcast({ t: "presence", peers: this.peers(), ...(compatibility ? { compatibility } : {}) }, client);
+    return true;
   }
 
   // Leader seeds the initial project blob (host upload).
@@ -151,8 +193,22 @@ export class Session {
   }
 
   relayOp(from: Client, op: Op): void {
+    if (!this.clients.has(from)) {
+      send(from.ws, { t: "error", code: "not_joined", msg: "Join this session before sending edits." });
+      return;
+    }
     if (LEADER_ONLY_OPS.has(op.kind) && from.user.id !== this.leaderId) {
       send(from.ws, { t: "error", code: "not_leader", msg: "Only the party leader can replace the project or full state." });
+      return;
+    }
+    const compatibility = this.compatibility();
+    const source = this.builds.get(from);
+    if (compatibility?.mixed && (!SHARED_OPS.has(op.kind) ||
+        (OPAQUE_OPS.has(op.kind) && source!.fl !== compatibility.host_fl))) {
+      send(from.ws, { t: "error", code: "compatibility",
+        msg: OPAQUE_OPS.has(op.kind)
+          ? "The host's FL Studio build must create channels and send plugin presets in a mixed-build session."
+          : "This operation is not supported in a mixed-build session." });
       return;
     }
     const now = Date.now();
@@ -167,7 +223,7 @@ export class Session {
     if (op.kind === "project.load") this.releaseProjectLocks();
     else if (op.kind !== "cur") this.touchLocksOf(from.user.id, now);
     this.seq += 1;
-    this.broadcast({ t: "op", seq: this.seq, from: from.user.id, op }, from);
+    this.broadcast({ t: "op", seq: this.seq, from: from.user.id, ...(source ? { source_fl: source.fl } : {}), op }, from);
   }
 
   acquire(from: Client, key: UnitKey): void {
@@ -228,6 +284,7 @@ export class Session {
     const client = this.clientOf(ws);
     if (!client) return;
     this.clients.delete(client);
+    this.builds.delete(client);
 
     // release this user's locks
     for (const [key, l] of this.locks) {
@@ -244,8 +301,10 @@ export class Session {
         c.ws.close(4000, "leader_left");
       }
       this.clients.clear();
+      this.builds.clear();
     } else {
-      this.broadcast({ t: "presence", peers: this.peers() });
+      const compatibility = this.compatibility();
+      this.broadcast({ t: "presence", peers: this.peers(), ...(compatibility ? { compatibility } : {}) });
     }
 
     if (this.clients.size === 0) {

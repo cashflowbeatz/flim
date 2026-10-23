@@ -6,21 +6,43 @@ and engine with `FLIM_EXPERIMENTAL_FL26=1` using `client/build.bat`; output goes
 
 | FL build | Validation in this fork |
 |---|---|
-| **26.1.7.5654** | Current installation: 31/31 runtime checks passed |
-| **25.2.5.5319** | Current installation: 31/31 runtime checks passed with the same client binaries |
+| **26.1.7.5654** | Historical 31/31 runtime checks; see current results below |
+| **25.2.5.5319** | Historical 31/31 runtime checks; see current results below |
 | 26.1.6.5639 | Table retained; earlier client passed 31/31 checks and 12/12 repeated effect checks before FL was updated |
 | 25.2.3.5171 | Original reference table retained; synthetic hook checks passed |
 | 25.1.6.4997 | Original upstream table retained; synthetic hook checks passed |
 
-**Everyone in a session must use the same exact FL build.** The receiver validates the full FLP
-stream and every version event before rewriting sample paths, writing a project or calling FL's
-loader. Missing, malformed and conflicting versions are rejected, as are valid different builds.
-The relay forwards opaque operations and does not negotiate FL project compatibility.
+Reviewed external profiles can extend FL 25/26 support without rebuilding. The client and relay
+negotiate a shared format before admission. The oldest build must host; project and preset states
+can only originate from people on that exact host build. Supported logical edits travel both ways.
+Unknown builds remain disabled until reviewed and tested. See [the policy](../../../BUILD-COMPATIBILITY.md).
 
-## Current builds
+## Current profile and mixed-session validation
+
+The installed FL 25.2.5.5319 host and FL 26.1.7.5654 member passed **34/34 feature checks** with the
+new profiles and negotiation, including supported parameter, name and note edits back to the host.
+[The new runtime record](mixed-profile-runtime.json) binds current binaries, profiles, server source
+and logs. Same-build and refusal checks are listed there as separate results.
+
+The mixed effect check compares plugin identity (201), wrapper state (212, local visibility excluded)
+and plugin payload (213). Other FL writer events differ across versions and are not claimed equal.
+Same-build checks still compare all events except local visibility.
+
+The same final binaries also passed **34/34 checks on each same-build pair**, FL 25 and FL 26.
+The native refusal checks confirmed the newer-member preset restriction and older-member admission
+refusal before project disclosure. Offline validation passed 57 Python tests, 56 Node tests,
+58 session checks, 14 native harnesses and 20 process-ownership checks. All matching owned runtime
+processes and the loopback relay were stopped; PID reuse was checked before lifecycle actions.
+
+An optional older-project direct-loader helper bypassed FL's normal open notification and did not
+establish end-to-end opening behavior. Its failed attempts are kept separate in the runtime record.
+The current snapshot-writer source path must not be read as a completed normal UI opening test.
+
+
+## Prior mapping and same-build evidence (2026-10-22)
 
 Both installed executables and engines passed Authenticode validation. Exact launcher identities,
-client hashes and runtime checks are in [the current runtime record](25-26-runtime.json).
+client hashes and runtime checks are in [the historical runtime record](25-26-runtime.json).
 
 | Engine | SHA-256 |
 |---|---|
@@ -45,7 +67,7 @@ offset `0x394`. The body contains 25,243 bytes, 799 basic blocks and 102 callees
 omitted 215 known edges and indirect calls remain partly unresolved. See [the Ghidra record](26.1.7.5654-ghidra.json)
 for exact target identity, analysis profile and coverage limits. Raw pseudocode stays local.
 
-Two disposable same-build pairs used one experimental client and a loopback-only relay. Both
+At the historical checkpoint, two disposable same-build pairs used one experimental client and a loopback-only relay. Both
 project joins returned `1` from FL's loader and settled before feature checks. All four test
 processes and the relay were stopped using their recorded PID, start time and executable path.
 Each build passed **31/31** checks covering the feature categories described below. Sample tests
@@ -135,7 +157,7 @@ through FL's configured shared-data root so downloaded samples can be shared aga
 - Mouse-arrow rendering, every pattern operation, automation editing and all lock-conflict
   combinations still need interactive testing.
 - Kontakt/compressed or encrypted embedded samples remain unsupported upstream behavior.
-- Cross-version FL project compatibility is not established; use the same exact FL build.
+- Current mixed-build coverage and directional preset/project restrictions are recorded above. Arbitrary cross-version format conversion is not implemented.
 - Docker image building and a deployed Cloudflare Tunnel were not tested here.
 - The original FL 25.2.3.5171 and 25.1.6.4997 tables were retained and passed synthetic hook
   checks. They were not rerun live after this update. Other patch builds need their own tables.

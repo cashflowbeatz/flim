@@ -7,6 +7,7 @@
 #include <shobjidl.h>
 #include <stdio.h>
 #include "../common/flim_config.h"
+#include "../common/flim_profile.h"
 #include "../common/flim_res.h"
 #pragma comment(lib, "version.lib")
 #pragma comment(lib, "ole32.lib")
@@ -78,6 +79,14 @@ static int known_build(const wchar_t *ver) {
     return 0;
 }
 
+static int supported_install(const wchar_t *dir, const wchar_t *ver, wchar_t *why, int cap) {
+    wchar_t engine[MAX_PATH * 2], build[32]; FlBuild row;
+    int result;
+    swprintf_s(engine, MAX_PATH * 2, L"%s\\FLEngine_x64.dll", dir);
+    result = flim_profile_load(NULL, engine, ver, &row, build, why, cap);
+    return result ? result : known_build(ver);
+}
+
 static void discover_fl_dir(wchar_t *out, int cap) {
     static const wchar_t *roots[] = { L"ProgramW6432", L"ProgramFiles", L"ProgramFiles(x86)" };
     WORD best[4] = { 0 };
@@ -102,7 +111,7 @@ static void discover_fl_dir(wchar_t *out, int cap) {
             if (!check_fl_dir(dir, why, 256, ver, 64)) continue;
             swprintf_s(engine, MAX_PATH * 2, L"%s\\FLEngine_x64.dll", dir);
             if (!file_version(engine, version)) continue;
-            known = known_build(ver);
+            known = supported_install(dir, ver, why, 256);
             for (j = 0; j < 4; j++) {
                 if (version[j] != best[j]) { newer = version[j] > best[j]; break; }
             }
@@ -208,13 +217,14 @@ static int launch(const wchar_t *flDir) {
 
     wcscpy_s(dirCopy, MAX_PATH * 2, flDir);
     if (!check_fl_dir(dirCopy, why, 256, ver, 64)) { fail_box(NULL, L"%s", why); return 1; }
-    known = known_build(ver);
+    known = supported_install(dirCopy, ver, why, 256);
+    if (known < 0) { fail_box(NULL, L"%s", why); return 1; }
     {
         if (!known) {
             wchar_t msg[768];
             swprintf_s(msg, 768,
-                L"This FL Studio is version %s. flim supports these builds: %s.\n\n"
-                L"This build has no verified address table. FL will start normally without loading flim.\n\n"
+                L"This FL Studio is version %s. Built-in profiles: %s.\n\n"
+                L"Additional FL 25/26 builds need a reviewed profile in flim\'s profiles folder. This engine has no verified profile. FL will start normally without flim.\n\n"
                 L"Start FL Studio anyway?",
                 ver, FLIM_FL_BUILDS_TEXT);
             if (MessageBoxW(NULL, msg, L"flim", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return 1;

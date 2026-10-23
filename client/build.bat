@@ -32,6 +32,12 @@ echo === compiling launcher exe ===
 cl /nologo /O2 /W3 %FLIM_BUILD_FLAGS% "%ROOT%launcher\flim.c" "%OUT%\flim.res" /Fe:"%OUT%\flim.exe" /Fo:"%OUT%\\" /link /SUBSYSTEM:WINDOWS /MANIFEST:EMBED user32.lib
 if errorlevel 1 exit /b 1
 
+if exist "%ROOT%profiles" (
+  if not exist "%OUT%\profiles" mkdir "%OUT%\profiles"
+  copy /Y "%ROOT%profiles\25.*.profile" "%OUT%\profiles\" >nul
+  if "%FLIM_EXPERIMENTAL_FL26%"=="1" copy /Y "%ROOT%profiles\26.*.profile" "%OUT%\profiles\" >nul
+)
+
 echo === done ===
 dir /b "%OUT%"
 popd

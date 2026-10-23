@@ -218,7 +218,7 @@ def strip_comments(text):
 
 class BuildTable:
     """Read literal designated initializers, rejecting syntax we cannot safely interpret."""
-    def __init__(self, src):
+    def __init__(self, src, include_experimental=False):
         self.path = Path(src).resolve()
         raw = self.path.read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
@@ -228,6 +228,11 @@ class BuildTable:
         if not base or int(base[1], 0) != IMG_BASE:
             raise ValueError(f'{self.path}: expected IMG_BASE {hex(IMG_BASE)}')
         struct = re.search(r'typedef\s+struct\s*\{([^{}]*)\}\s*FlBuild\s*;', clean, re.S)
+        if not struct and '#include "../common/flim_profile.h"' in clean:
+            header = self.path.parent / '../common/flim_profile.h'
+            if header.is_file():
+                struct = re.search(r'typedef\s+struct\s*\{([^{}]*)\}\s*FlBuild\s*;',
+                                   strip_comments(header.read_text(encoding='utf-8-sig')), re.S)
         table = re.search(r'\bk_flBuilds\s*\[\s*\]\s*=\s*\{(.*?)\}\s*;', clean, re.S)
         if not struct or not table:
             raise ValueError(f'{self.path}: missing FlBuild / k_flBuilds; no addresses parsed')
@@ -237,7 +242,7 @@ class BuildTable:
             raise ValueError(f'{self.path}: empty FlBuild address or offset declaration')
         expected = set(self.address_fields + self.offset_fields + ['build', 'msgbox'])
         self.builds = {}
-        body = self._reference_rows(table[1])
+        body = self._reference_rows(table[1], include_experimental)
         rows = re.findall(r'\{([^{}]*)\}', body, re.S)
         if re.sub(r'\{[^{}]*\}|[\s,]', '', body):
             raise ValueError(f'{self.path}: unsupported nested build initializer')
@@ -278,7 +283,7 @@ class BuildTable:
                 self.aliases[match[2]] = (match[1], match[3] or '')
 
     @staticmethod
-    def _reference_rows(body):
+    def _reference_rows(body, include_experimental=False):
         # Candidate-only rows must not silently become trusted porting references.
         active, experimental = [], False
         for line in body.splitlines():
@@ -289,7 +294,7 @@ class BuildTable:
                 experimental = False
             elif directive.startswith('#'):
                 raise ValueError(f'unsupported build-table preprocessor directive: {directive}')
-            elif not experimental:
+            elif not experimental or include_experimental:
                 active.append(line)
         if experimental:
             raise ValueError('unterminated experimental build block')

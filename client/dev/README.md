@@ -136,3 +136,16 @@ Notes on FL internals that took a while to find:
   form+0xafc / grid+0x3fc. The engine's "where everyone is pointing" section has the full mapping.
   `FLIM_CURSOR_NOCOVER=1` shows other people's arrows even when FL is behind other windows (tests).
 - Screenshots: capture FL's window with `PrintWindow`, never the screen (other apps may be on top).
+
+
+## Reviewed external compatibility profiles
+
+See [the profile workflow](../../BUILD-COMPATIBILITY.md#adding-another-build) for `profiles.py draft`
+and `profiles.py export`. A draft cannot run: every address, layout, calling convention, shared
+record format and runtime result needs review. Launcher and engine both require the exact engine
+SHA-256 and a complete profile. Signature matches and nearby build numbers are insufficient.
+
+`feature_test.py` includes member-to-host parameter, metadata and note checks. For mixed builds,
+set `FLIM_TEST_A` and `FLIM_TEST_B` explicitly, with the oldest supported build as A. New clients need
+the updated relay. Mixed effect checks compare identity, wrapper and plugin payload; same-build
+checks retain all saved events except editor visibility.

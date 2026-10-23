@@ -12,14 +12,30 @@ The fork now uses a separate verified address list for each supported build. The
 
 | FL Studio build | What was checked |
 |---|---|
-| **26.1.7.5654** | The currently installed FL 26 build. Full 31-check live feature runs passed before the latest server-only transfer changes; fresh sample-transfer checks also passed with the latest server. |
-| **25.2.5.5319** | The currently installed FL 25 build. The same client passed the corresponding full feature runs and fresh sample-transfer checks. |
+| **26.1.7.5654** | The currently installed FL 26 build. Current binary checks are recorded below; historical 31-check results are preserved separately. |
+| **25.2.5.5319** | The currently installed FL 25 build. Uses the same experimental client as FL 26, with its own verified profile. |
 | 26.1.6.5639 | Its support table is retained. Earlier live results exist, but that installation was replaced by the update and was not rerun with the newest client. |
 | 25.2.3.5171 and 25.1.6.4997 | Their support tables are retained and passed simulated hook-selection checks. These older builds were not rerun live after this update. |
 
 The experimental Windows client supports the builds listed above. The normal build contains the three FL 25 tables. Building with `FLIM_EXPERIMENTAL_FL26=1` includes FL 26; see [client build instructions](client/README.md).
 
-**Everyone in one session must use the same exact FL build.** For example, two people using 26.1.7.5654 can test together. One person using FL 26 and another using FL 25 cannot share that session. Backward support means you can choose a supported FL 25 installation; it does not make FL 26 project files compatible with FL 25. Future FL updates still need their own checks.
+**Different supported builds can now collaborate when the oldest build hosts.** The current
+FL 25 host and FL 26 member passed 34 mixed-session checks. Supported notes, knobs, naming,
+colors, routing and playlist changes can travel in both directions. Whole presets, channel
+creation must come from someone on the host's exact build. Project replacement remains host-only. A newer
+member making an incompatible change stops sharing, while keeping their local change.
+
+A small compatibility profile can add a reviewed FL 25/26 build without recompiling flim. The
+launcher and injected engine both check the exact engine fingerprint and require every address
+and layout field. A damaged or mismatched profile is refused. Unknown updates still need review
+and testing. See [build support and mixed sessions](BUILD-COMPATIBILITY.md).
+
+When the host opens an older project, flim uses that host's current project writer for the
+shared snapshot. It preserves the actual version stamp and refuses newer projects at older loaders.
+
+Delayed edits and unresolved parameter values are now discarded when their session ends, even
+if they finish after a reconnect. Local renames also survive unrelated channel deletion/reordering
+and remote metadata changes that arrive before the next scan.
 
 ## 2. Project files and presets are read more reliably
 
@@ -123,20 +139,23 @@ The optional Syncthing file companion was removed from the current source and pa
 
 | Checkpoint | Results | What this does and does not mean |
 |---|---|---|
-| Current server transfer changes, commit `a4ae092` | **44 Node tests and 58 session checks passed.** | Includes local HTTP and WebSocket tests for transfer races, cache limits, lock handling, session separation and existing behavior. |
-| Current server with the installed FL builds | **2 focused live checks passed per build**, on 26.1.7.5654 and 25.2.5.5319. | A receiver with local lookup disabled downloaded a fresh synthetic sample, and the saved channel state referenced matching cached bytes. This was not a new full feature run. |
+| Current profiles and negotiation | **34/34 feature checks passed in each of three pairs:** FL 25 hosting FL 26, FL 25 with FL 25, and FL 26 with FL 26. | Same final experimental client binaries and updated relay. Mixed checks include member edits back to the host. |
+| Current compatibility refusals | **Both native checks passed.** | A newer member's whole preset stopped sharing and left the older host unchanged. An older member was refused before receiving a newer host's project. |
+| Current offline checks | **57 Python tests, 56 Node tests, 58 session checks, 14 native harnesses and 20 ownership checks passed.** | Includes complete profile validation, an uncompiled synthetic build profile, malformed negotiation, stale-session work, stale undo cleanup and local rename regressions. |
+| Historical server transfer changes, commit `a4ae092` | **44 Node tests and 58 session checks passed.** | Includes local HTTP and WebSocket tests for transfer races, cache limits, lock handling, session separation and existing behavior. |
+| Historical transfer checkpoint with the installed FL builds | **2 focused live checks passed per build**, on 26.1.7.5654 and 25.2.5.5319. | A receiver with local lookup disabled downloaded a fresh synthetic sample, and the saved channel state referenced matching cached bytes. This was not a new full feature run. |
 | Previous server revision, commit `a8513d4` | **31 live feature checks passed on each current build; 36 Node tests, 58 session checks and 48 Python tests passed.** | Full feature coverage included project joins, parameters, mixer settings, channels, notes, markers, effects, reordering, clips and samples. |
 | Earlier client compatibility work | Both normal and experimental clients built; parser, launcher, buffer, preset-race and supported-build checks passed. | Detailed records identify the binaries and scope of each historical run. |
 
-Three selected transfer scenarios failed before the latest fixes and passed afterward. Tests deliberately control timing and file callbacks to reproduce rare races. This gives repeatable evidence; it does not mean every possible bug is fixed.
+Three selected transfer scenarios failed before the historical transfer fixes and passed afterward. Tests deliberately control timing and file callbacks to reproduce rare races. This gives repeatable evidence; it does not mean every possible bug is fixed.
 
-Live checks used disposable same-build FL pairs and loopback servers. All owned test processes were stopped by their saved identities. Installed FL files were not patched. Long sessions, broad third-party plugin coverage, remote-network performance, audio-render comparisons and Linux runtime behavior remain untested in the latest pass.
+Live checks used disposable same-build and mixed-build FL pairs with loopback servers. All owned test processes were stopped by their saved identities. Installed FL files were not patched. Long sessions, broad third-party plugin coverage, remote-network performance, audio-render comparisons and Linux runtime behavior remain untested in the latest pass.
 
-See the [compatibility record](client/dev/compatibility/README.md), [original source audit](server/AUDIT.txt), [project-lock audit](server/CONTINUED-AUDIT.txt) and [sample-transfer audit](server/TRANSFER-AUDIT.txt) for evidence and limitations. The JSON audit files preserve the state at their own checkpoints; their `pushed: false` entries describe when the tests were recorded, before GitHub publication.
+See the [current runtime record](client/dev/compatibility/mixed-profile-runtime.json), [compatibility evidence](client/dev/compatibility/README.md), [original source audit](server/AUDIT.txt), [project-lock audit](server/CONTINUED-AUDIT.txt) and [sample-transfer audit](server/TRANSFER-AUDIT.txt) for evidence and limitations. The JSON audit files preserve the state at their own checkpoints; their `pushed: false` entries describe when the tests were recorded, before GitHub publication.
 
 ## What you need to update
 
-1. **For FL 26 support and client fixes:** build the experimental Windows client and keep `flim.exe` and `flim_engine.dll` together. All participants need the same exact supported FL build and the required plugins.
+1. **For FL 26 support and client fixes:** build the experimental Windows client and keep `flim.exe` and `flim_engine.dll` together. Keep the `profiles` folder beside them. Update everyone's client and relay; the oldest supported build hosts, and all participants need the required plugins.
 2. **For the relay and sample-transfer fixes:** run the revised server from this branch. Updating only the client does not update an older server.
 3. **For friend testing:** start with project copies and a server you control. [Private testing instructions](server/DEPLOYMENT.md) explain the server and Cloudflare Tunnel setup.
 

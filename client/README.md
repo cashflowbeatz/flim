@@ -55,3 +55,8 @@ per supported build (25.2.3.5171, the reference found by hand, and 25.1.6.4997);
 row matching the loaded `FLEngine_x64.dll` and stays off without one. The launcher's list is
 `FLIM_FL_BUILDS` in `common/flim_config.h`. Adding a build: see "Adding an FL build" in
 [dev/README.md](dev/README.md).
+
+
+For reviewed external profiles and mixed FL 25/26 sessions, see [build support](../BUILD-COMPATIBILITY.md).
+Keep the generated `profiles` folder beside `flim.exe` and `flim_engine.dll`. New clients require
+the updated relay, and the oldest supported FL build must host.
