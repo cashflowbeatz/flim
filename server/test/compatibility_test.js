@@ -26,12 +26,12 @@ function fixture(hostFl = "25.2.5.5319", memberFl = "26.1.7.5654") {
   return { host, member, session };
 }
 
-test("only canonical complete FL 25/26 build descriptors select the shared wire", () => {
-  for (const fl of ["25.0.0.0", "25.2.5.5319", "26.1.7.5654", "26.65535.65535.65535"]) {
+test("only canonical complete FL 25/26 and exact reviewed FL24 descriptors select the shared wire", () => {
+  for (const fl of ["24.2.2.4597", "25.0.0.0", "25.2.5.5319", "26.1.7.5654", "26.65535.65535.65535"]) {
     assert.ok(flVersion(fl), fl);
     assert.equal(validCompatibility(compat(fl)), true, fl);
   }
-  for (const fl of ["24.1.2.3", "27.0.0.0", "025.2.5.5319", "25.02.5.5319", "25.2.5.05319",
+  for (const fl of ["24.1.2.3", "24.2.2.4596", "24.2.2.4598", "24.02.2.4597", "27.0.0.0", "025.2.5.5319", "25.02.5.5319", "25.2.5.05319",
     "25.2.5", "25.2.5.5319.1", "25.2.5.5319\n", "25.2.5.5319 ", "25.2.5.65536", "26.1.0.-1",
     "26.1e0.0.1", "26.1.0.+1", "26.1.0.１", "26.1.0.1x", null, 26]) {
     assert.equal(validCompatibility(compat(fl)), false, JSON.stringify(fl));
@@ -46,6 +46,9 @@ test("only canonical complete FL 25/26 build descriptors select the shared wire"
 
 test("session admission keeps the host on the oldest build and never sends a rejected client its snapshot", () => {
   for (const [hostFl, memberFl, accepted] of [
+    ["24.2.2.4597", "24.2.2.4597", true], ["24.2.2.4597", "25.2.5.5319", true],
+    ["24.2.2.4597", "26.1.7.5654", true], ["25.2.5.5319", "24.2.2.4597", false],
+    ["26.1.7.5654", "24.2.2.4597", false],
     ["25.2.5.5319", "25.2.5.5319", true], ["25.2.5.5319", "26.1.7.5654", true],
     ["25.2.5.5319", "25.10.0.1", true], ["26.1.7.5654", "25.2.5.5319", false],
     ["26.1.7.5654", "26.1.6.5639", false], ["25.2.5.5319", "25.2.3.5171", false],

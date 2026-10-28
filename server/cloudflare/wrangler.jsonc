@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flim-relay",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-07-30",
+  "workers_dev": true,
+  "vars": {
+    "R2_STORAGE_LIMIT_BYTES": "536870912",
+    "R2_MONTHLY_UPLOAD_LIMIT": "20000",
+    "R2_MONTHLY_DOWNLOAD_LIMIT": "100000"
+  },
+  "durable_objects": { "bindings": [{ "name": "ROOM", "class_name": "FlimRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FlimRoom"] }],
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "flim-private-files" }],
+  "observability": { "enabled": false }
+}

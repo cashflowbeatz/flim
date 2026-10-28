@@ -1,0 +1,21 @@
+{
+  "name": "flim-cloudflare",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/worker.ts --bundle --format=esm --external:cloudflare:workers --outfile=dist/worker.mjs",
+    "check": "tsc --noEmit",
+    "test": "npm run check && npm run build && node --test test/*.test.mjs",
+    "dev": "wrangler dev --ip 127.0.0.1 --port 49938",
+    "usage": "node scripts/usage.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261023.1",
+    "esbuild": "0.25.12",
+    "miniflare": "4.20260730.0",
+    "typescript": "5.9.3",
+    "wrangler": "4.152.0"
+  }
+}

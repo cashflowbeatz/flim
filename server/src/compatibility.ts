@@ -17,7 +17,8 @@ export interface SessionCompatibility {
 export function flVersion(value: unknown): number[] | null {
   if (typeof value !== "string" || !/^(?:0|[1-9]\d{0,4})(?:\.(?:0|[1-9]\d{0,4})){3}$/.test(value)) return null;
   const parts = value.split(".").map(Number);
-  return parts.join(".") === value && (parts[0] === 25 || parts[0] === 26) && parts.every((part) => part <= 65535) ? parts : null;
+  return parts.join(".") === value && (parts[0] === 25 || parts[0] === 26 || value === "24.2.2.4597") &&
+    parts.every((part) => part <= 65535) ? parts : null;
 }
 
 export function validCompatibility(value: unknown): value is Compatibility {
