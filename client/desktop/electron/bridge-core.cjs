@@ -141,7 +141,7 @@ function roomStatus(data, code) {
 class DesktopBridge {
   constructor({ nativeDir, preferencesFile, platform = process.platform, environment = process.env,
     fetch = globalThis.fetch, run = execute, io = fs, chooseDirectory, copyText, readText = () => '', now = Date.now,
-    record = () => {}, nativeLogDir = '', diagnosticsStatus = () => false, fileTransfers,
+    record = () => {}, nativeLogDir = '', diagnosticsStatus = () => false, fileTransfers, peerFiles,
     defaultSampleDirectory = path.join(environment.USERPROFILE || path.dirname(preferencesFile), 'Documents', 'flim', 'samples'), chooseSampleDirectory }) {
     this.nativeDir = path.resolve(nativeDir);
     this.preferencesFile = preferencesFile;
@@ -156,6 +156,7 @@ class DesktopBridge {
     this.now = now;
     this.record = record; this.nativeLogDir = nativeLogDir; this.diagnosticsStatus = diagnosticsStatus;
     this.fileTransfers = fileTransfers;
+    this.peerFiles = peerFiles;
     this.defaultSampleDirectory = defaultSampleDirectory;
     this.chooseSampleDirectory = chooseSampleDirectory;
     this.sampleDirectory = ''; this.sampleLocationError = '';
@@ -495,6 +496,9 @@ class DesktopBridge {
       this.checkReservation(room);
       this.log('launch_started', details);
       room.sampleDirectory = sampleDirectory;
+      let peerSession;
+      try {peerSession = await this.peerFiles?.prepare(room.code); if (peerSession) Object.assign(env, peerSession.env);}
+      catch {this.log('peer_unavailable', {message: 'Direct file setup unavailable; relay transfers remain enabled.'});}
       try {
         // The native launcher owns its injection timeout and cleans up suspended FL on failure.
         const output = await this.run(path.join(this.nativeDir, 'flim.exe'), args,
@@ -502,8 +506,10 @@ class DesktopBridge {
         let result; try { result = JSON.parse(output); } catch { throw new BridgeError('The launcher did not confirm that FL Studio opened. Check FL Studio before trying again.', 'native_uncertain'); }
         if (!result || Array.isArray(result) || result.launched !== true || !Number.isSafeInteger(result.pid) || result.pid < 1 || result.pid > 0xffffffff) throw new BridgeError('The launcher did not confirm that FL Studio opened. Check FL Studio before trying again.', 'native_uncertain');
         room.state = 'launched';
+        peerSession?.launched(result.pid);
         this.log('launch_confirmed', {...details, pid: result.pid, durationMs: Math.max(0, this.now() - started)}); this.logStatus();
       } catch (error) {
+        if (error instanceof BridgeError && error.code === 'native_failed') peerSession?.cancel();
         this.log('launch_failed', {...details, code: error?.code, message: error?.message, durationMs: Math.max(0, this.now() - started)});
         if (!(error instanceof BridgeError) || error.code !== 'native_failed') room.state = 'uncertain';
         throw error;

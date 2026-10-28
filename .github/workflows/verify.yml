@@ -1,7 +1,7 @@
 name: Verify source
 on:
   push:
-    branches: [main, fl26-compatibility-audit]
+    branches: [main, fl26-compatibility-audit, cloudflare-peer-files]
   pull_request:
 permissions:
   contents: read
@@ -21,6 +21,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - run: npm ci
+        working-directory: server/cloudflare
+      - run: npm run build
+        working-directory: server/cloudflare
+      - run: npm run test:peer
   relays:
     runs-on: ubuntu-latest
     strategy:
@@ -42,6 +47,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Build deterministic native harnesses
         shell: cmd
         run: client\dev\harness\build.bat
@@ -54,3 +62,12 @@ jobs:
             & ".\t_$name.exe"
             if ($LASTEXITCODE) { throw "Native harness failed: $name" }
           }
+      - name: Build native file-sync loopback harness
+        shell: cmd
+        run: client\dev\harness\build-file-sync.bat
+      - name: Verify native HTTP transfers and file rewriting
+        working-directory: client/dev
+        run: |
+          node transfer_test.cjs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node file_sync_test.cjs

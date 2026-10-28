@@ -12,7 +12,7 @@ details** shows the exact build and folder. Short labels do not bypass native ch
 | FL Studio 25 | **25.2.5.5319** | Supported, with the reviewed build profile. |
 | FL Studio 26 | **26.1.7.5654** | Supported in the complete Rooms package, with the reviewed build profile. |
 
-These are the reviewed installations for release 0.2.23, not a promise of support for the latest
+These are the reviewed installations for release 0.2.25, not a promise of support for the latest
 version Image-Line may release later. Retained mappings for **25.1.6.4997**, **25.2.3.5171** and
 **26.1.6.5639** have earlier/static evidence; they were not rerun live in the latest sweep.
 Unknown patches need their own mapping, identity review and tests. Use **Check again** after an

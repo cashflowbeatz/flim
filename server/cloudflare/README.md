@@ -4,6 +4,11 @@ Workers handle requests, a SQLite Durable Object orders edits/manages rooms and 
 private R2 bucket holds samples and large payloads. Participants do not run server software.
 Node.js is only needed for development/deployment.
 
+Rooms 0.2.25 adds authenticated WebRTC signaling at `/peer/<room>`. Direct sample bytes go
+between the participants; Cloudflare still orders edits and R2 retains the initial sample
+backup and fallback download. No TURN subscription is configured. [Direct file architecture,
+limits and tests](../../docs/PEER-FILES.md).
+
 Current clients negotiate [note CRDTs](NOTES-CRDT.md) and portable sync. Any supported FL24/25/26
 build may host; older receivers use notes/basic controls instead of loading newer opaque data.
 Exact per-build checks remain. [Compatibility](../../BUILD-COMPATIBILITY.md).
@@ -21,7 +26,7 @@ The current local source restores missing reservation/cleanup alarms when the Du
 and schedules another cleanup attempt after an R2 deletion fails. A failed deletion retains its file
 reservation until deletion succeeds. If a download finds its R2 object missing, it removes the stale
 tracking row so a subsequent missing-file lookup can request a new upload. Monthly transfer attempts
-remain counted and the shared storage cutoff is unchanged. The current 73-test emulator suite
+remain counted and the shared storage cutoff is unchanged. The current 76-test emulator suite
 also covers scoped pending-room cancellation, authentication and its race with host admission.
 
 These changes are included in the October 27 deployment. Live R2 checks verify private access,

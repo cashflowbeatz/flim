@@ -13,7 +13,7 @@ newer host, it shares **notes and basic controls** in a protected session worksp
 features it cannot read stay unavailable. [See the compatibility table](BUILD-COMPATIBILITY.md).
 
 <p align="center">
-  <a href="https://github.com/cashflowbeatz/flim/releases/tag/rooms-v0.2.23"><strong>Download Rooms for Windows</strong></a>
+  <a href="https://github.com/cashflowbeatz/flim/releases/tag/rooms-v0.2.25"><strong>Download Rooms for Windows</strong></a>
   · <a href="docs/QUICKSTART.md">Start your first room</a>
   · <a href="docs/FEATURES.md">Explore the features</a>
   · <a href="docs/TROUBLESHOOTING.md">Get help</a>
@@ -28,7 +28,7 @@ features it cannot read stay unavailable. [See the compatibility table](BUILD-CO
 ## Start making music
 
 Each person needs **Windows 10/11 x64**, their own supported FL Studio installation and the
-complete **flim-rooms-0.2.23-win64.exe** from the release above. The portable executable opens
+complete **flim-rooms-0.2.25-win64.exe** from the release above. The portable executable opens
 the app and extracts its bundled native client automatically. Participants need no Cloudflare
 account, Node.js, VPN or separate server software.
 
@@ -67,30 +67,34 @@ Open **Files →** whenever you need it, then hide it to return to the compact r
 files are reused by content hash. Hidden status panels stop polling; native transfers continue
 while FL stays open. No Syncthing process or whole sample-pack mirroring is required.
 
-## What's new in 0.2.23
+## What's new in 0.2.24 and 0.2.25
 
-This publication includes the complete Rooms application and the accumulated compatibility,
-relay, sample-sharing, UI and recovery work. The latest pass adds **39 further native fixes**.
+**0.2.25 adds direct sample downloads between participants.** Cloudflare keeps room permissions,
+edit ordering and note coordination. When a direct connection is unavailable, the file downloads
+from its verified R2 backup automatically. Both participants need 0.2.25 for the direct path;
+older app clients continue using R2. [How direct files work](docs/PEER-FILES.md).
 
-- **More reliable shared editing:** complete control snapshots validate before applying; queued
-  preset updates retain their originating FL version; malformed names and locks cannot target another item.
-- **Less work while editing:** repeated waiting knob updates coalesce; native control batches yield
-  after 64 writes or a 4 ms elapsed check; unchanged note merges avoid unnecessary allocations.
-- **Clearer failure handling:** refused native note/clip insertions are detected, failed metadata
-  changes are not marked synced, and optional plugin recovery waits when the queue is busy.
-- **Better local plugin matching:** equivalent Windows paths match correctly; zero or ambiguous
-  VST identities are rejected instead of guessed.
+- **0.2.24 brings 34 reliability fixes:** large multi-pattern note edits, complete snapshot
+  preparation, native note/playlist verification, fewer unchanged applies and safer shared-file
+  handling. [All 34 explained](client/desktop/QA-0.2.24.md).
+- **Background operation:** closing the controls leaves the file service running while its
+  launched FL session is alive. Reopening the app restores the controls.
+- **Bounded transfers and automatic recovery:** changed sources, lost peers, invalid checksums
+  and occupied direct slots fall back to R2. The receiver verifies length and SHA-256.
+- **Same FL24/25/26 support:** no oldest-host requirement, and no change to the exact-build
+  safety checks. This release does not add support for unreviewed patches.
 
-[Release notes](docs/releases/0.2.23.md) · [All 39 fixes and verification](client/desktop/QA-0.2.23.md)
+[0.2.25 release notes](docs/releases/0.2.25.md) · [0.2.24 release notes](docs/releases/0.2.24.md)
 · [Full change history](CHANGES.md)
 
 ## How thoroughly is it checked?
 
-The 0.2.23 validation record includes **31 native harness executables**, **177 desktop backend
-tests**, **127 room/UI checks**, **68 Files/UI checks** and **73 local Cloudflare tests**.
+The 0.2.25 validation record includes **32 native harness executables**, **193 desktop backend
+tests**, **127 room/UI checks**, **68 Files/UI checks** and **76 local Cloudflare tests**.
 Native fixtures cover all nine host/member combinations of the three reviewed builds. Transfer
-loopbacks, real Electron folder selection/window recovery, and portable packaging/startup were
-also checked. Earlier live FL results are recorded separately in the versioned QA reports.
+loopbacks, actual Electron WebRTC file bytes, real Electron folder selection/window recovery,
+and portable packaging/startup were also checked. Earlier live FL results are recorded separately
+in the versioned QA reports.
 
 These results do not establish every FL patch or VST version. There was no fresh two-computer,
 physical MIDI keyboard or live drag/drop session in the latest pass. See the
@@ -99,7 +103,8 @@ physical MIDI keyboard or live drag/drop session in the latest pass. See the
 ## Hosting and project safety
 
 The current app connects to this fork's community relay. Its Cloudflare Worker and Durable
-Object coordinate rooms; private R2 storage carries samples and large messages. There is no
+Object coordinate rooms; direct peers can carry samples, with private R2 storage providing sample
+backups and large messages. Initial R2 uploads are retained. There is no
 15-minute application session cutoff or daily room-creation quota. Capacity, burst protection,
 Cloudflare platform limits and R2 usage guards still apply. This is not unlimited free hosting.
 [Run your own Cloudflare relay](server/cloudflare/README.md) or inspect the

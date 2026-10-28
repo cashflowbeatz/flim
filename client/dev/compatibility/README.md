@@ -1,5 +1,18 @@
 # FL 24–26 compatibility validation
 
+## Desktop 0.2.25 and 0.2.24: 2026-10-28
+
+[0.2.25 manifest](desktop-0.2.25-2026-10-28.json) records the direct-file implementation,
+complete executable/native hashes, 193 desktop tests, 32 native harnesses, 195 UI checks,
+76 local Worker tests and real Electron WebRTC bytes through local and deployed signaling.
+The direct-byte tests use two launch sessions on one computer. Remote NAT, physical FL/MIDI,
+new FL patches and the earlier FL24 recovery-save stall are not resolved by those fixtures.
+[0.2.25 QA](../../desktop/QA-0.2.25.md).
+
+[0.2.24 manifest](desktop-0.2.24-2026-10-28.json) and [34-fix report](../../desktop/QA-0.2.24.md)
+retain the preceding local validation and its original publication status. Both builds are
+published together in this follow-up. Reviewed FL profiles remain unchanged.
+
 ## Desktop 0.2.23: 2026-10-28
 
 [The manifest](desktop-0.2.23-2026-10-28.json) identifies the rebuilt complete portable app and

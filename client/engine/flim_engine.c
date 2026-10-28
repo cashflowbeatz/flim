@@ -877,7 +877,7 @@ static void log_path_init(void) {
 static int log_has_credentials(const char *text) {
     static const char *const keys[] = {
         "\"password\"", "\"blob\"", "\"owner\"", "\"token\"", "\"authorization\"",
-        "\"hostToken\"", "\"joinToken\"", "\"host_token\"", "\"join_token\"", "\"blobKey\"",
+        "\"hostToken\"", "\"joinToken\"", "\"host_token\"", "\"join_token\"", "\"blobKey\"", "\"file_peer\"",
         "password=", "password:", "owner_key=", "owner_key:", "token=", "token:", "bearer "
     };
     const char *p; size_t k;
@@ -3799,6 +3799,7 @@ static char     g_myName[96];      // UTF-8, sanitized
 
 static void net_connect(const char *url, const char *pw, int host, const char *owner);
 static void samples_key(const char *hex);
+static void peer_welcome(const char *message);
 static void net_disconnect(void);
 static void focus_summary(char *out, int cap, const char *sep);
 static void json_esc(const char *in, char *out, int cap);
@@ -7177,6 +7178,7 @@ static void handle_msg_inner(const char *m) {
             if (fj_get(root, "blob", &value) && fj_text(value, blob, sizeof(blob)) && strlen(blob) == 64) samples_key(blob);
             SecureZeroMemory(blob, sizeof(blob));
         }
+        peer_welcome(m);
         {   // time limit: counted down in the bar; members get the note now, the host in the hosted dialog
             uint32_t ms = 0;
             jget_u32(m, "ends_in", &ms);
@@ -8138,6 +8140,18 @@ static __declspec(thread) int g_sampleHttp;
 static __declspec(thread) int g_sampleRetry;
 static __declspec(thread) int g_sampleLocalError;
 static __declspec(thread) int g_sampleVerificationError;
+static __declspec(thread) int g_peerHttp;
+static volatile LONG g_peerReady;
+
+static int peer_endpoint(NetUrl *url, char key[65]) {
+    char address[128], *end; unsigned long port;
+    DWORD n = GetEnvironmentVariableA("FLIM_PEER_URL", address, sizeof(address));
+    if (!n || n >= sizeof(address) || strncmp(address, "http://127.0.0.1:", 17) || n < 18 || n > 22) return 0;
+    port = strtoul(address + 17, &end, 10);
+    if (*end || !port || port > 65535 || address[17] < '0' || address[17] > '9') return 0;
+    n = GetEnvironmentVariableA("FLIM_PEER_TOKEN", key, 65);
+    return n == 64 && is_hex64(key) && parse_host(address, url);
+}
 static volatile LONG64 g_sampleBlockedUntil;
 
 static int sample_retryable(DWORD status, int download) {
@@ -8185,22 +8199,25 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
     unsigned char *buf = NULL;
     HANDLE f = INVALID_HANDLE_VALUE;
     size_t pl;
-    EnterCriticalSection(&g_sampleLock);
-    if (!session_current() || !g_blobOn) { LeaveCriticalSection(&g_sampleLock); return 0; }
-    u = g_blobUrl;
-    strcpy_s(key, sizeof(key), g_blobKey);
-    LeaveCriticalSection(&g_sampleLock);
+    if (g_peerHttp) { if (!session_current() || !peer_endpoint(&u, key)) return 0; }
+    else {
+        EnterCriticalSection(&g_sampleLock);
+        if (!session_current() || !g_blobOn) { LeaveCriticalSection(&g_sampleLock); return 0; }
+        u = g_blobUrl; strcpy_s(key, sizeof(key), g_blobKey);
+        LeaveCriticalSection(&g_sampleLock);
+    }
     wcscpy_s(path, 700, u.path);
     pl = wcslen(path);
     while (pl && path[pl - 1] == L'/') path[--pl] = 0;
     MultiByteToWideChar(CP_UTF8, 0, what, -1, wwhat, 200);
     wcscat_s(path, 700, wwhat);
     swprintf_s(hdr, 128, L"x-flim-key: %S\r\n", key);
-    ses = WinHttpOpen(L"flim/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    ses = WinHttpOpen(L"flim/1.0", g_peerHttp ? WINHTTP_ACCESS_TYPE_NO_PROXY : WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) ses = WinHttpOpen(L"flim/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) goto out;
     WinHttpSetTimeouts(ses, 15000, 15000, !strcmp(what, "/blobs/missing") ? 10000 : 120000,
                        !strcmp(what, "/blobs/missing") ? 10000 : 120000);
+    if (g_peerHttp) WinHttpSetTimeouts(ses, 500, 500, 2000, down ? 8000 : 2000);
     con = WinHttpConnect(ses, u.host, u.port, 0);
     if (!con) goto out;
     req = WinHttpOpenRequest(con, verb, path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, u.secure ? WINHTTP_FLAG_SECURE : 0);
@@ -8300,6 +8317,21 @@ static DWORD sample_http(const wchar_t *verb, const char *what, const wchar_t *u
     DWORD status = 0; int attempt;
     uint64_t startDone = g_xferDone;
     g_sampleLocalError = g_sampleVerificationError = 0;
+    if (g_peerReady && down && downHex && expectedBytes && !wcscmp(verb, L"GET") && strlen(what) == 70 && !strncmp(what, "/blob/", 6) && is_hex64(what + 6)) {
+        NetUrl peer; char peerKey[65], request[160];
+        if (peer_endpoint(&peer, peerKey)) {
+            uint64_t fileDone = ff_active ? ff_current.done : 0;
+            sprintf_s(request, sizeof(request), "%s?bytes=%llu&generation=%ld", what, (unsigned long long)expectedBytes, g_netGen);
+            g_peerHttp = 1;
+            status = blob_http(verb, request, NULL, 0, NULL, 0, down, downHex, NULL, 0, expectedBytes);
+            g_peerHttp = 0;
+            if (status == 200 && !strcmp(downHex, what + 6)) { logmsg("P2P sample received and verified (%llu bytes)", (unsigned long long)expectedBytes); return 200; }
+            if (g_sampleLocalError || !session_current()) return 0;
+            g_xferDone = startDone; g_sampleVerificationError = 0; downHex[0] = 0;
+            if (ff_active) {ff_current.done = fileDone; ff_save();}
+        }
+        SecureZeroMemory(peerKey, sizeof(peerKey));
+    }
     if (GetTickCount64() < (ULONGLONG)InterlockedCompareExchange64(&g_sampleBlockedUntil, 0, 0)) { g_sampleRetry = 1; return 507; }
     for (attempt = 0; attempt < 2 && session_current() && !g_compatFault; attempt++) {
         if (attempt) {
@@ -8315,6 +8347,31 @@ static DWORD sample_http(const wchar_t *verb, const char *what, const wchar_t *u
     }
     if (sample_retryable(status, down != NULL)) g_sampleRetry = 1;
     return status;
+}
+
+static void peer_welcome(const char *message) {
+    FlJson root = {message, strlen(message)}, value;
+    NetUrl peer; char key[65], token[65], body[160];
+    InterlockedExchange(&g_peerReady, 0);
+    if (!g_cloudTransport || !peer_endpoint(&peer, key) || !fj_get(root, "file_peer", &value) || !fj_text(value, token, sizeof(token)) || strlen(token) != 64 || !is_hex64(token)) return;
+    sprintf_s(body, sizeof(body), "{\"token\":\"%s\",\"generation\":%ld}", token, g_netGen);
+    g_peerHttp = 1;
+    if (blob_http(L"POST", "/connect", NULL, 0, body, (DWORD)strlen(body), NULL, NULL, NULL, 0, 0) == 200) InterlockedExchange(&g_peerReady, 1);
+    g_peerHttp = 0;
+    SecureZeroMemory(key, sizeof(key)); SecureZeroMemory(token, sizeof(token)); SecureZeroMemory(body, sizeof(body));
+}
+
+static void peer_offer(const wchar_t *path, const char *hash, uint64_t bytes) {
+    NetUrl peer; char key[65], *body; size_t cap, at;
+    if (!g_peerReady || !g_cloudTransport || !peer_endpoint(&peer, key)) return;
+    cap = ((wcslen(path) * 2 + 2) / 3) * 4 + 180;
+    body = (char *)malloc(cap); if (!body) return;
+    at = sprintf_s(body, cap, "{\"generation\":%ld,\"h\":\"%s\",\"s\":%llu,\"p\":\"", g_netGen, hash, (unsigned long long)bytes);
+    b64enc((const unsigned char *)path, (int)(wcslen(path) * 2), body + at); strcat_s(body, cap, "\"}");
+    g_peerHttp = 1;
+    if (!blob_http(L"POST", "/offer", NULL, 0, body, (DWORD)strlen(body), NULL, NULL, NULL, 0, 0)) InterlockedExchange(&g_peerReady, 0);
+    g_peerHttp = 0;
+    SecureZeroMemory(key, sizeof(key)); free(body);
 }
 
 // ---- sender ----
@@ -8392,6 +8449,7 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
         ne++;
     }
     if (!ne) goto done;
+    for (i = 0; i < ne; i++) peer_offer(E[i].full, E[i].hex, E[i].size);
     if (!samples_missing(E, ne)) {
         if (!session_current() || g_compatFault) goto done;
         logmsg("SAMPLES lookup unavailable: sample-dependent edit pending while recoverable requests retry");
@@ -8874,6 +8932,7 @@ static DWORD WINAPI inThread(LPVOID p) {
 
 // Connected: where the blob store is (same server). Usable once the welcome brings the key.
 static void samples_connected(const NetUrl *u) {
+    InterlockedExchange(&g_peerReady, 0);
     InterlockedExchange64(&g_sampleBlockedUntil, 0);
     EnterCriticalSection(&g_sampleLock);
     g_blobUrl = *u;
@@ -8896,6 +8955,7 @@ static void samples_key(const char *hex) {
 // Disconnected: drop what was waiting to go out or to be applied.
 static void samples_disconnected(void) {
     int i;
+    InterlockedExchange(&g_peerReady, 0);
     EnterCriticalSection(&g_sampleLock);
     InterlockedExchange(&g_blobOn, 0);
     SecureZeroMemory(g_blobKey, sizeof(g_blobKey));

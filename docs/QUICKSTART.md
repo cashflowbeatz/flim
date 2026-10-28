@@ -1,7 +1,7 @@
 # Your first flim room
 
-[Download the Windows app](https://github.com/cashflowbeatz/flim/releases/tag/rooms-v0.2.23)
-and give your friend the same **flim-rooms-0.2.23-win64.exe**. It is a portable app with the
+[Download the Windows app](https://github.com/cashflowbeatz/flim/releases/tag/rooms-v0.2.25)
+and give your friend the same **flim-rooms-0.2.25-win64.exe**. It is a portable app with the
 native launcher, engine and profiles included. There is no separate client or Cloudflare installation.
 
 You each need Windows 10/11 x64, internet access and your own supported FL installation.

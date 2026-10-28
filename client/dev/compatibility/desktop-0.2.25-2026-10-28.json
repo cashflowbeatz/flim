@@ -1,0 +1,114 @@
+{
+  "version": "0.2.25",
+  "date": "2026-10-28T20:12:52.666Z",
+  "sourceBaseline": "8098548",
+  "reviewedBuilds": [
+    "24.2.2.4597",
+    "25.2.5.5319",
+    "26.1.7.5654"
+  ],
+  "profilesChanged": false,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.25-win64.exe",
+    "bytes": 103586832,
+    "sha256": "f00949778920c297df5d4d0f3bb00a76f41c9805955668ca99406774ae091dda"
+  },
+  "native": {
+    "launcher": "1e02f58c581c2cebdf9508a84be5694539a1277e2a46e414e4b2b295bb8118c8",
+    "engine": "f37abba431f1f6940fee880244aed03e63c074e77575f8c91ec0c3de58baf438"
+  },
+  "desktopTests": 193,
+  "nativeHarnessExecutables": 32,
+  "syntheticNativeHostMemberCombinations": 9,
+  "roomUiChecks": 127,
+  "filesUiChecks": 68,
+  "localCloudflareTests": 76,
+  "originalNodeRelaySuite": true,
+  "nativeHttpLoopback": true,
+  "nativeFileSyncLoopback": true,
+  "packagedStartup": true,
+  "portableStartup": true,
+  "realElectron": [
+    "folder dialog and persistence",
+    "window/menu/zoom",
+    "sidebar geometry and focus",
+    "bounded renderer recovery"
+  ],
+  "peerFiles": {
+    "local": {
+      "passed": true,
+      "bytes": 2097171,
+      "directDownloads": 3,
+      "checks": [
+        "Actual encrypted WebRTC file bytes through Cloudflare emulator signaling",
+        "Two simultaneous direct downloads with bounded chunk flow",
+        "Loopback authentication and browser-origin rejection",
+        "Stale generation rejection",
+        "Transport renderer crash reconnects and restores readiness",
+        "Changed source declines direct serving",
+        "Lost direct peer leaves verified R2 copy usable"
+      ],
+      "diagnostics": [
+        {
+          "event": "peer_download",
+          "bytes": 2097171
+        },
+        {
+          "event": "peer_download",
+          "bytes": 2097171
+        },
+        {
+          "event": "peer_download",
+          "bytes": 2097171
+        }
+      ],
+      "r2Downloads": 1,
+      "signaling": "Local Cloudflare emulator"
+    },
+    "live": {
+      "passed": true,
+      "bytes": 2097171,
+      "directDownloads": 3,
+      "checks": [
+        "Actual encrypted WebRTC file bytes through deployed Cloudflare signaling",
+        "Two simultaneous direct downloads with bounded chunk flow",
+        "Loopback authentication and browser-origin rejection",
+        "Stale generation rejection",
+        "Transport renderer crash reconnects and restores readiness",
+        "Changed source declines direct serving",
+        "Lost direct peer leaves verified R2 copy usable"
+      ],
+      "diagnostics": [
+        {
+          "event": "peer_download",
+          "bytes": 2097171
+        },
+        {
+          "event": "peer_download",
+          "bytes": 2097171
+        },
+        {
+          "event": "peer_download",
+          "bytes": 2097171
+        }
+      ],
+      "r2Downloads": 1,
+      "signaling": "Deployed Cloudflare Worker"
+    },
+    "scope": "Two isolated launch sessions on one computer; no physical FL or remote NAT claim"
+  },
+  "cloudflare": {
+    "deployed": true,
+    "version": "419ae2cb-bfe5-4279-b50f-1b0e798a4304",
+    "storageLimitBytes": 536870912,
+    "monthlyUploadLimit": 20000,
+    "monthlyDownloadLimit": 100000,
+    "turnSubscription": false,
+    "initialR2UploadsRetained": true
+  },
+  "noFreshTwoComputerOrMidiTest": true,
+  "knownUnresolved": [
+    "Earlier intermittent FL24 recovery-save stall; no fresh live retest"
+  ],
+  "userFLProcessesOperated": false
+}

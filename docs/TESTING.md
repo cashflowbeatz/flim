@@ -1,18 +1,20 @@
 # Testing and verification
 
-## Recorded 0.2.23 results
+## Recorded 0.2.25 results
 
 | Check | Recorded result | What it establishes |
 | --- | --- | --- |
-| Native harnesses | 31 executable suites passed | Parsing/setter guards, note/clip/plugin handling, bounded queues, startup/toolbar and format adapters using synthetic native fixtures. |
+| Native harnesses | 32 executable suites passed | Parsing/setter guards, native content verification, complete snapshots, note/clip/plugin handling, bounded queues and format adapters using synthetic native fixtures. |
 | Mixed FL host/member paths | Nine synthetic combinations passed | Negotiated FL24/25/26 shared note/control routing in each direction, not nine new live sessions. |
-| Desktop backend | 177 tests passed | Room/launch validation, settings/folders, diagnostics, recovery and transfer-status handling. |
+| Desktop backend | 193 tests passed | Room/launch validation, settings/folders, diagnostics, recovery, direct-file broker and transfer-status handling. |
 | Room and Files UI | 127 + 68 checks passed | Real renderer controls against fixture bridges, keyboard/focus, state/error/zoom/sidebar behavior. |
-| Cloudflare Worker | 73 local tests passed | Miniflare executes admission, ordering, locks, quotas, file integrity, isolation/cleanup and request-bound cases. |
+| Cloudflare Worker | 76 local tests passed | Miniflare executes room/file admission, ordering, locks, quotas, integrity, capability isolation/revocation and cleanup. |
+| Actual Electron WebRTC | Passed against emulator and deployed Cloudflare | Three 2,097,171-byte direct downloads per run, two concurrent, source/peer failure, authentication and one R2 fallback read. Two isolated launch sessions on one computer. |
 | Native sample loopback | 1 stored upload, 13 downloads across failure/retry cases | Actual WinHTTP workers, inbound path rewriting, cancellation, verified content and untouched source audio. |
 | Electron/package checks | Passed | Folder-picker IPC/persistence, fitted windows, recovery, icons, portable/unpacked startup and native-byte equality. |
 
-[All 39 latest changes and QA](../client/desktop/QA-0.2.23.md) describes the exact cases.
+[0.2.25 QA](../client/desktop/QA-0.2.25.md) and [all 34 fixes from 0.2.24](../client/desktop/QA-0.2.24.md)
+describe the exact cases.
 Versioned reports under `client/desktop/QA-*.md` retain their original dates/status; “local only”
 in an older report describes that test run, not the later GitHub publication. Personal paths and
 process observations are omitted from published evidence. Raw logs/screenshots stay local.
@@ -46,7 +48,7 @@ app. They inspect/discover installations but do not allocate a room or start FL.
 suitable for a generic CI runner with no FL installations.
 
 Build native harnesses with `cmd /c client\dev\harness\build.bat` from the root. Execute the
-31 deterministic harnesses listed in the CI workflow. Transfer harnesses require their loopback
+32 deterministic harnesses listed in the CI workflow. Transfer harnesses require their loopback
 orchestrators rather than being run directly:
 
 ```powershell
@@ -59,6 +61,11 @@ node transfer_test.cjs
 Run `npm ci` and `npm test` in `server/cloudflare` for the Worker, and in `server` for the retained
 Node.js relay. Both test locally. CI runs deterministic native/desktop/relay suites without an
 Image-Line account or live FL instance. Hosted CI results appear on the PR after pushing.
+
+For actual WebRTC bytes, install/build `server/cloudflare` first, then run `npm run test:peer`
+from `client/desktop`. It creates a local emulator and isolated Electron launch sessions.
+The optional live mode requires the relay owner's existing private key file; it is not run in
+CI. See the test source and [direct-file evidence](PEER-FILES.md).
 
 ## What still needs live testing
 

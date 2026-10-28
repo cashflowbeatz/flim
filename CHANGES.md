@@ -4,7 +4,20 @@ These changes support reviewed FL Studio 24/25/26 builds and improve shared proj
 
 In this document, **client** means the flim program running with your FL Studio. **Server** means the program that passes edits and sample files between you and your friends. An **edit lock** is a temporary reservation that stops two people from changing the same control at the same time. A **cache** is temporary file storage that can be cleared to make room.
 
-## Version 0.2.24: complete note snapshots and verified sample transfers (local, 2026-10-28)
+## Version 0.2.25: direct samples with Cloudflare coordination (2026-10-28)
+
+WebRTC transfers referenced samples directly when connected peers are available. Cloudflare
+keeps room authentication, ordered edits and locks; recorded notes retain their CRDT. Initial
+R2 uploads stay in place and failed direct transfers use the verified backup automatically.
+The app keeps its file service alive while launched FL processes run, bounds concurrent work,
+revokes departed capabilities and preserves exact FL24/25/26 checks. Includes all 0.2.24 fixes.
+[21 changes explained](docs/releases/0.2.25.md) · [QA](client/desktop/QA-0.2.25.md).
+
+193 desktop tests, 32 native harnesses, 195 UI checks, 76 local Worker tests, actual Electron
+WebRTC bytes through local and deployed signaling, native loopbacks and package/portable checks
+pass. No fresh two-computer FL/MIDI test or new FL profile. Full sessions still trust the relay.
+
+## Version 0.2.24: complete note snapshots and verified sample transfers (local validation, 2026-10-28)
 
 34 additional fixes share larger multi-pattern edits, prepare full note snapshots before queuing,
 ignore harmless note order changes, avoid unchanged CRDT/playlist application and verify actual

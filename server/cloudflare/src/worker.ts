@@ -8,7 +8,7 @@ import { boundedText, BodyReadError } from "./request-body";
 interface Env extends R2LimitsEnv { ROOM: DurableObjectNamespace<FlimRoom>; FILES: R2Bucket; HOST_KEY: string }
 interface Lock { key: string; at: number }
 interface Peer { id: string; name: string; role: "leader" | "member"; compat: Compatibility }
-interface Attachment { ip: string; deadline: number; tokens: number; tokenAt: number; peer?: Peer; locks: Lock[]; generation?: string; room?: string }
+interface Attachment { ip: string; deadline: number; tokens: number; tokenAt: number; peer?: Peer; locks: Lock[]; generation?: string; room?: string; files?: boolean; filesId?: string; fileToken?: string }
 interface Room { code: string; accessPassword?: string; generation: string; password: string; blob: string; host: Peer; epoch: number; snapshot?: Stored; notesCrdt?: boolean; portableSync?: boolean }
 type FileRow = { h: string; bytes: number; prefix: string; ready: number; created: number };
 const encoder = new TextEncoder();
@@ -33,7 +33,7 @@ export default {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") return new Response(env.HOST_KEY?.length >= 24 ? "flim-server ok\n" : "Host key is not configured\n", { status: env.HOST_KEY?.length >= 24 ? 200 : 503 });
     if (!env.HOST_KEY || env.HOST_KEY.length < 24) return json({ error: "Configure a private HOST_KEY before using the relay." }, 503);
-    if (request.headers.get("Upgrade")?.toLowerCase() === "websocket" && (url.pathname === "/" || /^\/room\/\d{8}$/.test(url.pathname))) {
+    if (request.headers.get("Upgrade")?.toLowerCase() === "websocket" && (url.pathname === "/" || /^\/(?:room|peer)\/(?:\d{8}|01)$/.test(url.pathname))) {
       return env.ROOM.get(env.ROOM.idFromName("private-room-01")).fetch(request);
     }
     if (url.pathname.startsWith("/blob/") || url.pathname === "/blobs/missing" || url.pathname === "/usage" || ["/rooms", "/rooms/join", "/rooms/status", "/rooms/cancel"].includes(url.pathname)) return env.ROOM.get(env.ROOM.idFromName("private-room-01")).fetch(request);
@@ -84,6 +84,38 @@ export class FlimRoom extends DurableObject<Env> {
   private attachment(ws: WebSocket): Attachment { return ws.deserializeAttachment() as Attachment; }
   private sockets(): WebSocket[] { return this.ctx.getWebSockets().filter(ws => ws.readyState === 1); }
   private joined(room: Room): WebSocket[] { return this.sockets().filter(ws => { const a = this.attachment(ws); return a.peer && a.generation === room.generation; }); }
+  private fileSockets(room: Room): WebSocket[] { return this.sockets().filter(ws => { const a = this.attachment(ws); return a.filesId && a.generation === room.generation; }); }
+  private filePresence(room: Room): void {
+    const peers = this.fileSockets(room).map(ws => this.attachment(ws).filesId!);
+    for (const ws of this.fileSockets(room)) this.send(ws, {t: "files.peers", you: this.attachment(ws).filesId, peers});
+  }
+  private async fileMessage(ws: WebSocket, a: Attachment, m: Record<string, any>): Promise<void> {
+    const room = this.rooms.get(a.room ?? "");
+    if (!room) return this.fail(ws, "no_session", "This session has ended.", true);
+    if (!a.filesId) {
+      const ip = await digest(a.ip);
+      if (!this.takeBudget("files:admissions", 4000) || !this.takeBudget(`files:admissions:${ip}`, 200)) return this.fail(ws, "rate_limit", "Too many file connections.", true);
+      if (Date.now() > a.deadline || m.t !== "files.hello" || !hash(m.token)) return this.fail(ws, "unauthorized", "File connection not authorized.", true);
+      const native = this.joined(room).find(s => equal(this.attachment(s).fileToken ?? "", m.token));
+      if (!native) return this.fail(ws, "unauthorized", "File connection not authorized.", true);
+      a.filesId = this.attachment(native).peer!.id; a.generation = room.generation;
+      for (const old of this.fileSockets(room)) if (old !== ws && this.attachment(old).filesId === a.filesId) old.close(4000, "replaced");
+      ws.serializeAttachment(a); this.filePresence(room); return;
+    }
+    if (a.generation !== room.generation || !this.joined(room).some(s => this.attachment(s).peer!.id === a.filesId)) return this.fail(ws, "no_session", "This session has ended.", true);
+    if (m.t !== "files.signal" || typeof m.to !== "string" || m.to === a.filesId || !m.signal || typeof m.signal !== "object" || Array.isArray(m.signal)) return this.fail(ws, "bad_signal", "Invalid file signal.");
+    const s = m.signal;
+    const valid = Object.keys(s).length === 2 && ["offer", "answer"].includes(s.type) && typeof s.sdp === "string" && s.sdp.length <= 32768 ||
+      Object.keys(s).length === 2 && s.type === "ice" && s.candidate && typeof s.candidate === "object" && !Array.isArray(s.candidate) &&
+      Object.keys(s.candidate).every(k => ["candidate", "sdpMid", "sdpMLineIndex", "usernameFragment"].includes(k)) &&
+      typeof s.candidate.candidate === "string" && s.candidate.candidate.length <= 2048 &&
+      (s.candidate.sdpMid === null || typeof s.candidate.sdpMid === "string" && s.candidate.sdpMid.length <= 128) &&
+      (s.candidate.sdpMLineIndex === null || Number.isInteger(s.candidate.sdpMLineIndex) && s.candidate.sdpMLineIndex >= 0 && s.candidate.sdpMLineIndex < 64) &&
+      (s.candidate.usernameFragment === undefined || typeof s.candidate.usernameFragment === "string" && s.candidate.usernameFragment.length <= 128);
+    if (!valid) return this.fail(ws, "bad_signal", "Invalid file signal.");
+    const target = this.fileSockets(room).find(s => this.attachment(s).filesId === m.to);
+    if (target) this.send(target, {t: "files.signal", from: a.filesId, signal: s});
+  }
   private active(room: Room): boolean { return this.rooms.get(room.code)?.generation === room.generation; }
   private async saveRooms(): Promise<void> { await this.ctx.storage.put("rooms", [...this.rooms.entries()]); }
   private activePrefixes(): string[] { return this.rooms.size ? [...this.rooms.values()].map(room => room.generation) : [""]; }
@@ -193,7 +225,7 @@ export class FlimRoom extends DurableObject<Env> {
     const times: number[] = [];
     for (const ws of this.sockets()) {
       const a = this.attachment(ws);
-      if (!a.peer) times.push(a.deadline);
+      if (!a.peer && !a.filesId) times.push(a.deadline);
       for (const l of a.locks) times.push(l.at + LOCK_TTL);
     }
     if (this.cleanupPending) times.push(Date.now() + 60_000);
@@ -217,11 +249,11 @@ export class FlimRoom extends DurableObject<Env> {
       return await this.serial(() => this.roomApi(request, url, text)) as Response;
     }
     if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
-      if (this.sockets().length >= 48) return new Response("Too many connections", { status: 429 });
+      if (this.sockets().length >= 80) return new Response("Too many connections", { status: 429 });
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
       this.ctx.acceptWebSocket(server);
-      server.serializeAttachment({ ip: request.headers.get("CF-Connecting-IP") ?? "local", deadline: Date.now() + 20_000, tokens: 2000, tokenAt: Date.now(), locks: [], room: url.pathname === "/" ? "01" : url.pathname.slice(6) } satisfies Attachment);
+      server.serializeAttachment({ ip: request.headers.get("CF-Connecting-IP") ?? "local", deadline: Date.now() + 20_000, tokens: 2000, tokenAt: Date.now(), locks: [], room: url.pathname === "/" ? "01" : url.pathname.slice(6), files: url.pathname.startsWith("/peer/") } satisfies Attachment);
       await this.schedule();
       return new Response(null, { status: 101, webSocket: client });
     }
@@ -262,6 +294,7 @@ export class FlimRoom extends DurableObject<Env> {
     let m: Record<string, any>;
     try { m = JSON.parse(data); } catch { return this.fail(ws, "bad_json", "Malformed JSON.", true); }
     if (!m || typeof m !== "object" || Array.isArray(m)) return this.fail(ws, "bad_request", "Expected an object.");
+    if (a.files) return this.fileMessage(ws, a, m);
     if (!a.peer) return this.hello(ws, a, m);
     const room = this.rooms.get(a.room ?? "01");
     if (!room || a.generation !== room.generation) return this.fail(ws, "no_session", "This session has ended.", true);
@@ -360,8 +393,8 @@ export class FlimRoom extends DurableObject<Env> {
       if (this.joined(room).length >= MEMBERS) return this.fail(ws, "session_full", "This session already has eight people.", true);
       if (this.joined(room).some(s => this.attachment(s).peer!.id === peer.id)) return this.fail(ws, "id_in_use", "This user is already connected.", true);
     }
-    a.peer = peer; a.generation = room!.generation; a.locks = []; ws.serializeAttachment(a);
-    this.send(ws, { t: "welcome", session: code, role: peer.role, you: { id: peer.id, name: peer.name }, peers: this.peers(room!), blob: room!.blob, ends_in: 0, transport: 2, ...this.noteProtocol(room!), compatibility: this.compatibility(room!) });
+    a.peer = peer; a.generation = room!.generation; a.locks = []; a.fileToken = random(); ws.serializeAttachment(a);
+    this.send(ws, { t: "welcome", session: code, role: peer.role, you: { id: peer.id, name: peer.name }, peers: this.peers(room!), blob: room!.blob, file_peer: a.fileToken, ends_in: 0, transport: 2, ...this.noteProtocol(room!), compatibility: this.compatibility(room!) });
     if (room!.snapshot && (!room!.portableSync || compareFlVersions(peer.compat.fl, room!.host.compat.fl) >= 0)) this.send(ws, { ...room!.snapshot, delivery: "snapshot", epoch: room!.epoch });
     else this.send(ws, { t: "snapshot", flp: null, epoch: room!.epoch });
     this.send(ws, { t: "lock_state", locks: this.joined(room!).flatMap(s => this.attachment(s).locks.map(l => ({ key: l.key, owner: this.attachment(s).peer!.id }))) });
@@ -404,14 +437,16 @@ export class FlimRoom extends DurableObject<Env> {
   private async remove(ws: WebSocket): Promise<void> {
     const a = this.attachment(ws);
     const room = this.rooms.get(a?.room ?? "01");
+    if (room && a?.filesId && a.generation === room.generation) { a.filesId = undefined; ws.serializeAttachment(a); this.filePresence(room); return; }
     if (!room || !a?.peer || a.generation !== room.generation) return;
+    for (const file of this.fileSockets(room)) if (this.attachment(file).filesId === a.peer.id) file.close(4000, "native_left");
     a.locks.forEach(l => this.broadcast(room, { t: "lock_released", key: l.key }));
     if (a.peer.role === "leader") { this.broadcast(room, { t: "leader_left" }, ws); await this.end(room); }
     else { a.peer = undefined; a.locks = []; ws.serializeAttachment(a); this.broadcast(room, { t: "presence", peers: this.peers(room), ...this.noteProtocol(room), compatibility: this.compatibility(room) }); }
     await this.schedule();
   }
   private async end(room: Room): Promise<void> {
-    const sockets = this.joined(room); this.rooms.delete(room.code); await this.saveRooms();
+    const sockets = [...this.joined(room), ...this.fileSockets(room)]; this.rooms.delete(room.code); await this.saveRooms();
     for (const [objectKey, abort] of this.uploads) if (objectKey.startsWith(room.generation + "/")) abort.abort();
     this.cleanupPending = true;
     for (const ws of sockets) { const a = this.attachment(ws); a.peer = undefined; a.locks = []; ws.serializeAttachment(a); try { ws.close(4000, "leader_left"); } catch {} }
@@ -501,7 +536,7 @@ export class FlimRoom extends DurableObject<Env> {
       this.nextAlarm = null;
       try {
         for (const room of this.rooms.values()) this.sweepLocks(room);
-        for (const ws of this.sockets()) { const a = this.attachment(ws); if (!a.peer && a.deadline <= Date.now()) ws.close(4001, "join_timeout"); }
+        for (const ws of this.sockets()) { const a = this.attachment(ws); if (!a.peer && !a.filesId && a.deadline <= Date.now()) ws.close(4001, "join_timeout"); }
         const prefixes = this.activePrefixes();
         const old = this.ctx.storage.sql.exec<FileRow>(`SELECT * FROM files WHERE prefix NOT IN (${prefixes.map(() => "?").join(",")}) OR (ready=0 AND created<?) LIMIT ?`, ...prefixes, Date.now()-600_000, FILE_COUNT_MAX).toArray();
         // Pick the deletion batch after skipping live transfers, so they cannot hide abandoned files.

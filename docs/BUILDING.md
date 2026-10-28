@@ -1,6 +1,6 @@
 # Build Rooms from source
 
-Participants use the [portable release](https://github.com/cashflowbeatz/flim/releases/tag/rooms-v0.2.23).
+Participants use the [portable release](https://github.com/cashflowbeatz/flim/releases/tag/rooms-v0.2.25).
 These instructions are for contributors. Building does not deploy a server or launch FL.
 
 ## Prerequisites
@@ -47,8 +47,8 @@ npm run build
 npm run package
 ```
 
-Output: `client/desktop/release/flim-rooms-0.2.23-win64.exe`. The packaging configuration includes
-only the renderer, Electron bridge/recovery code and the native launcher/engine/profiles. It
+Output: `client/desktop/release/flim-rooms-0.2.25-win64.exe`. The packaging configuration includes
+the renderer, Electron bridge/recovery/direct-file code and the native launcher/engine/profiles. It
 does not include tests, preferences, local credentials or diagnostics. Icons can be regenerated
 from the included master with `npm run icons`.
 

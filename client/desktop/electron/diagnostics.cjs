@@ -15,9 +15,9 @@ const NATIVE_FILE = /^(?:native-\d{1,10}\.log(?:\.[12])?|flim_engine(?:\.[12])?\
 const KNOWN_FILE = /^(?:session\.json|events(?:\.[12])?\.jsonl|native-\d{1,10}\.log(?:\.[12])?|flim_engine(?:\.[12])?\.log(?:\.[12])?)$/;
 const EVENTS = new Set(['app_start', 'install_inspected', 'request_failed', 'launch_started', 'launch_confirmed', 'launch_failed',
   'room_status', 'ipc_error', 'renderer_error', 'renderer_exit', 'process_error', 'app_exit', 'events_dropped',
-  'native_files', 'native_files_missing', 'settings_failed', 'room_left', 'renderer_load_failed', 'startup_failed', 'child_exit', 'request_retry', 'request_canceled', 'renderer_recovery', 'sample_folder_changed', 'file_status']);
+  'native_files', 'native_files_missing', 'settings_failed', 'room_left', 'renderer_load_failed', 'startup_failed', 'child_exit', 'request_retry', 'request_canceled', 'renderer_recovery', 'sample_folder_changed', 'file_status', 'peer_download', 'peer_unavailable']);
 const FIELDS = new Set(['appVersion', 'pid', 'flVersion', 'supported', 'experimental', 'operation', 'status', 'code', 'message',
-  'durationMs', 'role', 'peerCount', 'state', 'stack', 'reason', 'exitCode', 'launcherHash', 'engineHash', 'flEngineHash', 'custom']);
+  'durationMs', 'role', 'peerCount', 'state', 'stack', 'reason', 'exitCode', 'launcherHash', 'engineHash', 'flEngineHash', 'custom', 'bytes']);
 
 function bounded(value, max) {
   const bytes = Buffer.from(value, 'utf8');
@@ -48,7 +48,7 @@ function sanitize(fields) {
     if (!descriptor || !Object.hasOwn(descriptor, 'value')) continue;
     const value = descriptor.value;
     if (typeof value === 'boolean' && ['supported', 'experimental', 'custom'].includes(key)) clean[key] = value;
-    else if (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER && ['pid', 'status', 'durationMs', 'peerCount', 'exitCode', 'code'].includes(key)) {
+    else if (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER && ['pid', 'status', 'durationMs', 'peerCount', 'exitCode', 'code', 'bytes'].includes(key)) {
       if (key === 'pid' && (!Number.isSafeInteger(value) || value < 1 || value > 0xffffffff)) continue;
       clean[key] = value;
     } else if (typeof value === 'string') {

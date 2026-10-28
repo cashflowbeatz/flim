@@ -1,6 +1,6 @@
 {
   "name": "flim-desktop",
-  "version": "0.2.24",
+  "version": "0.2.25",
   "private": true,
   "type": "module",
   "description": "Create a room, invite a friend, and open FL Studio together.",
@@ -12,7 +12,8 @@
     "start": "electron .",
     "icons": "electron scripts/build-icons.cjs",
     "build": "tsc --noEmit && vite build",
-    "test": "node --test test/bridge.test.cjs test/sample-location.test.cjs test/diagnostics.test.cjs test/install-options.test.mjs test/window-fit.test.cjs test/renderer-recovery.test.cjs test/file-transfers.test.cjs test/reliability-0222.test.cjs",
+    "test": "node --test test/bridge.test.cjs test/sample-location.test.cjs test/diagnostics.test.cjs test/install-options.test.mjs test/window-fit.test.cjs test/renderer-recovery.test.cjs test/file-transfers.test.cjs test/reliability-0222.test.cjs test/peer-core.test.cjs",
+    "test:peer": "node test/peer-electron.cjs",
     "test:files:ui": "npm run build -- --outDir dist-files && node test/file-sidebar-ui.cjs",
     "test:files:package": "node test/file-sidebar-package.cjs",
     "test:ui": "npm run build && node test/ui.cjs",
@@ -24,7 +25,8 @@
   "dependencies": {
     "framer-motion": "11.18.2",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "ws": "8.22.0"
   },
   "devDependencies": {
     "@types/react": "18.3.27",
@@ -48,6 +50,8 @@
       "electron/*.cjs",
       "electron/recovery.html",
       "electron/recovery.js",
+      "electron/peer-worker.html",
+      "electron/peer-worker.js",
       "package.json"
     ],
     "extraResources": [

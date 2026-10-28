@@ -5,13 +5,14 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { createHash } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
-const { DesktopBridge, BridgeError, trustedSender } = require('./bridge-core.cjs');
+const { DesktopBridge, BridgeError, trustedSender, RELAY } = require('./bridge-core.cjs');
 const { createDiagnostics } = require('./diagnostics.cjs');
 const { fitBounds } = require('./window-fit.cjs');
 const { createRecoveryBudget } = require('./renderer-recovery.cjs');
 const { FileTransfers } = require('./file-transfers.cjs');
 const { createSetupGate } = require('./setup.cjs');
 const {singleFlight} = require('./single-flight.cjs');
+const {createPeerFiles} = require('./peer-electron.cjs');
 const recoveryURL = pathToFileURL(path.join(__dirname, 'recovery.html')).href;
 
 const dev = !app.isPackaged && process.env.FLIM_DESKTOP_DEV === '1';
@@ -23,6 +24,7 @@ let bridge;
 let diagnostics;
 let sampleFolderFlight;
 let quitFlushed = false;
+let peerFiles;
 const record = (event, fields) => diagnostics?.record(event, fields);
 async function flushDiagnostics() {
   let timer;
@@ -50,8 +52,10 @@ else {
         : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'"] } });
     });
     const fileTransfers = new FileTransfers(path.join(app.getPath('userData'), 'files'), fs, record);
+    peerFiles = createPeerFiles({BrowserWindow, ipcMain, session, relay: RELAY, record,
+      idle: () => {if (!quitFlushed && !peerFiles.active && window && !window.isVisible()) app.quit();}});
     bridge = new DesktopBridge({
-      fileTransfers,
+      fileTransfers, peerFiles,
       nativeDir, record, nativeLogDir: diagnostics.available ? diagnostics.nativeDirectory : '', diagnosticsStatus: () => diagnostics.available,
       preferencesFile: path.join(app.getPath('userData'), 'preferences.json'),
       defaultSampleDirectory: path.join(app.getPath('documents'), 'flim', 'samples'),
@@ -163,7 +167,8 @@ else {
       if (url !== recoveryURL) recover('load-failed');
     });
     window.once('ready-to-show', () => window.show());
-    window.on('closed', () => { clearTimeout(recoveryTimer); window = null; });
+    window.on('close', event => {if (!quitFlushed && peerFiles.active) {event.preventDefault(); window.hide();}});
+    window.on('closed', () => { clearTimeout(recoveryTimer); window = null; if (!peerFiles.active) app.quit(); });
     await window.loadURL(rendererURL).catch(() => {});
   }).catch(error => {
     void record('startup_failed', {message: error?.message, stack: error?.stack});
@@ -176,6 +181,6 @@ else {
     if (quitFlushed || !diagnostics) return;
     event.preventDefault(); quitFlushed = true;
     void record('app_exit', {pid: process.pid});
-    void flushDiagnostics().finally(() => app.quit());
+    void Promise.allSettled([flushDiagnostics(), peerFiles?.close()]).finally(() => app.quit());
   });
 }

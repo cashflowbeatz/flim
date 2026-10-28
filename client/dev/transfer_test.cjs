@@ -16,6 +16,14 @@ const assert = require('node:assert/strict');
       const body=Buffer.concat(chunks);
       if(req.url==='/test-mode'){
         mode=body.toString();modeCalls=0;res.end();
+      }else if(req.url==='/connect'){
+        assert.equal(JSON.parse(body).token,'2'.repeat(64));res.end();
+      }else if(req.url==='/offer'){
+        assert.equal(JSON.parse(body).s,65569);res.end();
+      }else if(/^\/blob\/[a-f0-9]{64}(?:\?|$)/.test(req.url)){
+        const direct=req.headers['x-flim-key']==='1'.repeat(64);
+        if(direct && mode==='peer-missing'){res.writeHead(404);res.end();return;}
+        res.end(direct && mode==='peer-corrupt'?'wrong transfer content':'flim transfer download');
       }else if(req.url==='/blobs/missing'){
         const hashes=body.toString().trim().split('\n');
         assert.ok(hashes.length<=512);modeCalls++;

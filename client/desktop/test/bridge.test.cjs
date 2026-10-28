@@ -83,7 +83,7 @@ async function fixture(t, options = {}) {
   let supported = true, tick = 100_000;
   const bridge = new DesktopBridge({
     nativeDir, preferencesFile: path.join(root, 'settings', 'preferences.json'), platform: 'win32',
-    defaultSampleDirectory: path.join(root, 'samples'),
+    defaultSampleDirectory: path.join(root, 'samples'), peerFiles: options.peerFiles,
     environment: { ProgramFiles: root, ProgramW6432: root, SystemRoot: 'C:\\Windows', PATH: 'C:\\Windows', FLIM_OWNER_KEY: 'global-secret', FLIM_AUTOCONNECT: 'wss://evil.invalid', CLOUDFLARE_API_TOKEN: 'never-inherit', NODE_OPTIONS: '--require injected.cjs' },
     io: {...fs, readdir: async (...args) => { scanned.push(args[0]); return fs.readdir(...args); }},
     run: async (file, args, settings) => {
@@ -102,6 +102,28 @@ async function fixture(t, options = {}) {
   return { bridge, input, root, nativeDir, installDir, calls, requests, copied, scanned, support: value => { supported = value; }, advance: value => { tick += value; } };
 }
 
+test('direct file session credentials are per launch and the confirmed FL pid keeps its broker alive', async t => {
+  let prepared, launched;
+  const env = {FLIM_PEER_URL: 'http://127.0.0.1:12345', FLIM_PEER_TOKEN: 'c'.repeat(64)};
+  const f = await fixture(t, {peerFiles: {prepare: async code => {prepared = code; return {env, launched: pid => {launched = pid;}};}}});
+  await f.bridge.createRoom(f.input); await f.bridge.launchFL();
+  assert.equal(prepared, '12345678'); assert.equal(launched, 321);
+  assert.equal(f.calls.at(-1).settings.env.FLIM_PEER_TOKEN, env.FLIM_PEER_TOKEN);
+  assert.equal(f.calls.at(-1).settings.env.FLIM_PEER_URL, env.FLIM_PEER_URL);
+  assert.ok(!JSON.stringify(f.bridge.state()).includes(env.FLIM_PEER_TOKEN));
+});
+test('unavailable direct file service leaves normal R2-backed native launch usable', async t => {
+  const f = await fixture(t, {peerFiles: {prepare: async () => {throw new Error('Unavailable');}}});
+  await f.bridge.createRoom(f.input); await f.bridge.launchFL(); assert.equal(f.bridge.room.state, 'launched');
+  assert.equal(f.calls.at(-1).settings.env.FLIM_PEER_TOKEN, undefined);
+});
+test('confirmed native launch failure cancels the staged peer session while uncertain launch retains it', async t => {
+  for (const code of ['native_failed', 'native_uncertain']) {
+    let canceled = 0;
+    const f = await fixture(t, {launch: async () => {throw new BridgeError('Failed', code);}, peerFiles: {prepare: async () => ({env: {}, cancel: () => {canceled++;}})}});
+    await f.bridge.createRoom(f.input); await assert.rejects(f.bridge.launchFL()); assert.equal(canceled, code === 'native_failed' ? 1 : 0);
+  }
+});
 test('launch binds the chosen sample folder to its FL process without inheriting an environment override', async t => {
   const f = await fixture(t); const directory = path.join(f.root, 'received'); await fs.mkdir(directory);
   f.bridge.chooseSampleDirectory = async () => directory; f.bridge.environment.FLIM_SAMPLE_DIR = 'D:\\untrusted';
@@ -688,6 +710,7 @@ test('preload exposes only explicit methods and normalizes Electron error messag
 });
 
 test('packaged main uses local renderer and external native resources with a locked-down window', async () => {
+  const peer = {active: false, close: async () => {}}, peerOptions = {};
   const resources = path.resolve(__dirname, 'packaged resources');
   const directory = path.join(resources, 'app.asar', 'electron');
   const windows = [], handlers = new Map(), listeners = new Map(), events = [], opened = [], createdFolders = [];
@@ -703,7 +726,9 @@ test('packaged main uses local renderer and external native resources with a loc
     isDestroyed() {return false;}
     isMinimized() {return true;}
     restore() {this.restored = true;}
-    show() {this.shown = true;}
+    show() {this.shown = true; this.hidden = false;}
+    hide() {this.hidden = true;}
+    isVisible() {return !this.hidden;}
     focus() {this.focused = true;}
   }
   const fakeApp = new EventEmitter();
@@ -717,12 +742,13 @@ test('packaged main uses local renderer and external native resources with a loc
       if (name === 'electron') return { app: fakeApp, BrowserWindow: FakeWindow, screen: {getPrimaryDisplay: () => ({workArea: {x:0,y:0,width:1920,height:1040}}), getDisplayMatching: () => ({workArea: {x:0,y:0,width:1920,height:1040}})}, clipboard: { writeText() {} }, shell: {openPath: async directory => {opened.push(directory); return '';}}, dialog: { showErrorBox: () => assert.fail('main startup failed') }, ipcMain: { on: (channel, fn) => listeners.set(channel, fn), handle: (channel, fn) => handlers.set(channel, fn) }, session: { defaultSession: {
         setPermissionRequestHandler: fn => { permissionHandler = fn; }, setPermissionCheckHandler: fn => { permissionCheck = fn; }, webRequest: { onHeadersReceived: fn => { headersHandler = fn; } },
       } } };
-      if (name === './bridge-core.cjs') return { DesktopBridge: FakeBridge, BridgeError, trustedSender };
+      if (name === './bridge-core.cjs') return { DesktopBridge: FakeBridge, BridgeError, trustedSender, RELAY };
       if (name === './window-fit.cjs') return require('../electron/window-fit.cjs');
       if (name === './renderer-recovery.cjs') return require('../electron/renderer-recovery.cjs');
       if (name === './file-transfers.cjs') return require('../electron/file-transfers.cjs');
       if (name === './setup.cjs') return require('../electron/setup.cjs');
       if (name === './single-flight.cjs') return require('../electron/single-flight.cjs');
+      if (name === './peer-electron.cjs') return {createPeerFiles: options => {Object.assign(peerOptions, options); return peer;}};
       if (name === 'node:fs/promises') return {readFile: async () => Buffer.from('fixture'), mkdir: async directory => {createdFolders.push(directory);}};
       if (name === './diagnostics.cjs') return {createDiagnostics: async () => ({available: true, directory: 'owned-logs', nativeDirectory: 'owned-logs', record: (event, fields) => {events.push({event, fields});}, flush: () => stallLogs ? new Promise(() => {}) : Promise.resolve()})};
       return require(name);
@@ -780,6 +806,13 @@ test('packaged main uses local renderer and external native resources with a loc
   assert.equal(events.length, count);
   assert.equal(events.at(-1).event, 'renderer_error');
   assert.equal(bridgeOptions.nativeLogDir, 'owned-logs');
+  assert.equal(peerOptions.relay, RELAY);
+  let prevented = 0, quit = 0; fakeApp.quit = () => {quit++;};
+  peer.active = true; window.emit('close', {preventDefault: () => {prevented++;}});
+  assert.equal(prevented, 1); assert.equal(window.hidden, true); assert.equal(quit, 0);
+  fakeApp.emit('second-instance'); assert.equal(window.hidden, false);
+  window.hide(); peer.active = false; peerOptions.idle(); assert.equal(quit, 1);
+  window.emit('close', {preventDefault: () => {prevented++;}}); assert.equal(prevented, 1);
 });
 
 test('explicit experimental candidates keep their opt-in separate from supported FL24', async t => {

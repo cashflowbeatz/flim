@@ -251,3 +251,56 @@ test("worker startup restores a missing reservation alarm", async t => {
   const alarm=await restored.testAlarmTime();
   assert.ok(alarm>Date.now() && alarm<=Date.parse(room.expiresAt));
 });
+
+async function filePeer(mf, code, token) {
+  const r = await mf.dispatchFetch(`http://flim/peer/${code}`, {headers: {Upgrade: 'websocket'}});
+  assert.equal(r.status, 101);
+  const ws = r.webSocket, messages = []; ws.accept();
+  ws.addEventListener('message', e => messages.push(JSON.parse(e.data)));
+  const client = {ws, messages, send: m => ws.send(JSON.stringify(m)), next: async type => {
+    const until = Date.now() + 3000;
+    while (Date.now() < until) {const i = messages.findIndex(m => m.t === type); if (i >= 0) return messages.splice(i, 1)[0]; await new Promise(r => setTimeout(r, 10));}
+    throw new Error('No file message: ' + type);
+  }};
+  client.send({t: 'files.hello', token}); return client;
+}
+test('file signaling uses private native credentials, forwards only signals and leaves edit ordering untouched', async t => {
+  const {mf, create, host, join, api} = await setup(t), room = await create();
+  const h = await host(room), m = await join(room);
+  assert.match(h.welcome.file_peer, /^[a-f0-9]{64}$/); assert.notEqual(h.welcome.file_peer, m.welcome.file_peer);
+  assert.equal(JSON.stringify((await api('/rooms/status', room)).data).includes(h.welcome.file_peer), false);
+  const bad = await filePeer(mf, room.room, '0'.repeat(64)); assert.equal((await bad.next('error')).code, 'unauthorized');
+  const hp = await filePeer(mf, room.room, h.welcome.file_peer); await hp.next('files.peers');
+  const mp = await filePeer(mf, room.room, m.welcome.file_peer); assert.deepEqual((await mp.next('files.peers')).peers.sort(), ['host', 'member']);
+  hp.send({t: 'files.signal', to: 'member', from: 'forged', signal: {type: 'offer', sdp: 'bounded-offer'}});
+  assert.deepEqual(await mp.next('files.signal'), {t: 'files.signal', from: 'host', signal: {type: 'offer', sdp: 'bounded-offer'}});
+  mp.send({t: 'op', op: {kind: 'param.set', id: 1, v: 2}}); assert.equal((await mp.next('error')).code, 'bad_signal');
+  hp.send({t: 'files.signal', to: 'member', signal: {type: 'offer', sdp: 'x'.repeat(32769)}}); assert.equal((await hp.next('error')).code, 'bad_signal');
+  m.send({t: 'op', op: {kind: 'param.set', id: 1, v: 2}}); const first = await h.next('op');
+  hp.send({t: 'files.signal', to: 'member', signal: {type: 'answer', sdp: 'answer'}}); await mp.next('files.signal');
+  m.send({t: 'op', op: {kind: 'param.set', id: 1, v: 3}}); assert.equal((await h.next('op')).seq, first.seq + 1);
+  assert.equal((await api('/rooms/status', room)).data.peers.length, 2);
+});
+test('file companions cannot cross rooms and lose access when their native participant leaves', async t => {
+  const {mf, create, host, join, api} = await setup(t), a = await create(), b = await create();
+  const ah = await host(a), bh = await host(b), am = await join(a);
+  const wrong = await filePeer(mf, b.room, ah.welcome.file_peer); assert.equal((await wrong.next('error')).code, 'unauthorized');
+  const ap = await filePeer(mf, a.room, ah.welcome.file_peer); await ap.next('files.peers');
+  const bp = await filePeer(mf, b.room, bh.welcome.file_peer); await bp.next('files.peers');
+  const mp = await filePeer(mf, a.room, am.welcome.file_peer); await mp.next('files.peers');
+  bp.messages.length = 0; ap.send({t: 'files.signal', to: 'host', signal: {type: 'offer', sdp: 'alien'}});
+  assert.equal((await ap.next('error')).code, 'bad_signal'); assert.equal(bp.messages.length, 0);
+  const closed = new Promise(resolve => mp.ws.addEventListener('close', resolve)); am.ws.close(1000, 'leaving'); await closed;
+  const expired = await filePeer(mf, a.room, am.welcome.file_peer); assert.equal((await expired.next('error')).code, 'unauthorized');
+  assert.equal((await api('/rooms/status', b)).data.state, 'active');
+});
+test('replacement file companions revoke the previous socket and companion closure never ends a native room', async t => {
+  const {mf, create, host, join, api} = await setup(t), room = await create();
+  const h = await host(room), m = await join(room), hp = await filePeer(mf, room.room, h.welcome.file_peer);
+  await hp.next('files.peers'); const mp = await filePeer(mf, room.room, m.welcome.file_peer); await mp.next('files.peers');
+  const replaced = new Promise(resolve => hp.ws.addEventListener('close', resolve));
+  const replacement = await filePeer(mf, room.room, h.welcome.file_peer); await replacement.next('files.peers'); await replaced;
+  replacement.send({t: 'files.signal', to: 'member', signal: {type: 'answer', sdp: 'after-replace'}}); assert.equal((await mp.next('files.signal')).signal.sdp, 'after-replace');
+  replacement.ws.close(1000, 'controls-test'); assert.equal((await api('/rooms/status', room)).data.state, 'active');
+  const closed = new Promise(resolve => mp.ws.addEventListener('close', resolve)); h.ws.close(1000, 'host-leaving'); await closed;
+});

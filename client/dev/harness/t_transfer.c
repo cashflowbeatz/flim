@@ -61,6 +61,38 @@ static void lookup_recovery(void) {
     lookup_mode("normal");
 }
 
+static void peer_transfers(const char *url) {
+    char key[65], hash[65], what[96], got[65], welcome[120]; NetUrl endpoint;
+    wchar_t source[MAX_PATH]; uint64_t size;
+    memset(key, '1', 64); key[64] = 0;
+    assert(SetEnvironmentVariableA("FLIM_PEER_URL", "http://remote.invalid:80"));
+    assert(SetEnvironmentVariableA("FLIM_PEER_TOKEN", key)); assert(!peer_endpoint(&endpoint, got));
+    assert(SetEnvironmentVariableA("FLIM_PEER_URL", url)); assert(peer_endpoint(&endpoint, got));
+    memset(key, '2', 64); key[64] = 0;
+    sprintf_s(welcome, sizeof(welcome), "{\"file_peer\":\"%s\"}", key);
+    peer_welcome(welcome); assert(g_peerReady);
+    assert(GetFullPathNameW(L"upload.bin", MAX_PATH, source, NULL));
+    assert(sha_hex("flim transfer download", 22, hash)); peer_offer(source, hash, 65569);
+    sprintf_s(what, sizeof(what), "/blob/%s", hash);
+    g_xferDone = 0;
+    assert(sample_http(L"GET", what, NULL, 0, NULL, 0, L"peer.bin", got, NULL, 0, 22) == 200);
+    assert(!strcmp(hash, got) && g_xferDone == 22);
+    InterlockedExchange64(&g_sampleBlockedUntil, GetTickCount64() + 60000);
+    assert(sample_http(L"GET", what, NULL, 0, NULL, 0, L"peer-budget.bin", got, NULL, 0, 22) == 200);
+    assert(!strcmp(hash, got));
+    InterlockedExchange64(&g_sampleBlockedUntil, 0);
+    lookup_mode("peer-corrupt"); g_xferDone = 0;
+    assert(sample_http(L"GET", what, NULL, 0, NULL, 0, L"peer-fallback.bin", got, NULL, 0, 22) == 200);
+    assert(!strcmp(hash, got) && g_xferDone == 22 && !g_sampleVerificationError);
+    lookup_mode("peer-missing");
+    assert(sample_http(L"GET", what, NULL, 0, NULL, 0, L"peer-missing.bin", got, NULL, 0, 22) == 200);
+    assert(file_info(L"peer-missing.bin", &size, NULL) && size == 22);
+    peer_welcome("{}"); assert(!g_peerReady);
+    SetEnvironmentVariableA("FLIM_PEER_URL", NULL); SetEnvironmentVariableA("FLIM_PEER_TOKEN", NULL);
+    puts("PASS native peer registration, verified direct bytes, corrupt/missing peer fallback and legacy relay negotiation");
+    lookup_mode("normal");
+}
+
 int main(int argc, char **argv) {
     SEnt *entries;
     FILE *file;
@@ -113,6 +145,7 @@ int main(int argc, char **argv) {
     assert(g_xferDone == 122 && file_info(L"retry.bin", &bytes, NULL) && bytes == 22);
     puts("PASS a partial download retry replaces failed bytes without inflating progress");
     lookup_recovery();
+    peer_transfers(argv[1]);
 
     g_workBound = 1; g_workGen = g_netGen = 3; cancel_read = 1;
     assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"cancelled.bin", actual, NULL, 0, 0) == 0);

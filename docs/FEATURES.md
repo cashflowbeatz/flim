@@ -44,8 +44,13 @@ waits for changed scan evidence.
 ## Referenced samples arrive in the background
 
 A supported channel/playlist edit with an extractable sample path checks which content is
-missing, uploads/downloads it through the relay, verifies size/SHA-256 and substitutes the local
+missing, uploads its R2 backup, verifies received size/SHA-256 and substitutes the local
 path. Ready content is reused by hash. Unrelated folders and whole sample packs are not mirrored.
+
+With 0.2.25 on both computers, downloads can go directly over WebRTC. Unavailable or failed
+direct transfers fall back to R2 automatically. Cloudflare keeps edit ordering and permissions;
+closing the controls keeps the background file service alive while its launched FL is running.
+[Direct files, fallback and limits](PEER-FILES.md).
 
 Choose the **received-files folder** before a room. Folder access/write/flush/locked-target
 failures retain the waiting edit for retry. Network failures back off. Pending work belongs to
@@ -77,4 +82,5 @@ and status retries back off. Renderer recovery restores controls with a limit ag
 may include names/paths, so review before sharing. Serious native faults stop sharing without
 intentionally closing FL or claiming failed edits were synced.
 
-[39 latest fixes](../client/desktop/QA-0.2.23.md) · [History](../CHANGES.md) · [Testing](TESTING.md)
+[0.2.25 changes](releases/0.2.25.md) · [34 fixes from 0.2.24](../client/desktop/QA-0.2.24.md)
+· [History](../CHANGES.md) · [Testing](TESTING.md)

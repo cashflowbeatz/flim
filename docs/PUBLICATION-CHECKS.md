@@ -1,5 +1,16 @@
 # GitHub presentation checks
 
+## 0.2.25 follow-up
+
+The updated README was rendered again through GitHub's Markdown API on 2026-10-28. The local
+1280px and 375px previews load all four labelled images, have no page overflow/browser errors
+and retain keyboard focus on the download link. The existing GitHub layout, artwork and
+screenshots are unchanged. Download/build guides now target 0.2.25; both new releases have
+plain-language notes and checksums. Local destinations are checked before publication.
+The retained UI's current design gate is in [0.2.25 QA](../client/desktop/QA-0.2.25.md).
+
+## Original 0.2.23 publication record
+
 Publication review, 2026-10-28. antislop was applied during editing under the owner's existing
 session choice. This is a repository/documentation update; the app UI and packaged executable
 are unchanged. Existing design direction is the compact equipment card, ENERGY 1 / RHYTHM 1 /

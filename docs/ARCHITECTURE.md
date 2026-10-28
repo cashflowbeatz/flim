@@ -11,6 +11,9 @@ flowchart LR
     D <-->|TLS| E[Friend's FL Studio + flim engine]
     C <-->|verified sample bytes| F[Private R2 bucket via authenticated Worker]
     E <-->|verified sample bytes| F
+    C --- G[Local background file broker]
+    E --- H[Friend's background file broker]
+    G <-->|WebRTC sample bytes| H
 ```
 
 ## Review by responsibility
@@ -22,6 +25,7 @@ flowchart LR
 | Recorded notes | `client/common/flim_notes_crdt.h`, `server/cloudflare/NOTES-CRDT.md` | Stable IDs, tombstones, immutable-note conflicts, local-unsent merge, bounded history. |
 | Plugin adaptation | `client/common/flim_plugin.h`, native plugin harnesses | Stable VST identity/path matching, source-version provenance, opaque state preservation. |
 | Files | `client/common/flim_files.h`, `flim_cloud.h`, desktop `file-transfers.cjs`/`sample-location.cjs` | Hash/size verification, cache paths, ordered pending edits, cancellation/retry, local status reads. |
+| Direct samples | desktop `peer-core.cjs`, `peer-electron.cjs`, `peer-worker.js`; Worker `/peer/` route | Scoped native capabilities, loopback authentication, sandboxed WebRTC, bounded streaming and native verification/fallback. See [direct files](PEER-FILES.md). |
 | Desktop process | `client/desktop/electron/` | Allowlisted IPC, credentials kept in main/native processes, atomic settings, scoped launches, diagnostics/recovery. |
 | Desktop UI | `client/desktop/src/` | Compact room card, accessible installation picker, Files sidebar, input/focus/status behavior. |
 | Cloudflare relay | `server/cloudflare/src/` | Room admission, authentication, sequencing/locks, hibernation lifecycle, R2 budgets/cleanup, request bounds. |
