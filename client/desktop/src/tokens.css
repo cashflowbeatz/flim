@@ -1,0 +1,14 @@
+@font-face {
+  font-family: 'General Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/framer-assets/general-sans-medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'General Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/framer-assets/general-sans-regular.woff2') format('woff2');
+}

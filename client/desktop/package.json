@@ -1,0 +1,71 @@
+{
+  "name": "flim-desktop",
+  "version": "0.2.23",
+  "private": true,
+  "type": "module",
+  "description": "Create a room, invite a friend, and open FL Studio together.",
+  "author": "flim contributors",
+  "license": "UNLICENSED",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "start": "electron .",
+    "icons": "electron scripts/build-icons.cjs",
+    "build": "tsc --noEmit && vite build",
+    "test": "node --test test/bridge.test.cjs test/sample-location.test.cjs test/diagnostics.test.cjs test/install-options.test.mjs test/window-fit.test.cjs test/renderer-recovery.test.cjs test/file-transfers.test.cjs test/reliability-0222.test.cjs",
+    "test:files:ui": "npm run build -- --outDir dist-files && node test/file-sidebar-ui.cjs",
+    "test:files:package": "node test/file-sidebar-package.cjs",
+    "test:ui": "npm run build && node test/ui.cjs",
+    "test:window": "npm run build && node test/window.cjs",
+    "package": "npm run build && electron-builder --win portable --x64 --publish never",
+    "build:files:native": "cmd /c ..\\dev\\build-files-preview.bat",
+    "package:files": "npm run build:files:native && npm run build -- --outDir dist-files && electron-builder --config electron-builder.files.cjs --win portable --x64 --publish never"
+  },
+  "dependencies": {
+    "framer-motion": "11.18.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.27",
+    "@types/react-dom": "18.3.7",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "playwright": "1.64.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.5"
+  },
+  "build": {
+    "appId": "com.cashflowbeatz.flim",
+    "productName": "flim",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/*.cjs",
+      "electron/recovery.html",
+      "electron/recovery.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../out-experimental",
+        "to": "native",
+        "filter": [
+          "flim.exe",
+          "flim_engine.dll",
+          "profiles/*.profile"
+        ]
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "public/brand/flim.ico",
+      "signExecutable": false
+    },
+    "artifactName": "flim-rooms-${version}-win64.${ext}"
+  }
+}
