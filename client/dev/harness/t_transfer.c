@@ -2,7 +2,7 @@
 #include <winhttp.h>
 #include <assert.h>
 
-static int partial_writes, cancel_read;
+static int partial_writes, cancel_read, fail_download_once;
 static BOOL WINAPI transfer_write(HINTERNET request, LPCVOID data, DWORD bytes, LPDWORD written) {
     if (partial_writes && bytes > 1024) bytes = 1024;
     return WinHttpWriteData(request, data, bytes, written);
@@ -15,13 +15,16 @@ static BOOL WINAPI transfer_read(HINTERNET request, LPVOID data, DWORD bytes, LP
 #undef WinHttpReadData
 
 static BOOL WINAPI transfer_read(HINTERNET request, LPVOID data, DWORD bytes, LPDWORD read) {
-    BOOL ok = WinHttpReadData(request, data, bytes, read);
+    BOOL ok;
+    if (fail_download_once == 2) { fail_download_once = 0; *read = 0; SetLastError(ERROR_CONNECTION_ABORTED); return FALSE; }
+    if (fail_download_once == 1) { if (bytes > 10) bytes = 10; fail_download_once = 2; }
+    ok = WinHttpReadData(request, data, bytes, read);
     if (cancel_read && ok && *read) { cancel_read = 0; g_netGen++; }
     return ok;
 }
 
 static void lookup_mode(const char *mode) {
-    assert(blob_http(L"POST", "/test-mode", NULL, 0, mode, (DWORD)strlen(mode), NULL, NULL, NULL, 0) == 200);
+    assert(blob_http(L"POST", "/test-mode", NULL, 0, mode, (DWORD)strlen(mode), NULL, NULL, NULL, 0, 0) == 200);
 }
 
 static void lookup_recovery(void) {
@@ -88,21 +91,31 @@ int main(int argc, char **argv) {
     for (i = 0; i < 65569; i++) fputc(i % 251, file);
     fclose(file);
     partial_writes = 1;
-    assert(blob_http(L"PUT", "/blob/upload", L"upload.bin", 65569, NULL, 0, NULL, NULL, NULL, 0) == 201);
+    assert(blob_http(L"PUT", "/blob/upload", L"upload.bin", 65569, NULL, 0, NULL, NULL, NULL, 0, 0) == 201);
     partial_writes = 0;
     assert(g_xferDone == 65569);
     puts("PASS partial HTTP writes send the complete file");
 
-    assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"download.bin", actual, NULL, 0) == 200);
+    assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"download.bin", actual, NULL, 0, 0) == 200);
     assert(sha_hex("flim transfer download", 22, expected));
     assert(!strcmp(actual, expected));
     assert(file_info(L"download.bin", &bytes, NULL) && bytes == 22);
     puts("PASS streamed download content and checksum");
 
+    assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"oversized.bin", actual, NULL, 0, 21) == 0);
+    assert(file_info(L"oversized.bin", &bytes, NULL) && !bytes);
+    assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"short.bin", actual, NULL, 0, 23) == 0);
+    assert(blob_http(L"GET", "/blob/redirect", NULL, 0, NULL, 0, NULL, NULL, NULL, 0, 0) == 302);
+    puts("PASS advertised download length bounds reject oversized/short bodies and authenticated requests never follow redirects");
+
+    g_xferDone = 100; fail_download_once = 1;
+    assert(sample_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"retry.bin", actual, NULL, 0, 22) == 200);
+    assert(g_xferDone == 122 && file_info(L"retry.bin", &bytes, NULL) && bytes == 22);
+    puts("PASS a partial download retry replaces failed bytes without inflating progress");
     lookup_recovery();
 
     g_workBound = 1; g_workGen = g_netGen = 3; cancel_read = 1;
-    assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"cancelled.bin", actual, NULL, 0) == 0);
+    assert(blob_http(L"GET", "/blob/download", NULL, 0, NULL, 0, L"cancelled.bin", actual, NULL, 0, 0) == 0);
     assert(file_info(L"cancelled.bin", &bytes, NULL) && bytes == 0);
     puts("PASS a stale session stops writing downloaded data");
     return 0;

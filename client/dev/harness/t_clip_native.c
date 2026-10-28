@@ -15,7 +15,7 @@ static unsigned char arrangement[64], clips[32], records[3 * CLIP_SIZE], mainfor
 static void *clip_vmt[4], *playlist, *main_form;
 static CRITICAL_SECTION note_cs;
 static unsigned purges, adds;
-static int ignore_add;
+static int ignore_add, corrupt_add;
 static uint32_t last_rec_id;
 static unsigned rec_calls, mute_calls;
 static uint32_t rec_override;
@@ -37,6 +37,7 @@ static int fake_add(void *ca, const void *record) {
     memcpy(records + n * clip_native_size(), record, clip_native_size());
     *(unsigned *)(records + n * clip_native_size() + CLIP_ID_OFS) = 100 + n;
     *(unsigned *)((char *)ca + CLIPS_COUNT) = n + 1;
+    if (corrupt_add) records[n * clip_native_size()] ^= 1;
     adds++; return (int)n;
 }
 static void fixture(const wchar_t *build) {
@@ -126,7 +127,7 @@ static void snapshots_and_apply(const wchar_t *build) {
     assert(clips_hash(0) == hash);
     records[CLIP_SEL_OFS] |= CLIP_SEL_BIT;
     assert(clips_apply(0, wire, 2));
-    assert(purges == 1 && adds == 2 && g_clipLast.known && g_clipLast.n == 2);
+    assert(purges == 0 && adds == 0 && g_clipLast.known && g_clipLast.n == 2);
     assert(records[CLIP_SEL_OFS] & CLIP_SEL_BIT);
     assert(records[clip_native_size()] == 11);
     free(wire);
@@ -161,11 +162,27 @@ static void refused_native_clip(void) {
     assert(g_compatFault && !g_clipLast.known);
     puts("PASS silently refused native clips do not commit an incorrect shared playlist baseline");
 }
+static void sweep_0224(void) {
+    unsigned char incoming[CLIP_SIZE] = {42}; int same;
+    unsigned char *old = (unsigned char *)calloc(6000, CLIP_SIZE), *next = (unsigned char *)calloc(6000, CLIP_SIZE);
+    unsigned i;
+    assert(old && next);
+    for (i = 0; i < 6000; i++) { memcpy(old + (size_t)i * CLIP_SIZE, &i, 4); old[(size_t)i * CLIP_SIZE + CLIP_SEL_OFS] = CLIP_SEL_BIT; memcpy(next + (size_t)(5999-i) * CLIP_SIZE, &i, 4); }
+    assert(clips_apply_plan(old, 6000, next, 6000, &same) && same);
+    for (i = 0; i < 6000; i++) assert(next[(size_t)i * CLIP_SIZE + CLIP_SEL_OFS] & CLIP_SEL_BIT);
+    free(old); free(next);
+    fixture(L"24.2.2.4597"); memcpy(incoming + 60, flim_clip_extension_default, 20);
+    corrupt_add = 1; assert(!clips_apply(0, incoming, 1)); corrupt_add = 0;
+    assert(g_compatFault && !g_clipLast.known);
+    fixture(L"25.2.5.5319"); assert(!clips_apply(9, incoming, 0) && g_compatFault);
+    puts("PASS 6000 selected clips match by sorted records; same-count corruption and absent arrangements pause sharing");
+}
 int main(void) {
     InitializeCriticalSection(&note_cs); InitializeCriticalSection(&g_ulockLock);
     InitializeCriticalSection(&g_sendLock); InitializeCriticalSection(&g_netTextLock);
     InitializeCriticalSection(&g_qLock);
     InitializeCriticalSection(&g_slotLock);
+    sweep_0224();
     refused_native_clip();
     translation(); snapshots_and_apply(L"24.2.2.4597"); snapshots_and_apply(L"25.2.5.5319");
     failed_reads_and_allocations();

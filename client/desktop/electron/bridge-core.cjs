@@ -6,7 +6,7 @@ const { randomUUID } = require('node:crypto');
 const { execFile } = require('node:child_process');
 const { setTimeout: delay } = require('node:timers/promises');
 const { readStableFile } = require('./local-file.cjs');
-const {checkDirectory, validDirectory} = require('./sample-location.cjs');
+const {checkDirectory, validDirectory, folderError} = require('./sample-location.cjs');
 const {writeSettings} = require('./atomic-settings.cjs');
 
 const RELAY = 'https://flim-relay.cashflowbeatz.workers.dev';
@@ -323,7 +323,7 @@ class DesktopBridge {
     try { return await checkDirectory(directory, {io: this.io, create: !this.sampleDirectory && !this.room?.sampleDirectory, writable}); }
     catch (error) {
       this.log('settings_failed', {operation: 'sample-folder', code: error?.code, message: 'The received-files folder is unavailable.'});
-      throw new BridgeError(/^(Choose |The actual |Choose a folder)/.test(error.message) ? error.message : 'The samples folder is unavailable or cannot be written. Check its drive, permissions and free space, or choose another folder in Files.');
+      throw new BridgeError(folderError(error, 'The samples folder is unavailable or cannot be written. Check its drive, permissions and free space, or choose another folder in Files.'));
     }
   }
 
@@ -339,7 +339,7 @@ class DesktopBridge {
       }
       let resolved;
       try { resolved = await checkDirectory(chosen, {io: this.io, create: reset}); }
-      catch (error) { throw new BridgeError(/^(Choose |The actual )/.test(error.message) ? error.message : 'That folder cannot be written. Check its drive, permissions and free space, then choose again.'); }
+      catch (error) { throw new BridgeError(folderError(error, 'That folder cannot be written. Check its drive, permissions and free space, then choose again.')); }
       const previous = this.sampleDirectory;
       const previousError = this.sampleLocationError;
       this.sampleDirectory = reset || samePath(resolved, this.defaultSampleDirectory) ? '' : resolved;

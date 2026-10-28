@@ -1,6 +1,6 @@
 {
   "name": "flim-desktop",
-  "version": "0.2.23",
+  "version": "0.2.24",
   "private": true,
   "type": "module",
   "description": "Create a room, invite a friend, and open FL Studio together.",

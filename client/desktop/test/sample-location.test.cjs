@@ -97,7 +97,7 @@ test('duplicate choices and room actions cannot overlap a native folder dialog',
 });
 test('a vanished custom drive never silently falls back to the default folder', async t => {
   const f = await fixture(t); await f.bridge.changeSampleLocation(); await fs.rmdir(f.selected);
-  await assert.rejects(f.bridge.checkedSampleDirectory(), /unavailable/);
+  await assert.rejects(f.bridge.checkedSampleDirectory(), /no longer available/);
   await assert.rejects(fs.stat(f.bridge.defaultSampleDirectory), {code: 'ENOENT'}); assert.equal(f.bridge.getSampleLocation().custom, true);
 });
 test('invalid saved locations block launch preparation until explicitly repaired and are not erased by other saves', async t => {
@@ -124,4 +124,26 @@ test('progress rejects nonfinite byte counts and local storage waits have a spec
   const {fileProgress, fileStatus} = await import('../src/utils/fileTransfers.js');
   for (const [bytes, done] of [[1, NaN], [Infinity, 10], [10, Infinity], [-1, 10]]) assert.equal(fileProgress({bytes, done}), 0);
   assert.equal(fileStatus({state: 'waiting', reason: 'local_cache'}), 'Waiting for folder access');
+});
+
+
+test('sample destinations reject reserved Windows device components and malformed Unicode before disk access', async () => {
+  for (const value of ['C:/Audio/CON', 'C:/Audio/nul.wav', 'D:/COM1/Shared', 'D:/LPT\u00b9/Shared', 'C:/Audio/\ud800']) assert.equal(validDirectory(value), false, value);
+  assert.equal(validDirectory('C:/Audio/Console'), true);
+  assert.equal(validDirectory('C:/Audio/\ud83c\udfb9'), true);
+});
+test('probe cleanup does not hide the original write or sync failure', async () => {
+  const diskFull = Object.assign(new Error('disk full'), {code: 'ENOSPC'});
+  let closes = 0, deletes = 0;
+  const io = {realpath: async value => value, stat: async () => ({isDirectory: () => true}),
+    open: async () => ({writeFile: async () => {throw diskFull;}, sync: async () => {}, close: async () => {closes++; throw new Error('close failed');}}),
+    unlink: async () => {deletes++; throw new Error('unlink failed');}};
+  await assert.rejects(checkDirectory('C:/Audio', {io}), error => error === diskFull);
+  assert.equal(closes, 1); assert.equal(deletes, 1);
+});
+test('samples-folder failures explain full drives, disconnected drives and denied writing without exposing paths', () => {
+  const {folderError} = require('../electron/sample-location.cjs');
+  for (const [code, text] of [['ENOSPC', /full/], ['EDQUOT', /quota/], ['ENOENT', /no longer available/], ['ENODEV', /Reconnect/], ['EACCES', /permissions/], ['EROFS', /does not allow writing/]])
+    assert.match(folderError({code, message: 'C:/private'}, 'fallback'), text);
+  assert.equal(folderError({code: 'OTHER'}, 'fallback'), 'fallback');
 });

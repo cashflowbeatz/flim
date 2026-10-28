@@ -4,6 +4,21 @@ These changes support reviewed FL Studio 24/25/26 builds and improve shared proj
 
 In this document, **client** means the flim program running with your FL Studio. **Server** means the program that passes edits and sample files between you and your friends. An **edit lock** is a temporary reservation that stops two people from changing the same control at the same time. A **cache** is temporary file storage that can be cleared to make room.
 
+## Version 0.2.24: complete note snapshots and verified sample transfers (local, 2026-10-28)
+
+34 additional fixes share larger multi-pattern edits, prepare full note snapshots before queuing,
+ignore harmless note order changes, avoid unchanged CRDT/playlist application and verify actual
+native note/clip contents. Playlist matching uses sorted records. FL24 control snapshots reserve
+space only for meaningful work. Sample handling validates path/size identities, bounds downloaded
+bodies, separates concurrent progress, corrects retry totals and cancels obsolete hashes. Received
+folder validation and storage messages cover Windows devices, Unicode, full disks and missing
+drives. [Detailed fixes, evidence and compatibility limits](client/desktop/QA-0.2.24.md).
+
+32 native harnesses, 180 desktop tests, 195 UI checks, real Electron window/recovery checks,
+73 local worker tests and native file-transfer loopbacks pass. Reviewed build profiles remain
+FL24 24.2.2.4597, FL25 25.2.5.5319 and FL26 26.1.7.5654. No fresh two-computer/MIDI proof,
+new FL build profile, commit, push or Cloudflare deployment.
+
 ## Version 0.2.23: native editing and mixed-build reliability (local, 2026-10-28)
 
 39 additional fixes retain queued preset source versions, structurally dispatch formatted

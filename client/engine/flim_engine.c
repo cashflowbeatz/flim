@@ -1532,7 +1532,9 @@ static unsigned char *read_file(const char *path, size_t *n) {
 static char *tmp_path(const char *tag) {
     char *p = (char *)malloc(MAX_PATH);
     if (!p) { sharing_fail("Shared plugin: session stopped", "There is not enough memory to prepare the shared plugin file."); return NULL; }
-    sprintf_s(p, MAX_PATH, "%s\\%s_%ld.fst", g_tmpDir, tag, InterlockedIncrement(&g_tmpSeq));
+    if (_snprintf_s(p, MAX_PATH, _TRUNCATE, "%s\\%s_%ld.fst", g_tmpDir, tag, InterlockedIncrement(&g_tmpSeq)) < 0) {
+        free(p); sharing_fail("Shared plugin: sharing paused", "The temporary folder path is too long to prepare this preset. Choose a shorter TEMP folder before reconnecting."); return NULL;
+    }
     return p;
 }
 
@@ -2150,7 +2152,6 @@ static int sha_hex(const void *p, size_t n, char hex[65]);
 #define NOTES_SCAN_MS   100
 #define NOTES_SETTLE_MS 100
 #define NOTES_STREAM_MS 200     // keep recorded MIDI moving while notes are still being added
-#define NOTES_BULK      8       // this many patterns changing at once = project load, not an edit
 
 static int notes_suppressed(volatile DWORD *until, DWORD now) {
     LONG deadline = InterlockedCompareExchange((volatile LONG *)until, 0, 0);
@@ -2162,14 +2163,19 @@ static int notes_suppressed(volatile DWORD *until, DWORD now) {
 
 // Hash of note records with the selection bit masked out: selecting is not an edit.
 static uint64_t notes_fnv(const unsigned char *p, unsigned n) {
-    uint64_t h = 1469598103934665603ull;
-    size_t i, len = (size_t)n * NOTE_SIZE;
-    for (i = 0; i < len; i++) {
-        unsigned char b = p[i];
-        if (i % NOTE_SIZE == NOTE_SEL_OFS) b &= (unsigned char)~NOTE_SEL_BIT;
-        h ^= b; h *= 1099511628211ull;
+    uint64_t sum = 0, mixed = 0;
+    unsigned i, j;
+    for (i = 0; i < n; i++) {
+        uint64_t h = 1469598103934665603ull;
+        for (j = 0; j < NOTE_SIZE; j++) {
+            unsigned char v = p[(size_t)i * NOTE_SIZE + j];
+            if (j == NOTE_SEL_OFS) v &= (unsigned char)~NOTE_SEL_BIT;
+            h = (h ^ v) * 1099511628211ull;
+        }
+        sum += h; mixed += h * (h ^ 0x9e3779b97f4a7c15ull);
     }
-    return h ? h : 1;
+    sum ^= (mixed << 23) | (mixed >> 41); sum ^= (uint64_t)n * 0x9e3779b97f4a7c15ull;
+    return sum ? sum : 1;
 }
 
 static void notes_clear_sel(unsigned char *d, unsigned n) {
@@ -2182,18 +2188,19 @@ static char *pat_notes_arr(int p) {
     return *(char **)(tbl + (size_t)p * PAT_STRIDE + PAT_NOTES);
 }
 
+static CRITICAL_SECTION *note_lock(void) { return *(CRITICAL_SECTION **)(g_flBase + (NOTELOCK_VA - IMG_BASE)); }
+
 static uint64_t notes_hash(int p) {
+    uint64_t h = 0;
+    EnterCriticalSection(note_lock());
     __try {
         char *a = pat_notes_arr(p);
-        if (!a) return 0;
-        unsigned n = *(unsigned *)(a + NOTES_COUNT);
-        if (!n) return 0;
-        if (n > 1000000) return 1;
-        return notes_fnv(*(unsigned char **)(a + NOTES_DATA), n);
-    } __except (EXCEPTION_EXECUTE_HANDLER) { return 1; }
+        unsigned n = a ? *(unsigned *)(a + NOTES_COUNT) : 0;
+        h = n > 1000000 ? 1 : n ? notes_fnv(*(unsigned char **)(a + NOTES_DATA), n) : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { h = 1; }
+    LeaveCriticalSection(note_lock());
+    return h;
 }
-
-static CRITICAL_SECTION *note_lock(void) { return *(CRITICAL_SECTION **)(g_flBase + (NOTELOCK_VA - IMG_BASE)); }
 
 // Copy of pattern p's note records (main thread, under FL's note lock). *n = count.
 static unsigned char *notes_copy(int p, unsigned *n) {
@@ -2289,6 +2296,14 @@ static void notes_apply(int p, const unsigned char *recs, unsigned n) {
             for (k = (int)c - 1; k >= 0; k--) if (!keep[k]) { g_noteDel(a, k, 0); changed = 1; }
             for (i = 0; i < n; i++) if (insert[i]) { add(a, in + (size_t)i * NOTE_SIZE); changed = 1; }
             applied = *(unsigned *)(a + NOTES_COUNT) == n;
+            if (applied && n) {
+                /* Reuse the plan to verify the exact multiset, including duplicate notes. */
+                unsigned char *actual = *(unsigned char **)(a + NOTES_DATA);
+                unsigned char *verified = (unsigned char *)calloc(n, 1);
+                applied = verified && notes_apply_plan(actual, n, in, n, verified, insert);
+                if (applied) for (i = 0; i < n; i++) if (insert[i]) { applied = 0; break; }
+                free(verified);
+            }
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("NOTES apply faulted pat %d", p); }
     LeaveCriticalSection(note_lock());
@@ -2444,7 +2459,11 @@ static void notes_crdt_receive(const QItem *it) {
     if (n == UINT_MAX) goto unlock;
     fnc_free(&g_noteSets[p]); g_noteSets[p] = next; memset(&next, 0, sizeof(next));
     notes_crdt_budget(old, g_noteSets[p].count);
-    notes_apply(p, merged, n); ok = !g_compatFault;
+    if (notes_hash(p) == (n ? notes_fnv(merged, n) : 0)) {
+        g_patSeen[p] = g_patHash[p] = n ? notes_fnv(merged, n) : 0;
+        g_patChangedAt[p] = g_patDirtyAt[p] = 0; ok = 1;
+    }
+    else { notes_apply(p, merged, n); ok = !g_compatFault; }
 unlock:
     LeaveCriticalSection(note_lock()); LeaveCriticalSection(&g_ulockLock);
     free(local); free(merged); fnc_free(&next);
@@ -2573,12 +2592,6 @@ static void scan_notes(DWORD now) {
         if ((g_patChangedAt[p] && now - g_patChangedAt[p] >= NOTES_SETTLE_MS) ||
             now - g_patDirtyAt[p] >= NOTES_STREAM_MS) pend[np++] = p;
     }
-    if (np >= NOTES_BULK) {
-        // project load/new: never broadcast as edits (the param bulk guard syncs the whole project)
-        for (i = 0; i < np; i++) { g_patHash[pend[i]] = g_patSeen[pend[i]]; g_patDirtyAt[pend[i]] = 0; }
-        logmsg("NOTES bulk change in %d patterns: not sent", np);
-        return;
-    }
     for (i = 0; i < np; i++) {
         enqueue_unit(T_NOTESNAP, 0, pend[i], 0, 0, NULL);
         g_patDirtyAt[pend[i]] = now;
@@ -2615,68 +2628,75 @@ static int shared_b64(FlJson value, FlJson *data, size_t max_bytes, size_t *byte
     return *bytes <= max_bytes;
 }
 
-static int notes_item_data(FlJson item, int *pat, FlJson *data) {
-    FlJson value; uint64_t number; size_t n, i;
+static int notes_decode_item(FlJson item, int full, QItem *task) {
+    FlJson value, data; uint64_t number; size_t bytes, n;
     int crdt = fj_get(item, "crdt", &value);
-    if ((crdt && (!g_notesCrdt || !fj_is(value, "1"))) || (!crdt && g_notesCrdt)) return 0;
-    if (!fj_get(item, "pat", &value) || !fc_uint(value, &number) || !number || number >= MAX_PAT ||
-        !fj_get(item, "data", &value) || !shared_b64(value, data,
-            crdt ? FNC_HEADER + FNC_LIMIT * FNC_ENTRY : 1000000 * NOTE_SIZE, &n)) return 0;
-    *pat = (int)number;
+    memset(task, 0, sizeof(*task));
+    if ((crdt && (!g_notesCrdt || !fj_is(value, "1"))) || (!crdt && g_notesCrdt) ||
+        !fj_get(item, "pat", &value) || !fc_uint(value, &number) || !number || number >= MAX_PAT ||
+        !fj_get(item, "data", &value) || !shared_b64(value, &data,
+            crdt ? FNC_HEADER + FNC_LIMIT * FNC_ENTRY : 1000000 * NOTE_SIZE, &bytes)) return 0;
+    task->order = (int *)b64dec(data.p, data.n, &n);
+    if (!task->order) return 0;
     if (crdt) {
-        unsigned char scope[16], *wire; const FncEntry *entries; unsigned count; size_t bytes;
-        wire = b64dec(data->p, data->n, &bytes);
-        i = wire && fnc_unpack(wire, (unsigned)bytes, scope, &entries, &count);
-        free(wire); if (!i) return 0;
-    } else if (n % NOTE_SIZE) return 0;
+        unsigned char scope[16]; const FncEntry *entries; unsigned count;
+        if (!fnc_unpack((unsigned char *)task->order, (unsigned)n, scope, &entries, &count)) goto invalid;
+    } else if (n % NOTE_SIZE) goto invalid;
+    task->type = T_NOTES; task->a = (int)number;
+    task->mode = (int)(crdt ? n : n / NOTE_SIZE); task->b = crdt ? (full ? 2 : 1) : 0;
     return 1;
-}
-
-static int parse_notes_item(FlJson item, int full) {
-    int pat; FlJson data; size_t n;
-    if (!notes_item_data(item, &pat, &data)) return 0;
-    unsigned char *recs = b64dec(data.p, data.n, &n);
-    if (!recs) return 0;
-    QItem it; memset(&it, 0, sizeof(it));
-    it.type = T_NOTES; it.a = pat; it.mode = (int)(g_notesCrdt ? n : n / NOTE_SIZE); it.b = g_notesCrdt ? (full ? 2 : 1) : 0; it.order = (int *)recs;
-    enqueue(&it);
-    return !g_compatFault;
+invalid:
+    free(task->order); task->order = NULL; return 0;
 }
 
 static void on_notes(const char *m, int full) {
-    FlJson root = {m, strlen(m)}, op, items, item, data;
+    FlJson root = {m, strlen(m)}, op, items, item;
     const char *p, *end, *start;
     unsigned char *keep = NULL;
-    int pat;
+    QItem *tasks = NULL, one = {0};
+    unsigned count = 0, i, history = 0;
+    LONG generation = session_generation();
     if (!fj_get(root, "op", &op)) goto invalid;
-    if (!full) { if (!parse_notes_item(op, 0) && !g_compatFault) goto invalid; return; }
+    if (!full) {
+        if (!notes_decode_item(op, 0, &one)) goto invalid;
+        enqueue(&one); return;
+    }
     if (!fj_get(op, "items", &items) || items.n < 2 || items.p[0] != '[') goto invalid;
     keep = (unsigned char *)calloc(MAX_PAT, 1);
-    if (!keep) { sharing_fail("Shared notes: session stopped", "There is not enough memory to receive the shared patterns."); return; }
-    p = items.p + 1; end = items.p + items.n - 1;
-    fj_space(&p, end);
+    tasks = (QItem *)calloc(MAX_PAT + 1, sizeof(*tasks));
+    if (!keep || !tasks) goto invalid;
+    p = items.p + 1; end = items.p + items.n - 1; fj_space(&p, end);
     while (p < end) {
         start = p;
-        if (!fj_value(&p, end, 0)) goto invalid;
+        if (count == MAX_PAT - 1 || !fj_value(&p, end, 0)) goto invalid;
         item.p = start; item.n = (size_t)(p - start);
-        if (!notes_item_data(item, &pat, &data) || keep[pat]) goto invalid;
-        keep[pat] = 1;
+        if (!notes_decode_item(item, 1, &tasks[count])) goto invalid;
+        count++;
+        if (keep[tasks[count - 1].a]) goto invalid;
+        keep[tasks[count - 1].a] = 1;
+        if (g_notesCrdt) {
+            history += ((unsigned)tasks[count - 1].mode - FNC_HEADER) / FNC_ENTRY;
+            if (history > 262144) goto invalid;
+        }
         fj_space(&p, end);
-        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); }
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); if (p == end) goto invalid; }
     }
-    // Validate every pattern before any replacement or removal is queued.
-    p = items.p + 1; fj_space(&p, end);
-    while (p < end) {
-        start = p; fj_value(&p, end, 0);
-        item.p = start; item.n = (size_t)(p - start);
-        if (!parse_notes_item(item, 1)) { free(keep); return; }
-        fj_space(&p, end); if (p < end) { p++; fj_space(&p, end); }
+    tasks[count].type = T_NOTESYNC; tasks[count].order = (int *)keep; count++; keep = NULL;
+    EnterCriticalSection(&g_qLock);
+    if (generation != g_netGen || g_compatFault) { LeaveCriticalSection(&g_qLock); goto cleanup; }
+    if (count > (unsigned)((g_qh + QCAP - g_qt - 1) % QCAP)) { LeaveCriticalSection(&g_qLock); goto invalid; }
+    for (i = 0; i < count; i++) {
+        tasks[i].sessionGen = generation; g_q[g_qt] = tasks[i]; g_qt = (g_qt + 1) % QCAP;
     }
-    { QItem it = {0}; it.type = T_NOTESYNC; it.order = (int *)keep; enqueue(&it); }
+    LeaveCriticalSection(&g_qLock);
+    free(tasks);
+    if (g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0);
     return;
 invalid:
-    free(keep);
-    sharing_fail("Shared notes: session stopped", "The shared pattern data is incomplete or invalid. Reconnect and resync before continuing to share.");
+    sharing_fail("Shared notes: session stopped", "The complete note snapshot is invalid, exceeds its limits or could not be queued. No partial snapshot was queued. Reconnect and resync before continuing.");
+cleanup:
+    for (i = 0; i < count; i++) discard_task(&tasks[i]);
+    free(tasks); free(keep);
 }
 
 // ---------------- playlist clips ----------------
@@ -2742,6 +2762,7 @@ static uint64_t clips_fnv(unsigned char *d, unsigned n) {
 static uint64_t clips_hash(int arr) {
     unsigned char *buf = NULL;
     uint64_t h = 0;
+    EnterCriticalSection(note_lock());
     __try {
         char *ca = arr_clips(arr);
         unsigned n = ca ? *(unsigned *)(ca + CLIPS_COUNT) : 0;
@@ -2751,6 +2772,7 @@ static uint64_t clips_hash(int arr) {
             h = buf ? clips_fnv(buf, n) : 1;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { h = 1; }
+    LeaveCriticalSection(note_lock());
     free(buf);
     return h;
 }
@@ -2795,21 +2817,57 @@ static void playlist_refresh(void) {
     } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("CLIPS refresh faulted"); }
 }
 
-// Replace an arrangement's clips with recs[0..n) (main thread). Selection stays local:
-// clips this user had selected stay selected if an identical clip is still there.
+typedef struct { unsigned char rec[CLIP_SIZE]; unsigned index, selected; } ClipApplyRef;
+static int clip_apply_cmp(const void *a, const void *b) {
+    const ClipApplyRef *x = (const ClipApplyRef *)a, *y = (const ClipApplyRef *)b;
+    int order = memcmp(x->rec, y->rec, CLIP_SIZE);
+    if (order) return order;
+    if (x->selected != y->selected) return x->selected ? -1 : 1;
+    return x->index < y->index ? -1 : x->index > y->index;
+}
+static void clip_apply_ref(ClipApplyRef *ref, const unsigned char *data, unsigned n) {
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        memcpy(ref[i].rec, data + (size_t)i * CLIP_SIZE, CLIP_SIZE);
+        ref[i].selected = !!(ref[i].rec[CLIP_SEL_OFS] & CLIP_SEL_BIT);
+        ref[i].rec[CLIP_SEL_OFS] &= (unsigned char)~CLIP_SEL_BIT;
+        memset(ref[i].rec + CLIP_ID_OFS, 0, 4); ref[i].index = i;
+    }
+    if (n) qsort(ref, n, sizeof(*ref), clip_apply_cmp);
+}
+/* Match duplicates once, keeping this computer's selected copies first. */
+static int clips_apply_plan(const unsigned char *old, unsigned c, unsigned char *in, unsigned n, int *same) {
+    ClipApplyRef *before = c ? (ClipApplyRef *)malloc((size_t)c * sizeof(*before)) : NULL;
+    ClipApplyRef *after = n ? (ClipApplyRef *)malloc((size_t)n * sizeof(*after)) : NULL;
+    unsigned a = 0, b = 0, matched = 0;
+    *same = 0;
+    if ((c && !before) || (n && !after)) { free(before); free(after); return 0; }
+    clip_apply_ref(before, old, c); clip_apply_ref(after, in, n);
+    while (a < c && b < n) {
+        int order = memcmp(before[a].rec, after[b].rec, CLIP_SIZE);
+        if (!order) {
+            if (before[a].selected) in[(size_t)after[b].index * CLIP_SIZE + CLIP_SEL_OFS] |= CLIP_SEL_BIT;
+            a++; b++; matched++;
+        } else if (order < 0) a++; else b++;
+    }
+    *same = matched == c && c == n;
+    free(before); free(after); return 1;
+}
+
 static int clips_apply(int arr, const unsigned char *recs, unsigned n) {
-    unsigned i, j, nold = 0;
+    unsigned i, j;
     size_t stride = clip_native_size();
-    unsigned char *in, *native;
+    unsigned char *in, *native, *check;
     unsigned char *old = NULL;
-    int applied = 0, faulted = 0;
+    int applied = 0, faulted = 0, changed = 0;
     if (n > 200000 || !flim_clips_compatible(recs, n, stride)) {
         compat_fail("A playlist clip uses data this FL build cannot preserve. The session stopped before replacing any clips.");
         return 0;
     }
     in = n ? (unsigned char *)malloc((size_t)n * CLIP_SIZE) : NULL;
     native = n ? (unsigned char *)malloc((size_t)n * stride) : NULL;
-    if (n && (!in || !native)) { free(in); free(native); return 0; }
+    check = n ? (unsigned char *)malloc((size_t)n * CLIP_SIZE) : NULL;
+    if (n && (!in || !native || !check)) { free(in); free(native); free(check); goto failed; }
     for (i = 0; i < n; i++) {
         memcpy(in + (size_t)i * CLIP_SIZE, recs + (size_t)i * CLIP_SIZE, CLIP_SIZE);
         in[(size_t)i * CLIP_SIZE + CLIP_SEL_OFS] &= (unsigned char)~CLIP_SEL_BIT;
@@ -2823,43 +2881,39 @@ static int clips_apply(int arr, const unsigned char *recs, unsigned n) {
             clippurge_t purge = (clippurge_t)vmt[CLIPPURGE_VSLOT];
             unsigned c = *(unsigned *)(ca + CLIPS_COUNT);
             unsigned char *d = *(unsigned char **)(ca + CLIPS_DATA);
-            if (c && c <= 200000) {
-                old = clips_from_native(d, c);
-                if (!old) __leave;
-                nold = c;
-            }
+            int same;
             if (c > 200000) __leave;
-            for (j = 0; j < nold; j++) {
-                unsigned char *o = old + (size_t)j * CLIP_SIZE;
-                if (!(o[CLIP_SEL_OFS] & CLIP_SEL_BIT)) continue;
-                o[CLIP_SEL_OFS] &= (unsigned char)~CLIP_SEL_BIT;
-                for (i = 0; i < n; i++) {
-                    unsigned char *r = in + (size_t)i * CLIP_SIZE;
-                    if (!(r[CLIP_SEL_OFS] & CLIP_SEL_BIT) && memcmp(r, o, CLIP_ID_OFS) == 0 &&
-                        memcmp(r + CLIP_ID_OFS + 4, o + CLIP_ID_OFS + 4, CLIP_SIZE - CLIP_ID_OFS - 4) == 0) {
-                        r[CLIP_SEL_OFS] |= CLIP_SEL_BIT; break;
-                    }
-                }
-            }
+            old = c ? clips_from_native(d, c) : NULL;
+            if ((c && !old) || !clips_apply_plan(old, c, in, n, &same)) __leave;
+            if (same) { applied = 1; __leave; }
             for (i = 0; i < n; i++)
                 if (!flim_clip_to_native(native + (size_t)i * stride, in + (size_t)i * CLIP_SIZE, stride)) __leave;
-            // FL's own delete: mark every clip deleted, then purge (also frees their resources)
             for (j = 0; j < c; j++) *(int32_t *)(d + (size_t)j * stride + CLIP_DEL_OFS) = -1;
             if (c) purge(ca);
             for (i = 0; i < n; i++) add(ca, native + (size_t)i * stride);
+            changed = 1;
             applied = *(unsigned *)(ca + CLIPS_COUNT) == n;
-            if (!applied) faulted = 1;
+            if (applied && n) {
+                d = *(unsigned char **)(ca + CLIPS_DATA);
+                for (i = 0; i < n; i++) if (!flim_clip_from_native(check + (size_t)i * CLIP_SIZE, d + (size_t)i * stride, stride)) { applied = 0; break; }
+                if (applied) {
+                    clips_fnv(in, n); clips_fnv(check, n);
+                    applied = !memcmp(in, check, (size_t)n * CLIP_SIZE);
+                }
+            }
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { faulted = 1; logmsg("CLIPS apply faulted arr %d", arr); }
     LeaveCriticalSection(note_lock());
     if (applied) unit_agreed(0, arr, in, n);
-    free(old); free(in); free(native);
-    if (faulted) compat_fail("FL could not apply a playlist edit. Sharing stopped to avoid continuing with different clip lists.");
-    if (!applied) return 0;
-    playlist_refresh();
+    free(old); free(in); free(native); free(check);
+    if (!applied || faulted) goto failed;
+    if (changed) playlist_refresh();
     if (arr == g_clipArr) { g_clipSeen = g_clipHash = clips_hash(arr); g_clipChangedAt = 0; }
     g_clipSuppress = GetTickCount() + NOTES_SETTLE_MS;
     return 1;
+failed:
+    compat_fail("FL could not apply or verify a playlist edit. Sharing paused to avoid continuing with different clip lists. Your project remains open.");
+    return 0;
 }
 
 static void do_clipsnap(const QItem *it) {
@@ -6601,7 +6655,7 @@ static void apply_full_state(const char *m) {
     FlJson root = {m, strlen(m)}, op, vals, pair, fields[2];
     const char *p, *end, *start;
     IncomingParam *parsed = NULL;
-    unsigned count = 0, i; int diff = 0, capacity = 0;
+    unsigned count = 0, i, needed = 0; int diff = 0, capacity = 0;
     if (!fj_get(root, "op", &op) || !fj_get(op, "vals", &vals) || vals.n < 2 || vals.p[0] != '[') goto invalid;
     p = vals.p + 1; end = vals.p + vals.n - 1; fj_space(&p, end);
     while (p < end) {
@@ -6626,7 +6680,15 @@ static void apply_full_state(const char *m) {
     for (i = 1; i < count; i++) if (parsed[i-1].id == parsed[i].id) goto invalid;
     /* Hold the queue until the complete snapshot has been reserved and routed. */
     EnterCriticalSection(&g_qLock);
-    if (count > (unsigned)(QCAP - 1 - (g_qt - g_qh + QCAP) % QCAP)) {
+    EnterCriticalSection(&g_slotLock);
+    for (i = 0; i < count; i++) {
+        Slot *slot;
+        if (!param_id_in_range(parsed[i].id)) continue;
+        slot = slot_by_id(parsed[i].id);
+        if (g_portableLocal || plug_param_blocked(parsed[i].id) || !slot || slot->last != parsed[i].value) needed++;
+    }
+    LeaveCriticalSection(&g_slotLock);
+    if (needed > (unsigned)(QCAP - 1 - (g_qt - g_qh + QCAP) % QCAP)) {
         LeaveCriticalSection(&g_qLock); goto invalid;
     }
     for (i = 0; i < count && !g_compatFault; i++) diff += route_inbound(parsed[i].id, parsed[i].value, !g_portableLocal);
@@ -7217,9 +7279,9 @@ static InItem  *g_inHead, *g_inTail;
 static int     g_inBusy;
 static size_t  g_inBytes, g_inCount;
 static HANDLE  g_outEvt, g_inEvt;
-static volatile uint64_t g_xferDone, g_xferTotal;
-static const char *g_xferWhat = "";
-static DWORD   g_xferShown;
+static __declspec(thread) uint64_t g_xferDone, g_xferTotal;
+static __declspec(thread) const char *g_xferWhat = "";
+static __declspec(thread) DWORD g_xferShown;
 
 typedef struct { BCRYPT_ALG_HANDLE alg; BCRYPT_HASH_HANDLE h; } Sha;
 static int sha_begin(Sha *s) {
@@ -7228,14 +7290,15 @@ static int sha_begin(Sha *s) {
     if (!BCRYPT_SUCCESS(BCryptCreateHash(s->alg, &s->h, NULL, 0, NULL, 0, 0))) { BCryptCloseAlgorithmProvider(s->alg, 0); return 0; }
     return 1;
 }
-static void sha_add(Sha *s, const void *p, size_t n) { BCryptHashData(s->h, (PUCHAR)p, (ULONG)n, 0); }
-static void sha_end(Sha *s, char hex[65]) {
+static int sha_add(Sha *s, const void *p, size_t n) { return n <= ULONG_MAX && BCRYPT_SUCCESS(BCryptHashData(s->h, (PUCHAR)p, (ULONG)n, 0)); }
+static int sha_end(Sha *s, char hex[65]) {
     UCHAR d[32];
-    int i;
-    BCryptFinishHash(s->h, d, 32, 0);
+    int i, ok = BCRYPT_SUCCESS(BCryptFinishHash(s->h, d, 32, 0));
+    hex[0] = 0;
     BCryptDestroyHash(s->h);
     BCryptCloseAlgorithmProvider(s->alg, 0);
-    for (i = 0; i < 32; i++) sprintf_s(hex + i * 2, 3, "%02x", d[i]);
+    if (ok) for (i = 0; i < 32; i++) sprintf_s(hex + i * 2, 3, "%02x", d[i]);
+    return ok;
 }
 static int sha_hex(const void *p, size_t n, char hex[65]) {
     Sha s; UCHAR d[32]; int i, ok;
@@ -7274,7 +7337,7 @@ static int is_abs_path(const wchar_t *p) {
 }
 
 static int hash_file(const wchar_t *p, char hex[65]) {
-    HANDLE f = CreateFileW(p, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+    HANDLE f = CreateFileW(p, GENERIC_READ, FILE_SHARE_READ, NULL,
                            OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
     unsigned char *buf;
     DWORD got;
@@ -7285,11 +7348,12 @@ static int hash_file(const wchar_t *p, char hex[65]) {
     buf = (unsigned char *)malloc(BLOB_CHUNK * 4);
     if (!buf) { sha_end(&s, hex); CloseHandle(f); return 0; }
     for (;;) {
+        if (!session_current()) { ok = 0; break; }
         if (!ReadFile(f, buf, BLOB_CHUNK * 4, &got, NULL)) { ok = 0; break; }
         if (!got) break;
-        sha_add(&s, buf, got);
+        if (!sha_add(&s, buf, got)) { ok = 0; break; }
     }
-    sha_end(&s, hex);
+    if (!sha_end(&s, hex)) ok = 0;
     free(buf);
     CloseHandle(f);
     return ok;
@@ -7344,25 +7408,29 @@ static int sample_hash(const wchar_t *p, char hex[65], uint64_t *size) {
 
 // Any local file known to have this content (and unchanged since it was hashed).
 static int find_by_hash(const char *hex, wchar_t *out, int cap) {
-    int i, found = 0;
-    EnterCriticalSection(&g_sampleLock);
-    for (i = 0; i < g_nhash && !found; i++) {
-        uint64_t sz;
-        FILETIME mt;
-        if (strcmp(g_hashes[i].hex, hex) != 0) continue;
-        if (!file_info(g_hashes[i].path, &sz, &mt) || sz != g_hashes[i].size || CompareFileTime(&g_hashes[i].mt, &mt) != 0) continue;
-        wcsncpy_s(out, cap, g_hashes[i].path, _TRUNCATE);
-        found = 1;
+    int i = 0;
+    for (;;) {
+        wchar_t *path = NULL; uint64_t expected = 0, sz; FILETIME mt, expectedMt;
+        EnterCriticalSection(&g_sampleLock);
+        while (i < g_nhash) {
+            HashEnt *entry = &g_hashes[i++];
+            if (strcmp(entry->hex, hex)) continue;
+            path = _wcsdup(entry->path); expected = entry->size; expectedMt = entry->mt; break;
+        }
+        LeaveCriticalSection(&g_sampleLock);
+        if (!path) return 0;
+        if (wcslen(path) < (size_t)cap && file_info(path, &sz, &mt) && sz == expected && !CompareFileTime(&mt, &expectedMt)) {
+            wcscpy_s(out, cap, path); free(path); return 1;
+        }
+        free(path);
     }
-    LeaveCriticalSection(&g_sampleLock);
-    return found;
 }
 
 static void map_set(const wchar_t *from, const wchar_t *to) {
     int i, failed = 0;
     EnterCriticalSection(&g_sampleLock);
     if (!session_current()) { LeaveCriticalSection(&g_sampleLock); return; }
-    for (i = 0; i < g_npmap && wcscmp(g_pmap[i].from, from) != 0; i++) {}
+    for (i = 0; i < g_npmap && _wcsicmp(g_pmap[i].from, from) != 0; i++) {}
     if (!to) {
         if (i < g_npmap) { free(g_pmap[i].from); free(g_pmap[i].to); g_pmap[i] = g_pmap[--g_npmap]; }
     } else {
@@ -7683,7 +7751,7 @@ static void pathlist_add(PathList *L, const wchar_t *w) {
     int i;
     wchar_t *copy;
     if (!w[0] || L->failed) return;
-    for (i = 0; i < L->n; i++) if (wcscmp(L->paths[i], w) == 0) return;
+    for (i = 0; i < L->n; i++) if (_wcsicmp(L->paths[i], w) == 0) return;
     if (L->n >= SAMPLE_REFERENCE_MAX) { L->failed = 1; return; }
     if (L->n == L->cap) {
         int cap = L->cap ? L->cap * 2 : 16;
@@ -7775,7 +7843,7 @@ static int raw_starts(const unsigned char *v, size_t i, size_t n, int wide) {
     c1 = wide ? *(const uint16_t *)(v + i + st) : v[i + st];
     c2 = wide ? *(const uint16_t *)(v + i + 2 * st) : v[i + 2 * st];
     if (wide && (v[i + 1] || v[i + 3])) return 0;
-    return ((c0 | 0x20) >= 'a' && (c0 | 0x20) <= 'z' && c1 == ':' && c2 == '\\') || (c0 == '\\' && c1 == '\\');
+    return ((c0 | 0x20) >= 'a' && (c0 | 0x20) <= 'z' && c1 == ':' && (c2 == '\\' || c2 == '/')) || (c0 == '\\' && c1 == '\\');
 }
 static void raw_collect(const unsigned char *v, size_t n, PathList *L) {
     wchar_t w[SAMPLE_PATH_MAX];
@@ -7837,7 +7905,7 @@ static void rw_event(RewriteCtx *c, int id, const unsigned char *p, size_t len) 
 }
 static const wchar_t *map_find(const wchar_t *from) {   // caller holds g_sampleLock
     int i;
-    for (i = 0; i < g_npmap; i++) if (wcscmp(g_pmap[i].from, from) == 0) return g_pmap[i].to;
+    for (i = 0; i < g_npmap; i++) if (_wcsicmp(g_pmap[i].from, from) == 0) return g_pmap[i].to;
     return NULL;
 }
 // TLV records of v[a, b) into c, mapped path leaves replaced (lengths follow). Caller holds g_sampleLock.
@@ -7983,7 +8051,7 @@ static int rewrite_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, 
     if (id == EV_SAMPLE_PATH && n >= 4) {
         ev_wstr(p, n, w, SAMPLE_PATH_MAX);
         for (i = 0; i < g_npmap; i++) {
-            if (wcscmp(g_pmap[i].from, w) != 0) continue;
+            if (_wcsicmp(g_pmap[i].from, w) != 0) continue;
             rw_event(c, id, (const unsigned char *)g_pmap[i].to, (wcslen(g_pmap[i].to) + 1) * 2);   // UTF-16LE + NUL
             c->changed = 1;
             return 1;
@@ -8069,6 +8137,7 @@ static FlpBuildCheck flp_check_build(const unsigned char *d, size_t n, char *the
 static __declspec(thread) int g_sampleHttp;
 static __declspec(thread) int g_sampleRetry;
 static __declspec(thread) int g_sampleLocalError;
+static __declspec(thread) int g_sampleVerificationError;
 static volatile LONG64 g_sampleBlockedUntil;
 
 static int sample_retryable(DWORD status, int download) {
@@ -8107,7 +8176,7 @@ static void sample_local_failed(void) {
 //   up/upSize: PUT body streamed from this file; body/bodyN: small in-memory body;
 //   down: response body written to this file (downHex = its sha256); resp: small text response.
 static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up, uint64_t upSize,
-                       const char *body, DWORD bodyN, const wchar_t *down, char *downHex, char *resp, int respCap) {
+                       const char *body, DWORD bodyN, const wchar_t *down, char *downHex, char *resp, int respCap, uint64_t expectedBytes) {
     NetUrl u;
     char key[65];
     wchar_t path[700], wwhat[200], hdr[128];
@@ -8136,6 +8205,8 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
     if (!con) goto out;
     req = WinHttpOpenRequest(con, verb, path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, u.secure ? WINHTTP_FLAG_SECURE : 0);
     if (!req) goto out;
+    { DWORD policy = WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
+      if (!WinHttpSetOption(req, WINHTTP_OPTION_REDIRECT_POLICY, &policy, sizeof(policy))) goto out; }
     buf = (unsigned char *)malloc(BLOB_CHUNK);
     if (!buf) { err = ERROR_NOT_ENOUGH_MEMORY; goto out; }
     if (up) {
@@ -8178,7 +8249,7 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
     }
     if (status == 200 && down) {
         Sha s;
-        uint64_t received = 0, limit = g_cloudTransport ? FLIM_CLOUD_FILE_MAX : SAMPLE_MAX_BYTES;
+        uint64_t received = 0, limit = expectedBytes ? expectedBytes : g_cloudTransport ? FLIM_CLOUD_FILE_MAX : SAMPLE_MAX_BYTES;
         f = CreateFileW(down, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
         if (f == INVALID_HANDLE_VALUE) { g_sampleLocalError = 1; err = GetLastError(); status = 0; goto out; }
         if (!sha_begin(&s)) { err = GetLastError(); status = 0; goto out; }
@@ -8188,15 +8259,16 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
             if (!WinHttpReadData(req, buf, BLOB_CHUNK, &got)) { err = GetLastError(); status = 0; break; }
             if (!got) break;
             if (!session_current()) { err = ERROR_OPERATION_ABORTED; status = 0; break; }
-            if (got > limit - received) { err = ERROR_FILE_TOO_LARGE; status = 0; break; }
+            if (got > limit - received) { g_sampleVerificationError = 1; err = ERROR_FILE_TOO_LARGE; status = 0; break; }
             received += got;
-            sha_add(&s, buf, got);
+            if (!sha_add(&s, buf, got)) { err = ERROR_INVALID_DATA; status = 0; break; }
             if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { g_sampleLocalError = 1; err = GetLastError(); status = 0; break; }
             g_xferDone += got;
             ff_progress(got);
             xfer_show(0);
         }
-        sha_end(&s, downHex);
+        if (status == 200 && expectedBytes && received != expectedBytes) { g_sampleVerificationError = 1; err = ERROR_INVALID_DATA; status = 0; }
+        if (!sha_end(&s, downHex)) { err = ERROR_INVALID_DATA; status = 0; }
         if (status == 200 && !FlushFileBuffers(f)) { g_sampleLocalError = 1; err = GetLastError(); status = 0; }
     } else if (resp && respCap > 0) {
         int o = 0;
@@ -8224,19 +8296,21 @@ out:
 }
 
 static DWORD sample_http(const wchar_t *verb, const char *what, const wchar_t *up, uint64_t upSize,
-                         const char *body, DWORD bodyN, const wchar_t *down, char *downHex, char *resp, int respCap) {
+                         const char *body, DWORD bodyN, const wchar_t *down, char *downHex, char *resp, int respCap, uint64_t expectedBytes) {
     DWORD status = 0; int attempt;
-    g_sampleLocalError = 0;
+    uint64_t startDone = g_xferDone;
+    g_sampleLocalError = g_sampleVerificationError = 0;
     if (GetTickCount64() < (ULONGLONG)InterlockedCompareExchange64(&g_sampleBlockedUntil, 0, 0)) { g_sampleRetry = 1; return 507; }
     for (attempt = 0; attempt < 2 && session_current() && !g_compatFault; attempt++) {
         if (attempt) {
+            g_xferDone = startDone;
             if (ff_active) { ff_current.done = 0; strcpy_s(ff_current.reason, sizeof(ff_current.reason), "retrying"); ff_save(); }
             Sleep(150);
         }
         g_sampleHttp = 1;
-        status = blob_http(verb, what, up, upSize, body, bodyN, down, downHex, resp, respCap);
+        status = blob_http(verb, what, up, upSize, body, bodyN, down, downHex, resp, respCap, expectedBytes);
         g_sampleHttp = 0;
-        if (g_sampleLocalError) break;
+        if (g_sampleLocalError || g_sampleVerificationError) break;
         if (status && status != 502 && status != 503 && status != 504) break;
     }
     if (sample_retryable(status, down != NULL)) g_sampleRetry = 1;
@@ -8261,7 +8335,7 @@ static int samples_missing(SEnt *entries, int count) {
         DWORD status;
         if (!session_current()) goto done;
         for (i = start; i < end; i++) n += sprintf_s(body + n, BODY_CAP - n, "%s\n", entries[i].hex);
-        status = sample_http(L"POST", "/blobs/missing", NULL, 0, body, (DWORD)n, NULL, NULL, response, RESPONSE_CAP);
+        status = sample_http(L"POST", "/blobs/missing", NULL, 0, body, (DWORD)n, NULL, NULL, response, RESPONSE_CAP, 0);
         if (status != 200) { logmsg("SAMPLES sample lookup failed (HTTP %lu)", status); goto done; }
         for (line = strtok_s(response, "\r\n", &context); line; line = strtok_s(NULL, "\r\n", &context)) {
             if (strlen(line) != 64 || !is_hex64(line)) goto done;
@@ -8348,7 +8422,7 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
             if (!E[i].upload) continue;
             sprintf_s(what, sizeof(what), "/blob/%s", E[i].hex);
             ff_begin(E[i].full, E[i].hex, "upload", E[i].size, "uploading");
-            st = sample_http(L"PUT", what, E[i].full, E[i].size, NULL, 0, NULL, NULL, NULL, 0);
+            st = sample_http(L"PUT", what, E[i].full, E[i].size, NULL, 0, NULL, NULL, NULL, 0, 0);
             if (st == 200 || st == 201) { ff_finish("ready", "uploaded"); logmsg("SAMPLES uploaded %S (%llu bytes)", E[i].full, (unsigned long long)E[i].size); }
             else {
                 sample_failed(st, 0);
@@ -8481,7 +8555,7 @@ static DWORD WINAPI outThread(LPVOID p) {
                     cloud_fail("This edit is too large or cannot be safely sent through the Cloudflare relay.");
                 } else {
                     sprintf_s(what, sizeof(what), "/blob/%s", hx);
-                    status = blob_http(L"PUT", what, NULL, 0, it->msg, (DWORD)size, NULL, NULL, NULL, 0);
+                    status = blob_http(L"PUT", what, NULL, 0, it->msg, (DWORD)size, NULL, NULL, NULL, 0, 0);
                     if (session_current()) {
                         if ((status == 200 || status == 201) && compat_outgoing(it->msg)) {
                             logmsg("CLOUD uploaded serialized edit (%llu bytes)", (unsigned long long)size);
@@ -8566,6 +8640,20 @@ static int cache_path(const char *hex, const wchar_t *p, wchar_t *out, int cap) 
     return swprintf_s(out, cap, L"%s\\%.16S\\%s", dir, hex, name) > 0;
 }
 
+static int sample_source_valid(const wchar_t *p, size_t n) {
+    size_t i;
+    if (!n || n >= SAMPLE_PATH_MAX || wcslen(p) != n) return 0;
+    if (!is_abs_path(p) && _wcsnicmp(p, L"%FLStudioUserData%", 18) && _wcsnicmp(p, L"%ILSharedData%", 14)) return 0;
+    if (p[0] == L'\\' && p[1] == L'\\' && (p[2] == L'?' || p[2] == L'.' || !p[2])) return 0;
+    for (i = 0; i < n; i++) {
+        unsigned c = p[i];
+        if (c < 32 || c == 127 || wcschr(L"<>\"|?*", c) || (c == L':' && i != 1)) return 0;
+        if (c >= 0xd800 && c <= 0xdbff) { if (++i == n || p[i] < 0xdc00 || p[i] > 0xdfff) return 0; }
+        else if (c >= 0xdc00 && c <= 0xdfff) return 0;
+    }
+    return 1;
+}
+
 typedef struct { wchar_t *p; char hex[65]; uint64_t size; wchar_t cache[MAX_PATH * 2]; int need; } REnt;
 
 // Inbox thread: make the samples an inbound op lists available here and record the path
@@ -8584,7 +8672,7 @@ static void samples_resolve(const char *m) {
         FlJson item, path, value;
         const char *start = q;
         char hex[65]; uint64_t bytes;
-        size_t bn, k, encoded, padding = 0;
+        size_t bn, encoded, decodedBytes;
         unsigned char *b;
         wchar_t *decoded;
         if (nr >= SAMPLE_REFERENCE_MAX || !fj_value(&q, end, 0)) goto invalid;
@@ -8592,21 +8680,26 @@ static void samples_resolve(const char *m) {
         if (!fj_get(item, "p", &path) || path.n < 6 || path.p[0] != '"' || path.n > 4 * ((SAMPLE_PATH_MAX * 2 + 2) / 3) + 2 ||
             !fj_get(item, "h", &value) || !fj_text(value, hex, sizeof(hex)) || strlen(hex) != 64 || !is_hex64(hex) ||
             !fj_get(item, "s", &value) || !fc_uint(value, &bytes) || !sample_sendable(bytes)) goto invalid;
-        encoded = path.n - 2;
-        if (encoded % 4) goto invalid;
-        if (path.p[path.n - 2] == '=') padding++;
-        if (path.p[path.n - 3] == '=') padding++;
-        for (k = 1; k <= encoded; k++) {
-            if (k <= encoded - padding ? b64val(path.p[k]) < 0 : path.p[k] != '=') goto invalid;
-        }
+        { FlJson data;
+          if (!shared_b64(path, &data, SAMPLE_PATH_MAX * 2 - 2, &decodedBytes)) goto invalid;
+          encoded = data.n; }
         b = b64dec(path.p + 1, encoded, &bn);
         if (!b) goto invalid;
         if (!bn || bn % 2 || bn >= SAMPLE_PATH_MAX * 2) { free(b); goto invalid; }
         decoded = (wchar_t *)calloc(bn / 2 + 1, 2);
         if (!decoded) { free(b); goto invalid; }
         memcpy(decoded, b, bn); free(b);
-        for (k = 0; k < bn / 2; k++) if (decoded[k] < 32) break;
-        if (k != bn / 2) { free(decoded); goto invalid; }
+        if (!sample_source_valid(decoded, bn / 2)) { free(decoded); goto invalid; }
+        { int previous;
+          for (previous = 0; previous < nr && _wcsicmp(R[previous].p, decoded); previous++) {}
+          if (previous < nr) {
+              int conflict = strcmp(R[previous].hex, hex) || R[previous].size != bytes;
+              free(decoded); if (conflict) goto invalid;
+              goto next_sample;
+          }
+          for (previous = 0; previous < nr; previous++)
+              if (!strcmp(R[previous].hex, hex) && R[previous].size != bytes) { free(decoded); goto invalid; }
+        }
         if (nr == cap) {
             int next = cap ? cap * 2 : 16;
             REnt *items = (REnt *)realloc(R, sizeof(REnt) * next);
@@ -8615,6 +8708,7 @@ static void samples_resolve(const char *m) {
         }
         memset(&R[nr], 0, sizeof(REnt)); R[nr].p = decoded;
         strcpy_s(R[nr].hex, sizeof(R[nr].hex), hex); R[nr++].size = bytes;
+next_sample:
         fj_space(&q, end);
         if (q < end && *q == ',') { q++; fj_space(&q, end); }
     }
@@ -8622,7 +8716,7 @@ static void samples_resolve(const char *m) {
         wchar_t full[SAMPLE_PATH_MAX], found[SAMPLE_PATH_MAX];
         char hx[65];
         uint64_t sz;
-        if (!g_noLocal && expand_path(R[i].p, full, SAMPLE_PATH_MAX) && sample_hash(full, hx, &sz) && sz == R[i].size && strcmp(hx, R[i].hex) == 0) {
+        if (!g_noLocal && expand_path(R[i].p, full, SAMPLE_PATH_MAX) && full[1] == L':' && sample_hash(full, hx, &sz) && sz == R[i].size && strcmp(hx, R[i].hex) == 0) {
             map_set(R[i].p, NULL);                      // the same file is right where the peer has it
             ff_begin(R[i].p, R[i].hex, "download", R[i].size, "ready"); ff_finish("ready", "local_cache");
             continue;
@@ -8639,7 +8733,9 @@ static void samples_resolve(const char *m) {
         /* A replacement must never reuse the previous contents at this peer path. */
         map_set(R[i].p, NULL);
         R[i].need = 1;
-        total += R[i].size;
+        { int previous;
+          for (previous = 0; previous < i; previous++) if (R[previous].need && !strcmp(R[previous].hex, R[i].hex)) break;
+          if (previous == i) total += R[i].size; }
         nneed++;
     }
     if (nneed) {
@@ -8668,7 +8764,7 @@ static void samples_resolve(const char *m) {
             if ((made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS) ||
                 !GetTempFileNameW(dir, L"flm", 0, part)) {sample_local_failed(); break;}
             sprintf_s(what, sizeof(what), "/blob/%s", R[i].hex);
-            st = sample_http(L"GET", what, NULL, 0, NULL, 0, part, got, NULL, 0);
+            st = sample_http(L"GET", what, NULL, 0, NULL, 0, part, got, NULL, 0, R[i].size);
             if (st == 200 && session_current() && file_info(part, &sz, NULL) && sz == R[i].size && strcmp(got, R[i].hex) == 0) {
                 if (!MoveFileExW(part, R[i].cache, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
                     DeleteFileW(part); sample_local_failed(); break;
@@ -8681,7 +8777,7 @@ static void samples_resolve(const char *m) {
                 logmsg("SAMPLES downloaded %S (%llu bytes)", R[i].cache, (unsigned long long)R[i].size);
             } else {
                 DeleteFileW(part);
-                if (g_sampleLocalError) sample_local_failed(); else sample_failed(st, st == 200);
+                if (g_sampleLocalError) sample_local_failed(); else sample_failed(st, st == 200 || g_sampleVerificationError);
                 nfail++;
                 logmsg("SAMPLES could not get %S (HTTP %lu%s): it will be missing", R[i].p, st, st == 200 ? ", content mismatch" : "");
                 if (g_sampleRetry) break;
@@ -8760,7 +8856,7 @@ static DWORD WINAPI inThread(LPVOID p) {
                 if (g_cloudTransport && fc_reference(it->msg, &ref)) {
                     original = (char *)malloc(ref.size + 1);
                     sprintf_s(what, sizeof(what), "/blob/%s", ref.hash);
-                    if (original && blob_http(L"GET", what, NULL, 0, NULL, 0, NULL, NULL, original, (int)ref.size + 1) == 200 &&
+                    if (original && blob_http(L"GET", what, NULL, 0, NULL, 0, NULL, NULL, original, (int)ref.size + 1, 0) == 200 &&
                         session_current() && strlen(original) == ref.size && sha_hex(original, ref.size, hx) && !strcmp(hx, ref.hash))
                         merged = fc_merge(it->msg, original);
                 }

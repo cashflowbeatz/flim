@@ -62,6 +62,13 @@ static void controls(void) {
     for (i = 1; i < MAX_PEND; i++) g_pend[i].id = i;
     pend_put(0, 22); assert(!g_compatFault && g_pend[0].v == 22);
     pend_put(MAX_PEND, 1); assert(g_compatFault && g_npend == MAX_PEND && g_pend[0].v == 22);
+    reset(); assert(add_slot(0));
+    for (i = 0; i < QCAP - 1; i++) enqueue_apply(i, i);
+    apply_full_state("{\"op\":{\"vals\":[[0,17]]}}"); assert(!g_compatFault && g_qt == QCAP - 1);
+    reset(); g_fl.build = L"24.2.2.4597";
+    for (i = 0; i < QCAP - 1; i++) enqueue_apply(i, i);
+    sprintf_s(message, sizeof(message), "{\"op\":{\"vals\":[[%u,2]]}}", MIX_ID(300, 0x1fc0));
+    apply_full_state(message); assert(!g_compatFault && g_qt == QCAP - 1);
     puts("PASS complete typed control snapshots, duplicate detection, queue reservation, FL24 unsupported-track skip and explicit pending overflow");
 }
 static void queues(void) {

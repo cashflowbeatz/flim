@@ -114,7 +114,7 @@ test('launch binds the chosen sample folder to its FL process without inheriting
 });
 test('unavailable chosen storage prevents starting FL without marking its launch uncertain or ending its room', async t => {
   const f = await fixture(t); f.bridge.sampleDirectory = path.join(f.root, 'missing'); await f.bridge.createRoom(f.input);
-  await assert.rejects(f.bridge.launchFL(), /samples folder is unavailable/);
+  await assert.rejects(f.bridge.launchFL(), /samples folder or its drive is no longer available/);
   assert.equal(f.calls.filter(call => call.args[0] === '--desktop').length, 0);
   assert.equal(f.bridge.room.state, 'ready'); assert.equal(f.bridge.room.status, 'waiting'); assert.equal(f.bridge.busy, false);
 });

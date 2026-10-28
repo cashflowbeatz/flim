@@ -23,7 +23,7 @@ static size_t sample_event(unsigned char *out, const wchar_t *path) {
     memcpy(out + n, path, length); return n + length;
 }
 static void mode(const char *value) {
-    assert(blob_http(L"POST", "/test-mode", NULL, 0, value, (DWORD)strlen(value), NULL, NULL, NULL, 0) == 200);
+    assert(blob_http(L"POST", "/test-mode", NULL, 0, value, (DWORD)strlen(value), NULL, NULL, NULL, 0, 0) == 200);
 }
 int main(int argc, char **argv) {
     unsigned char image[8192] = {0};
@@ -124,11 +124,11 @@ int main(int argc, char **argv) {
     mode("wrong-size");
     copy = _strdup(message); assert(copy);
     { char number[40], *at; sprintf_s(number, sizeof(number), "\"s\":%llu", (unsigned long long)bytes);
-      at = strstr(copy, number); assert(at); at[4] = '1'; }
+      at = copy; while ((at = strstr(at, number)) != NULL) { at[4] = '1'; at += strlen(number); } }
     samples_resolve(copy); assert(!file_exists_w(cache) && !g_compatFault); free(copy);
     puts("PASS sample metadata size is checked as well as its content fingerprint");
     mode("quota"); samples_resolve(message); assert(!g_compatFault && g_sampleBlockedUntil > (LONG64)GetTickCount64());
-    assert(sample_http(L"GET", "/blob/blocked", NULL, 0, NULL, 0, NULL, NULL, NULL, 0) == 507);
+    assert(sample_http(L"GET", "/blob/blocked", NULL, 0, NULL, 0, NULL, NULL, NULL, 0, 0) == 507);
     puts("PASS a sample allowance blocks further file requests while the room remains connected");
     g_workBound = 1; g_workGen = g_netGen - 1;
     assert(!sample_retry_wait(0)); assert(!samples_prepare_receive(message));

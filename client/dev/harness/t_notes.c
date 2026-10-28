@@ -6,12 +6,19 @@ static DWORD WINAPI notes_send(HINTERNET ws, WINHTTP_WEB_SOCKET_BUFFER_TYPE type
 #include "../../engine/flim_engine.c"
 #undef WinHttpWebSocketSend
 
+static int notes_item_data(FlJson item, int *pat, FlJson *data) {
+    QItem task; FlJson value; size_t bytes;
+    if (!notes_decode_item(item, 0, &task)) return 0;
+    *pat = task.a; free(task.order);
+    return fj_get(item, "data", &value) && shared_b64(value, data, SIZE_MAX - 2, &bytes);
+}
+
 static uint64_t image[4], patterns[MAX_PAT * 8], array[4];
 static unsigned char record[NOTE_SIZE * 6002];
 static CRITICAL_SECTION note_cs;
 static void *note_vtable[2];
 static unsigned added, deleted, sent;
-static int ignore_add;
+static int ignore_add, corrupt_add;
 static char last_send[2 * 1024 * 1024];
 
 static DWORD WINAPI notes_send(HINTERNET ws, WINHTTP_WEB_SOCKET_BUFFER_TYPE type, PVOID data, DWORD bytes) {
@@ -28,7 +35,9 @@ static void test_note_delete(void *arr, int index, char flag) {
 static void test_note_add(void *arr, const void *note) {
     unsigned *count = (unsigned *)((char *)arr + NOTES_COUNT); assert(*count < 6002);
     if (ignore_add) return;
-    memcpy(record + (size_t)(*count)++ * NOTE_SIZE, note, NOTE_SIZE); added++;
+    memcpy(record + (size_t)(*count)++ * NOTE_SIZE, note, NOTE_SIZE);
+    if (corrupt_add) record[(size_t)(*count - 1) * NOTE_SIZE] ^= 1;
+    added++;
 }
 
 static void fixture(void) {
@@ -324,6 +333,27 @@ static void queued_edits_rejected_after_stop(void) {
     assert(g_patHash[1] == before);
 }
 
+static void sweep_0224(void) {
+    unsigned char incoming[NOTE_SIZE] = {64}, pair[2 * NOTE_SIZE] = {0};
+    unsigned i; uint64_t hash;
+    fixture(); corrupt_add = 1; notes_apply(1, incoming, 1); corrupt_add = 0;
+    assert(g_compatFault && g_patHash[1] != notes_fnv(incoming, 1));
+    fixture(); pair[0] = 60; pair[NOTE_SIZE] = 64;
+    hash = notes_fnv(pair, 2);
+    assert(hash != notes_fnv(pair, 1));
+    pair[NOTE_SEL_OFS] |= NOTE_SEL_BIT; assert(hash == notes_fnv(pair, 2));
+    { unsigned char reversed[sizeof(pair)]; memcpy(reversed, pair + NOTE_SIZE, NOTE_SIZE); memcpy(reversed + NOTE_SIZE, pair, NOTE_SIZE); assert(hash == notes_fnv(reversed, 2)); }
+    fixture();
+    for (i = 2; i <= 12; i++) {
+        *(void **)((char *)patterns + (size_t)i * PAT_STRIDE + PAT_NOTES) = array;
+        g_patSeen[i] = g_patHash[i] = notes_hash(i);
+    }
+    record[0]++;
+    scan_notes(0x80002000u); scan_notes(0x80002200u);
+    assert(!g_compatFault && g_qt == 12);
+    for (i = 0; i < 12; i++) assert(g_q[i].type == T_NOTESNAP && g_q[i].a == (int)i + 1);
+    puts("PASS reordered note records, same-count native corruption and twelve simultaneous pattern edits");
+}
 int main(void) {
     InitializeCriticalSection(&g_qLock);
     InitializeCriticalSection(&note_cs);
@@ -348,6 +378,7 @@ int main(void) {
     crdt_snapshot_and_budget();
     crdt_structural_refresh();
     crdt_empty_pattern_snapshot();
+    sweep_0224();
     fixture();
     DeleteCriticalSection(&note_cs);
     DeleteCriticalSection(&g_qLock);

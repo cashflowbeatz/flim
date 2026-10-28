@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
   await fs.mkdir(root,{recursive:true});
   const directory=await fs.mkdtemp(path.join(root,'transfer-'));
   const batches=[], failures=[];
-  let mode = 'normal', modeCalls = 0;
+  let mode = 'normal', modeCalls = 0, redirectsFollowed = 0;
   const server=http.createServer(async(req,res)=>{
     try{
       const chunks=[];for await(const chunk of req)chunks.push(chunk);
@@ -27,6 +27,10 @@ const assert = require('node:assert/strict');
         assert.equal(body.length,65569);
         for(let i=0;i<body.length;i++)assert.equal(body[i],i%251);
         res.writeHead(201);res.end();
+      }else if(req.url==='/blob/redirect'){
+        res.writeHead(302, {location: '/blob/redirect-target'});res.end();
+      }else if(req.url==='/blob/redirect-target'){
+        redirectsFollowed++;res.end('should not be requested');
       }else if(req.url==='/blob/download'){
         res.writeHead(200,{'content-length':22});res.end('flim transfer download');
       }else{res.writeHead(404);res.end();}
@@ -40,8 +44,8 @@ const assert = require('node:assert/strict');
     child.stderr.on('data',data=>process.stderr.write(data));
     const timer=setTimeout(()=>child.kill(),30000);
     let code;try{code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});}finally{clearTimeout(timer);}
-    assert.equal(code,0);assert.deepEqual(batches,[512,512,1]);assert.deepEqual(failures,[]);
-    const result={passed:8,scope:'Real native WinHTTP against an ephemeral loopback fixture; no FL processes or Cloudflare writes',batches,output};
+    assert.equal(code,0);assert.deepEqual(batches,[512,512,1]);assert.deepEqual(failures,[]);assert.equal(redirectsFollowed,0);
+    const result={passed:(output.match(/^PASS /gm)||[]).length,scope:'Real native WinHTTP against an ephemeral loopback fixture; no FL processes or Cloudflare writes',batches,output};
     await fs.writeFile(path.join(__dirname,'../desktop/test/evidence/native-transfer-results.json'),JSON.stringify(result,null,2));
   }finally{
     await new Promise(resolve=>server.close(resolve));

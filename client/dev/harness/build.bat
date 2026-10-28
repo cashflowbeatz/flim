@@ -67,3 +67,6 @@ cl /nologo /W3 t_logging.c /Fe:t_logging.exe winhttp.lib shell32.lib user32.lib 
 if errorlevel 1 exit /b 1
 cl /nologo /W3 t_transfer.c /Fe:t_transfer.exe winhttp.lib shell32.lib user32.lib gdi32.lib bcrypt.lib advapi32.lib
 if errorlevel 1 exit /b 1
+
+cl /nologo /W3 t_sweep24.c /Fe:t_sweep24.exe winhttp.lib shell32.lib user32.lib gdi32.lib bcrypt.lib advapi32.lib
+if errorlevel 1 exit /b 1

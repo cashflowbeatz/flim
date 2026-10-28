@@ -1,5 +1,6 @@
 #include <assert.h>
 #include "../../engine/flim_engine.c"
+static CRITICAL_SECTION note_cs;
 static uint64_t image[4], patterns[MAX_PAT * 8], channels[3];
 static void *channelList, *channelItems[MAX_CH + 1];
 static unsigned nextChannel = 1000, adds, deletes;
@@ -21,6 +22,7 @@ static void clear_out(void) {
 }
 
 int main(void) {
+    InitializeCriticalSection(&note_cs);
     const char *welcome = "{\"t\":\"welcome\",\"portable_sync\":1,\"compatibility\":{\"protocol\":1,\"host_fl\":\"26.1.7.5654\",\"wire\":\"flim-25-26-v1\",\"mixed\":true}}";
     char temp[MAX_PATH]; QItem task;
     InitializeCriticalSection(&g_lifecycleLock); InitializeCriticalSection(&g_qLock);
@@ -42,6 +44,7 @@ int main(void) {
     g_isLeader = 1; g_portableLocal = 0; g_ws = (HINTERNET)1; g_outBusy = 1;
     g_flBase = (char *)image; g_fl.PATARR = IMG_BASE + 8; PAT_STRIDE = 64;
     image[1] = (uint64_t)(uintptr_t)patterns;
+    g_fl.NOTELOCK = IMG_BASE + 24; image[3] = (uint64_t)(uintptr_t)&note_cs;
     g_outEvt = CreateEventW(NULL, FALSE, FALSE, NULL);
     portable_send("older");
     assert(g_outCount == 3 && strstr(g_outHead->msg, "portable.start") && strstr(g_outHead->msg, "\"for\":\"older\""));
