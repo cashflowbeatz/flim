@@ -41,7 +41,9 @@ async function native(url, hello) {
     const config = path.join(tmp, 'config.json'); await fs.writeFile(config, JSON.stringify({relay, live: !!live, room: room.room, tokens: [host.welcome.file_peer, member.welcome.file_peer], blob: host.welcome.blob, source, result}));
     const child = spawn(path.join(root, 'node_modules/electron/dist/electron.exe'), [path.join(__dirname, 'peer-electron-fixture.cjs'), '--user-data-dir=' + path.join(tmp, 'profile')], {cwd: root, env: {...process.env, FLIM_PEER_TEST_CONFIG: config}, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']});
     child.stdout.on('data', data => process.stdout.write(data)); child.stderr.on('data', data => process.stderr.write(data));
-    const timer = setTimeout(() => child.kill(), 60000); const code = await new Promise((resolve, reject) => {child.once('exit', resolve); child.once('error', reject);}); clearTimeout(timer); assert.equal(code, 0);
+    const timer = setTimeout(() => child.kill(), 60000);
+    let code; try {code = await new Promise((resolve, reject) => {child.once('exit', resolve); child.once('error', reject);});} finally {clearTimeout(timer);}
+    assert.equal(code, 0);
     const usage = await (await fetch(relay + 'usage', {headers: {'x-flim-owner': owner}})).json();
     const downloads = usage.downloads.used - before.downloads.used;
     assert.equal(downloads, 1, 'Only the deliberately forced R2 fallback should read R2');

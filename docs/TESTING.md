@@ -25,6 +25,7 @@ See [build prerequisites](BUILDING.md). From `client/desktop`:
 
 ```powershell
 npm test
+npx install-electron
 npm run build
 node test/ui.cjs
 $env:FLIM_FILES_TEST_DIST = 'dist'

@@ -54,7 +54,8 @@ const assert = require('node:assert/strict');
     let code;try{code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});}finally{clearTimeout(timer);}
     assert.equal(code,0);assert.deepEqual(batches,[512,512,1]);assert.deepEqual(failures,[]);assert.equal(redirectsFollowed,0);
     const result={passed:(output.match(/^PASS /gm)||[]).length,scope:'Real native WinHTTP against an ephemeral loopback fixture; no FL processes or Cloudflare writes',batches,output};
-    await fs.writeFile(path.join(__dirname,'../desktop/test/evidence/native-transfer-results.json'),JSON.stringify(result,null,2));
+    const evidence = path.join(__dirname, '../desktop/test/evidence'); await fs.mkdir(evidence, {recursive: true});
+    await fs.writeFile(path.join(evidence,'native-transfer-results.json'),JSON.stringify(result,null,2));
   }finally{
     await new Promise(resolve=>server.close(resolve));
     assert.ok(directory.startsWith(root+path.sep));await fs.rm(directory,{recursive:true,force:true});

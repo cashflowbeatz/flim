@@ -42,6 +42,7 @@ The default native build without that flag targets the original FL25 workflow.
 ```powershell
 Set-Location client/desktop
 npm ci
+npx install-electron
 npm test
 npm run build
 npm run package

@@ -24,6 +24,11 @@ tests found and verified the async admission correction. The parent test driver 
 emulator's matching Undici implementation to avoid a Node 25 global-dispatcher incompatibility.
 Electron's broker/native HTTP paths are separate from that test-driver adjustment.
 
+The first hosted run exposed two clean-checkout setup omissions after its actual native tests
+passed: the native HTTP driver's evidence directory needed creation, and Electron 45 requires
+the explicit `install-electron` command. The follow-up fixes those test setup paths and clears
+the child timeout on spawn errors. They do not change the released native or desktop payload.
+
 Cloudflare deployment: `419ae2cb-bfe5-4279-b50f-1b0e798a4304`. R2 configuration remains
 536,870,912 bytes, 20,000 monthly upload attempts and 100,000 monthly download attempts.
 No daily room limit or TURN service was added. New socket attachment fields are optional;
