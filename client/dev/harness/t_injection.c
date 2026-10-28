@@ -9,6 +9,9 @@ static VS_FIXEDFILEINFO test_version;
 static int allocations, remote_threads, resumed, terminated, released, closed;
 static int alloc_fails, write_fails, thread_fails, resume_fails;
 static int long_module_path;
+static int profile_result;
+static int profile_hash_ok, profile_hash_calls;
+static wchar_t info_line[320];
 static DWORD wait_result, load_result, creation_flags;
 
 static DWORD WINAPI test_version_size(LPCWSTR p, LPDWORD h) { (void)p; *h = 0; return sizeof(test_version); }
@@ -59,7 +62,18 @@ static BOOL WINAPI test_free(HANDLE h, LPVOID p, SIZE_T n, DWORD flags) {
     (void)h; (void)p; (void)n; (void)flags; assert(wait_result == WAIT_OBJECT_0); released++; return TRUE;
 }
 static BOOL WINAPI test_terminate(HANDLE h, UINT code) { (void)h; (void)code; terminated++; return TRUE; }
-static BOOL WINAPI test_close(HANDLE h) { assert(h); closed++; return TRUE; }
+static BOOL WINAPI test_close(HANDLE h) { assert(h); if (h != (HANDLE)5) closed++; return TRUE; }
+static HANDLE WINAPI test_open_engine(LPCWSTR file, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security, DWORD creation, DWORD attrs, HANDLE templateFile) {
+    (void)file; (void)security; (void)attrs; (void)templateFile;
+    assert(access == GENERIC_READ && share == FILE_SHARE_READ && creation == OPEN_EXISTING);
+    return (HANDLE)5;
+}
+static UINT WINAPI test_dialog_text(HWND h, int id, LPWSTR out, int cap) {
+    (void)h; (void)id; wcscpy_s(out, cap, L"C:\\FL"); return 5;
+}
+static BOOL WINAPI test_set_dialog_text(HWND h, int id, LPCWSTR text) {
+    (void)h; (void)id; wcscpy_s(info_line, 320, text); return TRUE;
+}
 
 #define GetFileVersionInfoSizeW test_version_size
 #define GetFileVersionInfoW test_version_info
@@ -77,6 +91,25 @@ static BOOL WINAPI test_close(HANDLE h) { assert(h); closed++; return TRUE; }
 #define VirtualFreeEx test_free
 #define TerminateProcess test_terminate
 #define CloseHandle test_close
+#define GetDlgItemTextW test_dialog_text
+#define SetDlgItemTextW test_set_dialog_text
+#include "../../common/flim_profile.h"
+static int test_profile_hash(HANDLE file, char hash[65]) {
+    assert(file == (HANDLE)5); profile_hash_calls++;
+    strcpy_s(hash, 65, profile_hash_ok ? "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32"
+                                    : "0000000000000000000000000000000000000000000000000000000000000000");
+    return 1;
+}
+static int test_profile_load(HMODULE client, const wchar_t *engine, const wchar_t *version,
+                            FlBuild *out, wchar_t build[32], wchar_t *reason, size_t reasonCap) {
+    (void)client; (void)engine; (void)version; (void)out; (void)build;
+    reason[0] = 0;
+    if (profile_result < 0) wcscpy_s(reason, reasonCap, L"Fixture profile invalid");
+    return profile_result;
+}
+#define flim_profile_load test_profile_load
+#define flim_profile_sha256 test_profile_hash
+#define CreateFileW test_open_engine
 #include "../../launcher/flim.c"
 
 static void reset(void) {
@@ -87,6 +120,8 @@ static void reset(void) {
     allocations = remote_threads = resumed = terminated = released = closed = 0;
     alloc_fails = write_fails = thread_fails = resume_fails = 0;
     long_module_path = 0;
+    profile_result = 0; profile_hash_ok = 1; profile_hash_calls = 0; info_line[0] = 0;
+    g_machineOutput = 0; g_allowExperimental = 0; g_launchedPid = 0;
     wait_result = WAIT_OBJECT_0; load_result = 1; creation_flags = 0;
 }
 
@@ -101,6 +136,7 @@ int main(void) {
         assert(launch(L"C:\\FL") == 0);
         assert(creation_flags == CREATE_SUSPENDED && allocations == 1 && remote_threads == 1);
         assert(resumed == 1 && !terminated && released == 1 && closed == 3);
+        assert(g_launchedPid == 123);
     }
 
     reset(); long_module_path = 1;
@@ -136,6 +172,67 @@ int main(void) {
     test_version.dwFileVersionLS = (99u << 16) | 65535u;
     assert(launch(L"C:\\FL") == 0);
     assert(!creation_flags && !allocations && !remote_threads && !resumed && !terminated && closed == 2);
-    printf("Launcher process handling: OK (%zu known builds + 8 failure/fallback scenarios, mocked Win32 APIs)\n", i);
+
+    reset(); g_machineOutput = 1;
+    test_version.dwFileVersionMS = (26u << 16) | 99u;
+    test_version.dwFileVersionLS = (99u << 16) | 65535u;
+    assert(launch(L"C:\\FL") == 1);
+    assert(!creation_flags && !allocations && !remote_threads && !resumed && !terminated && !closed && !g_launchedPid);
+
+    reset(); g_machineOutput = 1;
+    test_version.dwFileVersionMS = (24u << 16) | 2u;
+    test_version.dwFileVersionLS = (2u << 16) | 4597u;
+#ifdef FLIM_EXPERIMENTAL_FL26
+    assert(launch(L"C:\\FL") == 0);
+    assert(creation_flags == CREATE_SUSPENDED && resumed == 1 && !terminated && profile_hash_calls == 1);
+#else
+    assert(launch(L"C:\\FL") == 1);
+    assert(!creation_flags && !allocations && !remote_threads && !closed);
+#endif
+    reset(); g_machineOutput = 1; g_allowExperimental = 1;
+    test_version.dwFileVersionMS = (24u << 16) | 2u;
+    test_version.dwFileVersionLS = (2u << 16) | 4597u;
+#ifdef FLIM_EXPERIMENTAL_FL26
+    assert(launch(L"C:\\FL") == 0);
+    assert(creation_flags == CREATE_SUSPENDED && resumed == 1 && !terminated && profile_hash_calls == 1);
+#else
+    assert(launch(L"C:\\FL") == 1);
+    assert(!creation_flags && !allocations && !remote_threads && !closed && !profile_hash_calls);
+#endif
+    reset(); g_machineOutput = 1; profile_hash_ok = 0;
+    test_version.dwFileVersionMS = (24u << 16) | 2u;
+    test_version.dwFileVersionLS = (2u << 16) | 4597u;
+    assert(launch(L"C:\\FL") == 1);
+    assert(!creation_flags && !allocations && !remote_threads && !closed);
+    reset(); g_machineOutput = 1;
+    test_version.dwFileVersionMS = (24u << 16) | 2u;
+    test_version.dwFileVersionLS = (2u << 16) | 4598u;
+    assert(launch(L"C:\\FL") == 1);
+    assert(!creation_flags && !allocations && !remote_threads && !closed && !profile_hash_calls);
+    reset(); g_machineOutput = 1; profile_result = 1;
+    test_version.dwFileVersionMS = (24u << 16) | 2u;
+    test_version.dwFileVersionLS = (2u << 16) | 4597u;
+    assert(launch(L"C:\\FL") == 0);
+    assert(creation_flags == CREATE_SUSPENDED && resumed == 1 && !terminated);
+
+    reset(); profile_result = -1;
+    show_fl_info(NULL);
+    assert(wcsstr(info_line, L"Fixture profile invalid"));
+    assert(launch(L"C:\\FL") == 1);
+    assert(!creation_flags && !allocations && !remote_threads && !closed);
+
+    reset(); profile_result = 1;
+    test_version.dwFileVersionMS = (25u << 16) | 9u;
+    test_version.dwFileVersionLS = (9u << 16) | 65000u;
+    show_fl_info(NULL);
+    assert(wcsstr(info_line, L"25.9.9.65000 supported."));
+    assert(launch(L"C:\\FL") == 0);
+    assert(creation_flags == CREATE_SUSPENDED && resumed == 1 && !terminated);
+
+    reset();
+    test_version.dwFileVersionMS = (25u << 16) | 9u;
+    show_fl_info(NULL);
+    assert(wcsstr(info_line, L"support is not verified"));
+    printf("Launcher process handling: OK (%zu known builds + 8 failure/fallback scenarios + external-profile status/launch checks, mocked Win32 APIs)\n", i);
     return 0;
 }

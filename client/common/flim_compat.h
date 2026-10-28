@@ -22,7 +22,8 @@ static int flim_version_parse(const char *s, unsigned parts[4]) {
 
 static int flim_version_family(const char *s) {
     unsigned v[4];
-    return flim_version_parse(s, v) && (v[0] == 25 || v[0] == 26);
+    return flim_version_parse(s, v) &&
+        (v[0] == 25 || v[0] == 26 || !strcmp(s, "24.2.2.4597"));
 }
 
 static int flim_version_cmp(const char *a, const char *b) {
@@ -35,7 +36,7 @@ static int flim_version_cmp(const char *a, const char *b) {
 static int flim_wire_known(const char *kind) {
     static const char *const kinds[] = { "project.load", "plug.full", "notes.full", "state.full",
         "state.req", "plug.state", "chan.add", "chan.del", "notes.set", "clips.set", "meta.set",
-        "pat.op", "focus", "cur", "fx.clear", "chan.order", "param.set" };
+        "pat.op", "focus", "cur", "fx.clear", "chan.order", "param.set", "portable.start" };
     size_t i;
     for (i = 0; i < sizeof(kinds) / sizeof(kinds[0]); i++) if (!strcmp(kind, kinds[i])) return 1;
     return 0;

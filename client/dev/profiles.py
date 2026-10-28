@@ -17,11 +17,34 @@ CHECKS = ('addresses', 'layouts', 'calling_conventions', 'wire_formats', 'runtim
 def version_ok(value):
     return (isinstance(value, str) and
             re.fullmatch(r'(?:0|[1-9][0-9]{0,4})(?:\.(?:0|[1-9][0-9]{0,4})){3}', value) is not None and
-            value.split('.')[0] in ('25', '26') and all(int(p) <= 65535 for p in value.split('.')))
+            (value == '24.2.2.4597' or value.split('.')[0] in ('25', '26')) and
+            all(int(p) <= 65535 for p in value.split('.')))
 
 
 def field_hash(fields):
     return hashlib.sha256(json.dumps(fields, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def read_review(path):
+    def unique_object(pairs):
+        obj = {}
+        for key, value in pairs:
+            if key in obj:
+                raise ValueError(f'Duplicate review field: {key}')
+            obj[key] = value
+        return obj
+
+    def reject_constant(value):
+        raise ValueError(f'Invalid JSON number: {value}')
+
+    return json.loads(path.read_text(encoding='utf-8'), object_pairs_hook=unique_object,
+                      parse_constant=reject_constant)
+
+
+def write_new(path, content, encoding):
+    # Exclusive creation also protects an existing review if another process creates it after validation.
+    with path.open('x', encoding=encoding, newline='\n') as output:
+        output.write(content)
 
 
 def validate_fields(fields, table, image):
@@ -42,6 +65,8 @@ def validate_fields(fields, table, image):
         va = fields[name]
         if name == 'MSGBOX_CORE' and fields['msgbox'] == 2 and va == 0:
             continue
+        if name == 'MIXCNT' and image.version == '24.2.2.4597' and va == 0:
+            continue
         rva = va - IMG_BASE
         if not 0 <= rva < image.pe.OPTIONAL_HEADER.SizeOfImage:
             raise ValueError(f'Address {name} is outside the engine image')
@@ -52,10 +77,11 @@ def validate_fields(fields, table, image):
 
 
 def export_review(review, image, table):
-    if not isinstance(review, dict) or review.get('schema') != 1 or review.get('status') != 'reviewed':
+    if (not isinstance(review, dict) or type(review.get('schema')) is not int or
+            review['schema'] != 1 or review.get('status') != 'reviewed'):
         raise ValueError('Only a reviewed attestation can be exported; a draft/map is not a runnable profile')
     if not version_ok(image.version) or image.base != IMG_BASE:
-        raise ValueError('Expected an FL 25/26 x64 engine at image base 0x400000')
+        raise ValueError('Expected exact FL 24.2.2.4597 or an FL 25/26 x64 engine at image base 0x400000')
     if review.get('target') != {'build': image.version, 'sha256': image.sha256} or review.get('wire') != WIRE:
         raise ValueError('The reviewed target identity or wire format does not match this engine')
     if not isinstance(review.get('reviewer'), str) or not review['reviewer'].strip():
@@ -65,9 +91,12 @@ def export_review(review, image, table):
     if field_hash(fields) != review.get('fields_sha256'):
         raise ValueError('Fields changed after review; update the review and its field fingerprint')
     checks = review.get('checks', {})
+    if not isinstance(checks, dict) or set(checks) != set(CHECKS):
+        raise ValueError('Every named review check is required; unknown checks are rejected')
     for name in CHECKS:
         check = checks.get(name, {})
-        if check.get('passed') is not True or not isinstance(check.get('evidence'), str) or not check['evidence'].strip():
+        if (not isinstance(check, dict) or check.get('passed') is not True or
+                not isinstance(check.get('evidence'), str) or not check['evidence'].strip()):
             raise ValueError(f'Missing successful {name} review and evidence reference')
     lines = ['schema=1', f'build={image.version}', f'sha256={image.sha256}', f'wire={WIRE}', f'msgbox={fields["msgbox"]}']
     lines += [f'{name}={hex(fields[name])}' for name in table.address_fields + table.offset_fields]
@@ -90,19 +119,20 @@ def main(argv=None):
         if args.output.exists():
             raise ValueError('Output already exists; choose a new path to preserve the previous review/profile')
         image = Image(args.engine)
-        if not version_ok(image.version): raise ValueError('Only canonical FL 25/26 builds can have profiles')
+        if not version_ok(image.version):
+            raise ValueError('Only exact FL 24.2.2.4597 or canonical FL 25/26 builds can have profiles')
         table = BuildTable(args.table, include_experimental=True)
         if args.action == 'draft':
             fields = {k: v for k, v in table.builds.get(image.version, {}).items() if k != 'build'}
             draft = dict(schema=1, status='draft', target=dict(build=image.version, sha256=image.sha256),
                          wire=WIRE, reviewer='', fields=fields, fields_sha256=field_hash(fields),
                          checks={k: dict(passed=False, evidence='') for k in CHECKS})
-            args.output.write_text(json.dumps(draft, indent=2) + '\n', encoding='utf-8')
+            write_new(args.output, json.dumps(draft, indent=2) + '\n', 'utf-8')
             print('Draft only. Review every field and complete the evidence before export.')
         else:
             if not args.review: raise ValueError('--review is required for export')
-            content = export_review(json.loads(args.review.read_text(encoding='utf-8')), image, table)
-            args.output.write_text(content, encoding='ascii', newline='\n')
+            content = export_review(read_review(args.review), image, table)
+            write_new(args.output, content, 'ascii')
             print(f'Wrote engine-bound profile for {image.version}; distribute only with its reviewed evidence.')
         return 0
     except (OSError, ValueError, TypeError, KeyError, pefile.PEFormatError) as error:

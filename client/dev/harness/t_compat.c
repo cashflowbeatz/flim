@@ -7,6 +7,7 @@ static unsigned checks;
 
 static void reset(void) {
     g_compatReady = g_compatFault = g_compatMixed = 0;
+    g_portableSync = g_portableLocal = 0;
     g_hostFlBuild[0] = 0;
     g_fl.build = L"26.1.7.5654";
 }
@@ -38,7 +39,10 @@ int main(void) {
     outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"param.set\",\"id\":0,\"v\":12}}", 1);
     incoming("{\"t\":\"op\",\"source_fl\":\"25.2.5.5319\",\"op\":{\"kind\":\"plug.state\",\"data\":\"\"}}", 1);
     outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"plug.state\",\"data\":\"\"}}", 0);
-    assert(g_compatFault && !g_compatReady);
+    assert(!g_compatFault && g_compatReady);
+    outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"notes.set\"}}", 1);
+    outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"chan.add\"}}", 0);
+    assert(g_compatFault && !g_compatReady); /* Unsynced channel indices cannot be ignored. */
     reset(); incoming(welcome, 1);
     incoming("{\"t\":\"op\",\"source_fl\":\"26.1.7.5654\",\"op\":{\"kind\":\"chan.add\"}}", 0);
     reset(); incoming(welcome, 1);
@@ -51,6 +55,24 @@ int main(void) {
     outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"chan.add\"}}", 1);
     reset(); g_fl.build = L"25.2.5.5319";
     incoming("{\"t\":\"welcome\",\"compatibility\":{\"protocol\":1,\"host_fl\":\"26.1.7.5654\",\"wire\":\"flim-25-26-v1\",\"mixed\":true}}", 0);
+    reset();
+    incoming("{\"t\":\"welcome\",\"compatibility\":{\"protocol\":1,\"host_fl\":\"24.2.2.4597\",\"wire\":\"flim-25-26-v1\",\"mixed\":true}}", 1);
+    incoming("{\"t\":\"op\",\"source_fl\":\"24.2.2.4597\",\"op\":{\"kind\":\"project.load\"}}", 1);
+    reset(); g_fl.build = L"24.2.2.4597"; incoming(welcome, 0);
+    reset(); g_fl.build = L"24.2.2.4597";
+    incoming("{\"t\":\"welcome\",\"compatibility\":{\"protocol\":1,\"host_fl\":\"24.2.2.4597\",\"wire\":\"flim-25-26-v1\",\"mixed\":true}}", 1);
+    incoming("{\"t\":\"op\",\"source_fl\":\"26.1.7.5654\",\"op\":{\"kind\":\"notes.set\"}}", 1);
+    incoming("{\"t\":\"op\",\"source_fl\":\"26.1.7.5654\",\"op\":{\"kind\":\"plug.state\"}}", 0);
+    assert(!flim_version_family("24.2.2.4598") && !flim_version_family("24.2.2.4596"));
+    reset(); g_fl.build = L"24.2.2.4597";
+    incoming("{\"t\":\"welcome\",\"portable_sync\":1,\"compatibility\":{\"protocol\":1,\"host_fl\":\"26.1.7.5654\",\"wire\":\"flim-25-26-v1\",\"mixed\":true}}", 1);
+    assert(g_portableSync && g_portableLocal);
+    incoming("{\"t\":\"op\",\"source_fl\":\"26.1.7.5654\",\"op\":{\"kind\":\"portable.start\",\"nch\":4}}", 1);
+    incoming("{\"t\":\"op\",\"source_fl\":\"26.1.7.5654\",\"op\":{\"kind\":\"plug.state\"}}", 1);
+    outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"chan.add\"}}", 1);
+    outgoing("{\"t\":\"op\",\"op\":{\"kind\":\"clips.set\"}}", 0);
+    assert(!g_compatFault && g_compatReady);
+    incoming("{\"t\":\"presence\",\"compatibility\":{\"protocol\":1,\"host_fl\":\"26.1.7.5654\",\"wire\":\"flim-25-26-v1\",\"mixed\":true}}", 0);
     printf("Native build negotiation: OK (%u checks)\n", checks);
     return 0;
 }

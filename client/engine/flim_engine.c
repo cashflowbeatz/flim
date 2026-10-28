@@ -15,18 +15,15 @@
 //           params locked by a peer are snapped back if tweaked locally
 //  - PATTERNS: insert / clone / delete / split are hooked (TFLProject vmt) and replayed as calls
 //  - FOCUS: which FL window each person last used, shown next to the status
-//  - NET: WinHTTP WebSocket (ws:// or wss://). Not connected at start: in FL's toolbar, Host
-//         opens a session on a server (first free slot 01..08; Ctrl+click + owner key = slot 00)
-//         with a password the host picks, Connect joins one by its link (https://server/NN) +
-//         password (remembered in %APPDATA%\flim\flim.ini, see common/flim_config.h), with a
-//         status text beside them.
+//  - NET: WinHTTP WebSocket (ws:// or wss://). The desktop app supplies the room connection;
+//         FL's toolbar shows status and unavailable-sound hints.
 // Config: user name from flim.ini (set by flim.exe). Env overrides for dev/tests:
 //         FLIM_NAME, FLIM_AUTOCONNECT=<session link> (+ FLIM_PASSWORD) joins at startup;
 //         with FLIM_HOST=1 it is a server address to host on instead (+ FLIM_OWNER_KEY = slot 00);
 //         legacy FLIM_SERVER=host:port means FLIM_AUTOCONNECT=ws://host:port.
 //         Tests only: FLIM_SAMPLE_NOLOCAL=1 (always download samples), FLIM_CURSOR_NOCOVER=1 (show
 //         other people's arrows even where another window covers FL).
-// Logs to %TEMP%\flim_engine.log.
+// Logs to FLIM_LOG_DIR\native-<PID>.log when set; otherwise %TEMP%\flim_engine.log.
 
 #include <windows.h>
 #include <winhttp.h>
@@ -35,6 +32,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdint.h>
+#include <limits.h>
 #include <ctype.h>
 #include <shlobj.h>
 #include "../common/flim_config.h"
@@ -42,6 +40,9 @@
 #include "../common/flim_version.h"
 #include "../common/flim_ws_buffer.h"
 #include "../common/flim_unit_bursts.h"
+#include "../common/flim_clip.h"
+#include "../common/flim_plugin.h"
+#include "../common/flim_files.h"
 #include <bcrypt.h>
 #include <commctrl.h>
 #pragma comment(lib, "winhttp.lib")
@@ -65,6 +66,8 @@
 // then tested in FL.
 #include "../common/flim_profile.h"
 #include "../common/flim_json.h"
+#include "../common/flim_cloud.h"
+#include "../common/flim_notes_crdt.h"
 
 static const FlBuild k_flBuilds[] = {
     {   // FL Studio 2025 (25.2.3.5171): the reference
@@ -326,6 +329,92 @@ static const FlBuild k_flBuilds[] = {
         .PATOP_SPLIT_SLOT      = 0x100,
     },
 #ifdef FLIM_EXPERIMENTAL_FL26
+    {   // FL Studio 24.2.2.4597: tested installed engine, with its older format adapters
+        .build = L"24.2.2.4597", .msgbox = 2,
+        .REC                    = 0xe8dee0,
+        .MUTE                   = 0x1135280,
+        .MIXARR                 = 0x143b148,
+        .MIXCNT                 = 0x0,
+        .MAINFORM               = 0x143bd60,
+        .SAVEPRESET             = 0xd78fe0,
+        .LOADPRESET             = 0xd791d0,
+        .HASPLUGIN              = 0x11ddb90,
+        .GETPLUGIN              = 0x11df6e0,
+        .INTFCLEAR              = 0x41a750,
+        .ADDCHAN                = 0xe62000,
+        .DELCHAN                = 0xe62810,
+        .RESOLVER               = 0xe63500,
+        .CHANLIST               = 0x143cb08,
+        .MOVECHAN               = 0xe8a580,
+        .MOVEOBJ                = 0x143be60,
+        .MOVEARG                = 0x143e1d0,
+        .CHANFILT               = 0x143ac08,
+        .PATARR                 = 0x143d2b8,
+        .NOTEARR                = 0x118be50,
+        .NOTEDEL                = 0xea35d0,
+        .NOTELOCK               = 0x143c900,
+        .GRIDREFRESH            = 0x118ed70,
+        .FLPROJ                 = 0x143ee58,
+        .MAINOBJ                = 0x143b9b8,
+        .SETPROJ                = 0x106ea20,
+        .SAVEPROJ               = 0x107a4b0,
+        .BUSYBEGIN              = 0x10657a0,
+        .BUSYEND                = 0x10657f0,
+        .PROJNAME               = 0x1512e70,
+        .ARRS                   = 0x157bde0,
+        .ARRCUR                 = 0x1431d10,
+        .PLFORM                 = 0x143dd60,
+        .PLREFRESH              = 0xd30840,
+        .HINT                   = 0x1095e90,
+        .MIXNAME                = 0x1179910,
+        .MIXCOLOR               = 0x117c8f0,
+        .UIUPDATE               = 0xbd4f20,
+        .MIXOBJ                 = 0x143cbc8,
+        .SETROUTE               = 0x1161a90,
+        .ROUTEUPD               = 0x1161350,
+        .PATNAME                = 0x118b740,
+        .PATCOLOR               = 0x118bc30,
+        .PATREFRESH             = 0xd404d0,
+        .PLTRACK                = 0x119bec0,
+        .MARKADD                = 0xea67c0,
+        .MARKTYPE               = 0xe9b448,
+        .DYNSETLEN              = 0x417fb0,
+        .MARKREFRESH            = 0xcec620,
+        .MARKSORT               = 0xea6220,
+        .PATLENUPD              = 0x118bf00,
+        .PATMARKS               = 0x118b320,
+        .SONGLOCK               = 0x143e4a8,
+        .MODIFIED               = 0x106ae80,
+        .TSNUM                  = 0x143e140,
+        .TSDEN                  = 0x143c598,
+        .TSSET                  = 0x12155f0,
+        .TSCTLS                 = 0x1215760,
+        .MSGBOX                 = 0xa7f920,
+        .MSGBOX_CORE            = 0x0,
+        .PRFORM                 = 0x143cd40,
+        .CURPAT                 = 0x143e730,
+        .CH_SELECTED            = 0x344,
+        .CH_GRID                = 0x748,
+        .FORM_BUSY              = 0x2f14,
+        .PAT_STRIDE             = 0x90,
+        .PLFORM_PATS            = 0xcc0,
+        .PL_MARKSEL             = 0xd18,
+        .ED_TICKSPERPX          = 0xad4,
+        .ED_HSCROLL             = 0xae4,
+        .PR_GRID                = 0xc00,
+        .PL_GRID                = 0xcb8,
+        .GRID_VSCROLL           = 0x3f8,
+        .MIX_STRIDE             = 0x8ac,
+        .MIX_SLOTS_OFF          = 0x75c,
+        .MIX_ROUTE              = 0x2e4,
+        .FLPROJ_LOAD_SLOT       = 0x28,
+        .PATOP_CLONE_SLOT       = 0xc8,
+        .PATOP_DELETE_SLOT      = 0xd0,
+        .PATOP_REARRANGE_SLOT   = 0xd8,
+        .PATOP_EDIT_SLOT        = 0xe0,
+        .PATOP_INSERT_SLOT      = 0xe8,
+        .PATOP_SPLIT_SLOT       = 0xf0,
+    },
     {   // FL Studio 26.1.6.5639: experimental mapping; see dev/compatibility/
         .build = L"26.1.6.5639", .msgbox = 1,
         .REC           = 0x1046540,
@@ -544,6 +633,8 @@ static const uint32_t MIX_SUBS[] = { 0x1fc0, 0x1fc1, 0x1fc2 };
 
 typedef void (*setenabled_t)(int track, int enabled);
 static void retry_pending(void);
+static void pend_put(uint32_t id, uint32_t v);
+static void pending_channels(const int *from, int n, int deleted);
 static void send_full_state(void);
 static void send_notes_full(void);
 static void notes_rebaseline(int channels_only);
@@ -557,15 +648,32 @@ static void hint_if_held(const char *key);
 static int  closing_now(void);
 static int b64val(char c);
 static int  plug_lock_send(int unit, int a, int b, char *key, int cap);
-static void plug_agreed_set(int unit, int a, int b, const unsigned char *d, size_t n);
+static int plug_agreed_set(int unit, int a, int b, const unsigned char *d, size_t n);
 static void plug_agreed_reset(int channels, int fx);
+static unsigned char *plug_agreed_copy(int unit, int a, int b, size_t *n);
+static void plug_agreed_channels(const int *from, int n, int deleted);
+static int plug_param_blocked(uint32_t id);
+static int plugin_prepare(const unsigned char *d, size_t n, int unit, unsigned char **local, size_t *localn, char *reason, size_t cap);
+static void plugins_changed(void);
+static void plugins_retry(void);
+static void plugins_auto_tick(DWORD now);
+static uint64_t plugin_retry_stamp(const unsigned char *d, size_t n, int unit);
+static void fl_hint(const char *msg);
+static int compat_plugin_send(void);
 static void plug_revert_state(int unit, int a, int b);
 static void plug_undo(const char *key, int apply);
 static void meta_rebaseline(int channels_only);
 static wchar_t *dstr_keep(const wchar_t *s);
 static int int_after(const char *p, const char *end, const char *key, int *out);
 static int compat_outgoing(const char *msg);
+static void compat_fail(const char *why);
+static void sharing_fail(const char *status, const char *why);
 static void ws_send(const char *msg);
+static void ws_send_to(const char *msg, const char *target);
+static void request_state(void);
+static void portable_send(const char *target);
+static void portable_send_peers(void);
+static void portable_start(int channels);
 static void ws_send_samples(char *msg, const unsigned char *blob, size_t n);
 static void samples_rewrite(unsigned char **d, size_t *n);
 typedef enum { FLP_BUILD_INVALID = -1, FLP_BUILD_MATCH, FLP_BUILD_MISMATCH, FLP_BUILD_FORWARD } FlpBuildCheck;
@@ -596,6 +704,8 @@ static __declspec(thread) int g_workBound;
 static LONG session_generation(void) { return g_workBound ? g_workGen : g_netGen; }
 static int session_current(void) { return !g_workBound || g_workGen == g_netGen; }
 static volatile LONG g_compatReady = 0, g_compatMixed = 0, g_compatFault = 0;
+static volatile LONG g_portableSync = 0, g_portableLocal = 0;
+static volatile LONG g_cloudTransport = 0;
 static char g_hostFlBuild[32];
 static volatile LONG g_isLeader = 0;
 static volatile LONG g_patDepth = 0;   // a pattern op is running (main thread; its dialogs pump messages): scans wait
@@ -662,7 +772,7 @@ static HINSTANCE g_hinst = NULL;
 #define ARR_CLIPS     0x14         // arrangement: clip array object (same array family as notes)
 #define CLIPS_DATA    0x08
 #define CLIPS_COUNT   0x14
-#define CLIP_SIZE     0x50         // first 32 bytes = FLP event 233 record
+#define CLIP_SIZE     FLIM_CLIP_WIRE_SIZE
 #define CLIP_DEL_OFS  0x04         // -1 = deleted (then purge)
 #define CLIP_SEL_OFS  0x13         // bit 0x80 = SELECTED (client-only)
 #define CLIP_SEL_BIT  0x80
@@ -670,7 +780,7 @@ static HINSTANCE g_hinst = NULL;
 #define CLIPADD_VSLOT   1          // arr->vmt[1](arr, &rec) -> index (kept sorted by position)
 #define CLIPPURGE_VSLOT 3          // arr->vmt[3](arr): drop records marked deleted, free their resources
 #define PLFORM_VA (g_fl.PLFORM)    // global -> var -> playlist form
-#define PLREFRESH_VA (g_fl.PLREFRESH)     // RefreshPlaylist(form): what FL's clip-properties dialog calls after an edit
+#define PLREFRESH_VA (g_fl.PLREFRESH) // form refresh; exact FL24 uses a grid invalidator through playlist_refresh
 #define HINT_VA (g_fl.HINT)    // ShowHint(form, UnicodeString text, 0): FL's hint bar (top left)
 #define PROJ_FX_MASS  3            // this many effects gone in one scan = project close, not a delete
 
@@ -711,8 +821,9 @@ static gridrefresh_t g_gridRefresh;
 // preset/channel code is "heavy" and runs one per message-loop tick (a plugin
 // often needs the message loop to run between load and the next call).
 enum { T_PARAM, T_SNAP, T_LOAD, T_ADDCH, T_DELCH, T_STRUCT, T_FULL, T_ORDER, T_FXCLEAR, T_FXSYNC,
-       T_NOTESNAP, T_NOTES, T_NOTESYNC, T_PROJLOAD, T_PROJDONE, T_PROJSNAP,
-       T_CLIPSNAP, T_CLIPS, T_UNITREVERT, T_HINT, T_METASNAP, T_META, T_PATOP };
+       T_NOTESNAP, T_NOTES, T_NOTESYNC, T_NOTEBASE, T_PROJLOAD, T_PROJDONE, T_PROJSNAP,
+       T_CLIPSNAP, T_CLIPS, T_UNITREVERT, T_HINT, T_METASNAP, T_META, T_PATOP, T_PLUGRETRY,
+       T_PORTABLESEND, T_PORTABLESTART };
 enum { U_CH, U_FX };
 enum { SNAP_BASELINE, SNAP_IF_DIFF, SNAP_FORCE, SNAP_ADD, SNAP_COLLECT };
 #define QCAP 16384
@@ -724,6 +835,7 @@ typedef struct {
     int unit, a, b;          // unit kind + (channel) or (track, slot)
     int mode;                // T_SNAP mode / T_LOAD: 1 = skip if identical
     char *path;              // T_LOAD / T_ADDCH: inbound .fst file (owned; deleted after use)
+    char presetFl[32];
     int *order;              // T_ORDER: [n, from0..from(n-1)]; T_FXSYNC/T_NOTESYNC: bitmap;
                              // T_NOTES: note records, it->mode = count (owned)
 } QItem;
@@ -731,17 +843,102 @@ static void run_task_inner(const QItem *it);
 static QItem g_q[QCAP];
 static int g_qh = 0, g_qt = 0;
 
-static void logmsg(const char *fmt, ...) {
-    char path[MAX_PATH];
-    GetTempPathA(MAX_PATH, path);
-    strcat_s(path, MAX_PATH, "flim_engine.log");
-    FILE *f = NULL;
-    if (fopen_s(&f, path, "a") == 0 && f) {
-        SYSTEMTIME t; GetLocalTime(&t);
-        fprintf(f, "%02d:%02d:%02d.%03d [%lu] ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, GetCurrentProcessId());
-        va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap);
-        fputc('\n', f); fclose(f);
+#ifndef FLIM_LOG_MAX_BYTES
+#define FLIM_LOG_MAX_BYTES (4u * 1024u * 1024u)
+#endif
+#define FLIM_LOG_PATH_CAP 4096
+static SRWLOCK g_logLock = SRWLOCK_INIT;
+static wchar_t g_logPath[FLIM_LOG_PATH_CAP];
+static HANDLE g_logFile = INVALID_HANDLE_VALUE;
+static int g_logInitialized;
+static ULONGLONG g_logRetryAt;
+
+static int log_absolute_path(const wchar_t *path) {
+    return ((path[0] >= L'A' && path[0] <= L'Z') || (path[0] >= L'a' && path[0] <= L'z'))
+        ? path[1] == L':' && (path[2] == L'\\' || path[2] == L'/')
+        : path[0] == L'\\' && path[1] == L'\\';
+}
+
+static void log_path_init(void) {
+    wchar_t directory[FLIM_LOG_PATH_CAP];
+    DWORD n = GetEnvironmentVariableW(L"FLIM_LOG_DIR", directory, FLIM_LOG_PATH_CAP);
+    g_logInitialized = 1;
+    if (n && n < FLIM_LOG_PATH_CAP - 64 && log_absolute_path(directory)) {
+        _snwprintf_s(g_logPath, FLIM_LOG_PATH_CAP, _TRUNCATE, L"%s%snative-%lu.log", directory,
+                     directory[n - 1] == L'\\' || directory[n - 1] == L'/' ? L"" : L"\\", GetCurrentProcessId());
+        return;
     }
+    n = GetTempPathW(FLIM_LOG_PATH_CAP, directory);
+    if (n && n < FLIM_LOG_PATH_CAP - 32)
+        _snwprintf_s(g_logPath, FLIM_LOG_PATH_CAP, _TRUNCATE, L"%sflim_engine.log", directory);
+}
+
+// Do not retain credential-bearing payloads if a future diagnostic accidentally includes one.
+static int log_has_credentials(const char *text) {
+    static const char *const keys[] = {
+        "\"password\"", "\"blob\"", "\"owner\"", "\"token\"", "\"authorization\"",
+        "\"hostToken\"", "\"joinToken\"", "\"host_token\"", "\"join_token\"", "\"blobKey\"",
+        "password=", "password:", "owner_key=", "owner_key:", "token=", "token:", "bearer "
+    };
+    const char *p; size_t k;
+    for (p = text; *p; p++)
+        for (k = 0; k < sizeof(keys) / sizeof(keys[0]); k++)
+            if (!_strnicmp(p, keys[k], strlen(keys[k]))) return 1;
+    return 0;
+}
+
+static void log_close_file(void) {
+    if (g_logFile != INVALID_HANDLE_VALUE) CloseHandle(g_logFile);
+    g_logFile = INVALID_HANDLE_VALUE;
+}
+
+static int log_rotate(void) {
+    wchar_t first[FLIM_LOG_PATH_CAP], second[FLIM_LOG_PATH_CAP];
+    log_close_file();
+    _snwprintf_s(first, FLIM_LOG_PATH_CAP, _TRUNCATE, L"%s.1", g_logPath);
+    _snwprintf_s(second, FLIM_LOG_PATH_CAP, _TRUNCATE, L"%s.2", g_logPath);
+    if (GetFileAttributesW(first) != INVALID_FILE_ATTRIBUTES && !MoveFileExW(first, second, MOVEFILE_REPLACE_EXISTING)) return 0;
+    return MoveFileExW(g_logPath, first, MOVEFILE_REPLACE_EXISTING) != 0;
+}
+
+static int log_open_file(void) {
+    if (g_logFile == INVALID_HANDLE_VALUE)
+        g_logFile = CreateFileW(g_logPath, FILE_APPEND_DATA | FILE_READ_ATTRIBUTES,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                               NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    return g_logFile != INVALID_HANDLE_VALUE;
+}
+
+static void logmsg(const char *fmt, ...) {
+    char message[6144], line[6400], build[48] = "unknown";
+    SYSTEMTIME time; LARGE_INTEGER size;
+    DWORD written, savedError = GetLastError();
+    size_t length, i;
+    va_list args;
+    va_start(args, fmt); _vsnprintf_s(message, sizeof(message), _TRUNCATE, fmt, args); va_end(args);
+    if (log_has_credentials(message)) strcpy_s(message, sizeof(message), "[credential-bearing diagnostic omitted]");
+    for (i = 0; message[i]; i++) if ((unsigned char)message[i] < 32) message[i] = ' ';
+    if (g_fl.build) WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, build, sizeof(build), NULL, NULL);
+    GetLocalTime(&time);
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "%04u-%02u-%02u %02u:%02u:%02u.%03u [%lu] %s [tid=%lu fl=%s]\n",
+                time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds,
+                GetCurrentProcessId(), message, GetCurrentThreadId(), build);
+    length = strlen(line);
+    AcquireSRWLockExclusive(&g_logLock);
+    if (!g_logInitialized) log_path_init();
+    if (!g_logPath[0] || GetTickCount64() < g_logRetryAt) goto done;
+    if (length > FLIM_LOG_MAX_BYTES || !log_open_file() || !GetFileSizeEx(g_logFile, &size)) goto failed;
+    if ((ULONGLONG)size.QuadPart + length > FLIM_LOG_MAX_BYTES) {
+        if (!log_rotate() || !log_open_file()) goto failed;
+    }
+    if (!WriteFile(g_logFile, line, (DWORD)length, &written, NULL) || written != length) goto failed;
+    goto done;
+failed:
+    log_close_file();
+    g_logRetryAt = GetTickCount64() + 1000;
+done:
+    ReleaseSRWLockExclusive(&g_logLock);
+    SetLastError(savedError);
 }
 
 static unsigned hash_id(uint32_t id) { return (id * 2654435761u) % HASH_SIZE; }
@@ -760,6 +957,7 @@ static Slot *slot_by_id(uint32_t id) {
 
 static int mix_count(void) {
     int n;
+    if (flim_profile_fl24(&g_fl)) return 126;
     __try { n = **(int **)(g_flBase + (MIXCNT_VA - IMG_BASE)); }
     __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
     return n < 0 ? 0 : (n > MAX_MIX ? MAX_MIX : n);
@@ -771,13 +969,33 @@ static int fl_ready(void) {
     __try {
         char **pl = *(char ***)(g_flBase + (MAINFORM_VA - IMG_BASE));
         if (!pl || !*pl) return 0;
-        return *(void **)(*pl + 0xf30) != NULL;
+        return *(void **)(*pl + (flim_profile_fl24(&g_fl) ? 0xf38 : 0xf30)) != NULL;
     } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
 }
 
 // Current value of any synced id (REC param or pseudo id). REC_NONE if absent.
 // SEH-guarded so a bad moment inside FL (e.g. mid project load) can't take FL down.
+static uint32_t local_rec_id(uint32_t id) {
+    if (flim_profile_fl24(&g_fl) && id >= 0x70000000u && id < 0x90000000u)
+        return id - 0x50000000u;
+    return id;
+}
+
+static int param_id_with_limit(uint32_t id, unsigned tracks) {
+    if (IS_MUTE_ID(id)) return (id & 0xFFFFFu) < tracks;
+    if (id < 0x70000000u) return (id >> 16) < MAX_CH;
+    uint32_t mixer = id - 0x70000000u;
+    return (mixer >> 22) < tracks &&
+           ((mixer >> 16) & 63u) < MAX_FX_SLOTS;
+}
+static int param_id_in_range(uint32_t id) { return param_id_with_limit(id, (unsigned)mix_count()); }
+
+static uint32_t local_rec_result(uint32_t value) {
+    return flim_profile_fl24(&g_fl) && value == 0x7fffffffu ? REC_NONE : value;
+}
+
 static uint32_t read_value(uint32_t id) {
+    if (!param_id_in_range(id)) return REC_NONE;
     __try {
         if (IS_MUTE_ID(id)) {
             int t = (int)(id & 0xFFFFF);
@@ -785,7 +1003,7 @@ static uint32_t read_value(uint32_t id) {
             char *arr = *(char **)(g_flBase + (MIXARR_VA - IMG_BASE));
             return arr[(size_t)t * MIX_STRIDE + MIX_ENABLED] ? 1u : 0u;
         }
-        return g_rec(id, 0, REC_GetValue);
+        return local_rec_result(g_rec(local_rec_id(id), 0, REC_GetValue));
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return REC_NONE;
     }
@@ -793,12 +1011,13 @@ static uint32_t read_value(uint32_t id) {
 
 // Must run on FL's main thread.
 static uint32_t write_value(uint32_t id, uint32_t v) {
+    if (!param_id_in_range(id)) return REC_NONE;
     __try {
         if (IS_MUTE_ID(id)) {
             g_setEnabled((int)(id & 0xFFFFF), v ? 1 : 0);
             return read_value(id);
         }
-        return g_rec(id, v, REC_UpdateValue | REC_UpdateControl);
+        return local_rec_result(g_rec(local_rec_id(id), v, REC_UpdateValue | REC_UpdateControl));
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         logmsg("APPLY faulted id=0x%08x", id);
         return REC_NONE;
@@ -867,9 +1086,9 @@ static void b64enc(const unsigned char *in, int n, char *out) {
 // Everything else calls ws_send (samples section), which keeps ops behind ones waiting for samples.
 static void ws_send_now(const char *msg, LONG generation) {
     DWORD e = 0;
-    if (generation != g_netGen || !compat_outgoing(msg)) return;
+    if (generation != g_netGen || g_compatFault || !compat_outgoing(msg)) return;
     EnterCriticalSection(&g_sendLock);
-    if (generation == g_netGen && g_ws) e = WinHttpWebSocketSend(g_ws, WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, (PVOID)msg, (DWORD)strlen(msg));
+    if (generation == g_netGen && !g_compatFault && g_ws) e = WinHttpWebSocketSend(g_ws, WINHTTP_WEB_SOCKET_UTF8_MESSAGE_BUFFER_TYPE, (PVOID)msg, (DWORD)strlen(msg));
     LeaveCriticalSection(&g_sendLock);
     if (e) logmsg("send failed (%lu)", e);
 }
@@ -878,6 +1097,14 @@ static void ws_send_now(const char *msg, LONG generation) {
 //   wss://host[:port][/path], ws://..., https:// / http:// (same as wss / ws), or host[:port].
 // A bare host means wss on 443; localhost, 127.x or an explicit non-443 port mean plain ws.
 typedef struct { int secure; wchar_t host[256]; INTERNET_PORT port; wchar_t path[512]; char shown[300]; } NetUrl;
+#define FLIM_SESSION_CAP 9
+
+static int session_valid(const char *session) {
+    size_t i, n = strlen(session);
+    if (n != 2 && n != 8) return 0;
+    for (i = 0; i < n; i++) if (session[i] < '0' || session[i] > '9') return 0;
+    return 1;
+}
 
 static int parse_url(const char *in, NetUrl *u) {
     char buf[800], pathA[512] = "/", *p, *h, *slash, *colon;
@@ -885,7 +1112,8 @@ static int parse_url(const char *in, NetUrl *u) {
     size_t n;
     memset(u, 0, sizeof(*u));
     while (*in == ' ' || *in == '\t') in++;
-    strncpy_s(buf, sizeof(buf), in, _TRUNCATE);
+    if (strlen(in) >= sizeof(buf)) return 0;
+    strcpy_s(buf, sizeof(buf), in);
     n = strlen(buf);
     while (n && (unsigned char)buf[n - 1] <= ' ') buf[--n] = 0;
     p = buf;
@@ -896,14 +1124,21 @@ static int parse_url(const char *in, NetUrl *u) {
     else if (strstr(p, "://")) return 0;
     h = p;
     slash = strchr(h, '/');
-    if (slash) { strncpy_s(pathA, sizeof(pathA), slash, _TRUNCATE); *slash = 0; }
+    if (slash) {
+        if (strlen(slash) >= sizeof(pathA)) return 0;
+        strcpy_s(pathA, sizeof(pathA), slash); *slash = 0;
+    }
+    for (p = pathA; *p; p++)
+        if ((unsigned char)*p <= ' ' || (unsigned char)*p >= 127 || strchr("?#\\%", *p)) return 0;
     colon = strrchr(h, ':');
     if (colon) {
-        char *e; long port = strtol(colon + 1, &e, 10);
+        char *e; long port;
+        for (p = colon + 1; *p; p++) if (*p < '0' || *p > '9') return 0;
+        port = strtol(colon + 1, &e, 10);
         if (*e || port <= 0 || port > 65535) return 0;
         u->port = (INTERNET_PORT)port; *colon = 0;
     }
-    if (!*h) return 0;
+    if (!*h || strlen(h) > 253) return 0;
     for (p = h; *p; p++) if (!(isalnum((unsigned char)*p) || *p == '.' || *p == '-' || *p == '_')) return 0;
     if (scheme < 0) {
         int local = _stricmp(h, "localhost") == 0 || strncmp(h, "127.", 4) == 0;
@@ -912,37 +1147,72 @@ static int parse_url(const char *in, NetUrl *u) {
     }
     u->secure = scheme;
     if (!u->port) u->port = scheme ? 443 : 80;
-    MultiByteToWideChar(CP_UTF8, 0, h, -1, u->host, 256);
-    MultiByteToWideChar(CP_UTF8, 0, pathA, -1, u->path, 512);
+    if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, h, -1, u->host, 256) ||
+        !MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, pathA, -1, u->path, 512)) return 0;
     strcpy_s(u->shown, sizeof(u->shown), h);              // status text: host[:port][/path]
     if (u->port != (scheme ? 443 : 80)) sprintf_s(u->shown + strlen(u->shown), sizeof(u->shown) - strlen(u->shown), ":%u", u->port);
-    if (pathA[1]) strncat_s(u->shown, sizeof(u->shown), pathA, _TRUNCATE);
+    if (strlen(u->shown) + strlen(pathA) >= sizeof(u->shown)) return 0;
+    if (pathA[1]) strcat_s(u->shown, sizeof(u->shown), pathA);
     return 1;
 }
 
-// The server itself: the socket always opens at "/" (the session goes into the host / join message).
-static void url_root(NetUrl *u) {
+static void url_origin(NetUrl *u) {
     char *slash = strchr(u->shown, '/');
     if (slash) *slash = 0;
+}
+
+static void url_root(NetUrl *u) {
+    url_origin(u);
     wcscpy_s(u->path, 512, L"/");
 }
 
-// A session link: server address + "/NN" (the slot, e.g. https://flim.fly.dev/03).
-static int parse_link(const char *in, NetUrl *u, char sess[4]) {
+// Legacy slots use the root socket; desktop rooms use a separate room path.
+static int parse_link(const char *in, NetUrl *u, char sess[FLIM_SESSION_CAP]) {
     const wchar_t *p;
-    int n = 0;
+    int n = 0, room;
+    sess[0] = 0;
     if (!parse_url(in, u)) return 0;
+    room = !wcsncmp(u->path, L"/room/", 6);
+    if (room) {
+        p = u->path + 6;
+        while (p[n] >= L'0' && p[n] <= L'9') n++;
+        if (n != 8 || (p[n] && !(p[n] == L'/' && !p[n + 1]))) return 0;
+        for (n = 0; n < 8; n++) sess[n] = (char)p[n];
+        sess[8] = 0;
+        u->path[14] = 0;
+        url_origin(u);
+        return 1;
+    }
     p = u->path[0] == L'/' ? u->path + 1 : u->path;
     while (p[n] >= L'0' && p[n] <= L'9') n++;
     if (n < 1 || n > 2 || (p[n] && !(p[n] == L'/' && !p[n + 1]))) return 0;
-    sprintf_s(sess, 4, "%02d", _wtoi(p));
+    sprintf_s(sess, FLIM_SESSION_CAP, "%02d", _wtoi(p));
     url_root(u);
+    return 1;
+}
+
+static int parse_host(const char *in, NetUrl *u) {
+    char room[FLIM_SESSION_CAP];
+    if (!parse_url(in, u)) return 0;
+    if (!wcsncmp(u->path, L"/room/", 6)) return parse_link(in, u, room);
+    if (wcscmp(u->path, L"/")) return 0;
+    url_root(u);
+    return 1;
+}
+
+static int welcome_session(const char *message, const NetUrl *u, char session[FLIM_SESSION_CAP]) {
+    FlJson root = { message, strlen(message) }, value;
+    int i, room = !wcsncmp(u->path, L"/room/", 6);
+    if (!fj_get(root, "session", &value) || !fj_text(value, session, FLIM_SESSION_CAP) ||
+        !session_valid(session) || strlen(session) != (room ? 8u : 2u)) return 0;
+    if (room) for (i = 0; i < 8; i++) if (u->path[6 + i] != (wchar_t)session[i]) return 0;
     return 1;
 }
 
 // The link people paste into Connect.
 static void session_link(const NetUrl *u, const char *sess, char *out, int cap) {
-    sprintf_s(out, cap, "%s://%s/%s", u->secure ? "https" : "ws", u->shown, sess);
+    sprintf_s(out, cap, "%s://%s/%s%s", u->secure ? "https" : "ws", u->shown,
+              strlen(sess) == 8 ? "room/" : "", sess);
 }
 
 typedef struct { HINTERNET ses, con, ws; } NetConn;
@@ -1005,32 +1275,65 @@ out:
 // ---------------- main-thread task queue ----------------
 static void discard_task(const QItem *it) {
     if (it->type == T_LOAD || it->type == T_ADDCH) { if (it->path) { DeleteFileA(it->path); free(it->path); } }
-    else if (it->type == T_UNITREVERT || it->type == T_PROJLOAD || it->type == T_HINT || it->type == T_META || it->type == T_PATOP) free(it->path);
+    else if (it->type == T_UNITREVERT || it->type == T_PROJLOAD || it->type == T_HINT || it->type == T_META || it->type == T_PATOP || it->type == T_PORTABLESEND) free(it->path);
     else if (it->type == T_ORDER || it->type == T_FXSYNC || it->type == T_NOTES || it->type == T_NOTESYNC || it->type == T_CLIPS) free(it->order);
 }
 
 static void enqueue(const QItem *it) {
     LONG generation = session_generation();
-    if (generation != g_netGen) { discard_task(it); return; }
+    int overflow = 0;
+    if (generation != g_netGen || g_compatFault) { discard_task(it); return; }
+    if (((it->type == T_LOAD || it->type == T_ADDCH || it->type == T_UNITREVERT ||
+          it->type == T_PROJLOAD || it->type == T_META || it->type == T_PATOP || it->type == T_PORTABLESEND) && !it->path) ||
+        ((it->type == T_ORDER || it->type == T_FXSYNC || it->type == T_NOTESYNC ||
+          ((it->type == T_NOTES || it->type == T_CLIPS) && it->mode)) && !it->order)) {
+        discard_task(it);
+        sharing_fail("Shared edit: session stopped", "There is not enough memory to queue the shared edit.");
+        return;
+    }
+    if (it->type == T_HINT && !it->path) return;
     EnterCriticalSection(&g_qLock);
-    if (it->type == T_LOAD) {
-        // a newer state for a unit that still has a load queued replaces it (latest wins)
+    if (it->type == T_NOTESNAP || it->type == T_CLIPSNAP || it->type == T_PLUGRETRY) {
         int i;
         for (i = g_qh; i != g_qt; i = (i + 1) % QCAP) {
-            QItem *q = &g_q[i];
-            if (q->sessionGen == generation && q->type == T_LOAD && q->unit == it->unit && q->a == it->a && q->b == it->b) {
-                DeleteFileA(q->path); free(q->path);
-                q->path = it->path; q->mode = it->mode;
+            const QItem *q = &g_q[i];
+            if (q->sessionGen == generation && q->type == it->type && q->a == it->a) {
                 LeaveCriticalSection(&g_qLock);
-                logmsg("LOAD coalesced unit=%d %d/%d", it->unit, it->a, it->b);
                 return;
             }
         }
     }
+    if (it->type == T_LOAD && g_qh != g_qt) {
+        // Only adjacent loads can replace each other: intervening edits may change the target.
+        QItem *q = &g_q[(g_qt + QCAP - 1) % QCAP];
+        if (q->sessionGen == generation && q->type == T_LOAD && q->unit == it->unit && q->a == it->a && q->b == it->b) {
+                DeleteFileA(q->path); free(q->path);
+                q->path = it->path; q->mode = it->mode;
+                strcpy_s(q->presetFl, sizeof(q->presetFl), it->presetFl);
+                LeaveCriticalSection(&g_qLock);
+                logmsg("LOAD coalesced unit=%d %d/%d", it->unit, it->a, it->b);
+                return;
+        }
+    }
+    if (it->type == T_PARAM && g_qh != g_qt) {
+        QItem *tail = &g_q[(g_qt + QCAP - 1) % QCAP];
+        if (tail->sessionGen == generation && tail->type == T_PARAM && tail->id == it->id &&
+            tail->mode == it->mode && (!it->mode || tail->applyGen == it->applyGen)) {
+            tail->v = it->v; LeaveCriticalSection(&g_qLock); return;
+        }
+    }
     int nt = (g_qt + 1) % QCAP;
     if (nt != g_qh) { g_q[g_qt] = *it; g_q[g_qt].sessionGen = generation; g_qt = nt; }
-    else { discard_task(it); logmsg("queue full, dropped task type %d", it->type); }
+    else {
+        discard_task(it);
+        // Scanners retry snapshot requests; received mutations cannot safely be dropped.
+        overflow = it->type != T_NOTESNAP && it->type != T_CLIPSNAP && it->type != T_PLUGRETRY;
+    }
     LeaveCriticalSection(&g_qLock);
+    if (overflow) {
+        sharing_fail("Edit backlog: session stopped", "FL Studio could not apply shared edits fast enough. Reconnect and resync before continuing to share.");
+        return;
+    }
     if (g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0); // wake the main thread
 }
 
@@ -1061,6 +1364,9 @@ typedef struct {
     DWORD absorbUntil;       // identity changes until then come from our own apply
     DWORD baselineAt;        // take a silent baseline at this tick
     DWORD baseAt;            // when the current hash baseline was taken
+    volatile LONG unavailable; // keep the remote preset; never share a local placeholder
+    uint64_t retryStamp;
+    char presetFl[32];
     volatile LONG applyGen;  // odd throughout a remote load; even when complete
 } Unit;
 
@@ -1076,6 +1382,8 @@ typedef struct {
 
 static Unit g_chU[MAX_CH];
 static Unit g_fxU[MAX_MIX][MAX_FX_SLOTS];
+static volatile LONG g_pluginMissing;
+static volatile LONG g_pluginRetryable;
 static void *g_chKnown[MAX_CH];
 static int   g_nChKnown = -1;
 static volatile LONG g_structGen = 0;     // bumped when channel indices shift
@@ -1121,12 +1429,15 @@ static void enqueue_local_revert(uint32_t id, uint32_t v, LONG applyGen) {
 // Delphi x64 UnicodeString with refcount -1 (a "literal"): FL copies rather than
 // references it, so we can free it after the call.
 static wchar_t *dstr_new(const char *s) {
-    int n = (int)strlen(s), i;
-    unsigned char *m = (unsigned char *)calloc(1, 16 + (n + 1) * 2);
+    int count = s ? MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0) : 0;
+    unsigned char *m;
+    if (!count) return NULL;
+    m = (unsigned char *)calloc(1, 16 + (size_t)count * sizeof(wchar_t));
+    if (!m) return NULL;
     *(uint16_t *)(m + 4) = 1200; *(uint16_t *)(m + 6) = 2;
-    *(int32_t *)(m + 8) = -1;    *(int32_t *)(m + 12) = n;
+    *(int32_t *)(m + 8) = -1;    *(int32_t *)(m + 12) = count - 1;
     wchar_t *w = (wchar_t *)(m + 16);
-    for (i = 0; i < n; i++) w[i] = (unsigned char)s[i];
+    if (!MultiByteToWideChar(CP_ACP, 0, s, -1, w, count)) { free(m); return NULL; }
     return w;
 }
 static void dstr_free(wchar_t *w) { if (w) free((unsigned char *)w - 16); }
@@ -1137,6 +1448,7 @@ static void *chan_obj(int i) {
     return o;
 }
 static void *fx_obj(int t, int s) {
+    if (t < 0 || t >= mix_count() || s < 0 || s >= MAX_FX_SLOTS) return NULL;
     __try {
         char *arr = *(char **)(g_flBase + (MIXARR_VA - IMG_BASE));
         return *(void **)(arr + (size_t)t * MIX_STRIDE + MIX_SLOTS_OFF + (size_t)s * 8);
@@ -1191,18 +1503,35 @@ static uint64_t state_hash(const unsigned char *d, size_t n) {
     return fnv64(d, n);
 }
 
+static unsigned char *read_file_checked(FILE *f, size_t *n) {
+    unsigned char *buf = NULL;
+    __int64 size;
+    *n = 0;
+    if (_fseeki64(f, 0, SEEK_END) || (size = _ftelli64(f)) < 0) goto failed;
+    if ((uint64_t)size > FLIM_CLOUD_MAX) {
+        sharing_fail("Shared file: session stopped", "The shared project or plugin state exceeds the 64 MiB file limit.");
+        goto failed;
+    }
+    if (_fseeki64(f, 0, SEEK_SET)) goto failed;
+    buf = (unsigned char *)malloc(size ? (size_t)size : 1);
+    if (!buf || fread(buf, 1, (size_t)size, f) != (size_t)size || ferror(f) || fgetc(f) != EOF || ferror(f)) goto failed;
+    if (fclose(f)) { free(buf); return NULL; }
+    *n = (size_t)size;
+    return buf;
+failed:
+    free(buf); fclose(f); return NULL;
+}
+
 static unsigned char *read_file(const char *path, size_t *n) {
     FILE *f = NULL;
-    if (fopen_s(&f, path, "rb") != 0 || !f) return NULL;
-    fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
-    unsigned char *buf = (unsigned char *)malloc(sz > 0 ? sz : 1);
-    *n = fread(buf, 1, sz > 0 ? sz : 0, f);
-    fclose(f);
-    return buf;
+    *n = 0;
+    if (!path || fopen_s(&f, path, "rb") != 0 || !f) return NULL;
+    return read_file_checked(f, n);
 }
 
 static char *tmp_path(const char *tag) {
     char *p = (char *)malloc(MAX_PATH);
+    if (!p) { sharing_fail("Shared plugin: session stopped", "There is not enough memory to prepare the shared plugin file."); return NULL; }
     sprintf_s(p, MAX_PATH, "%s\\%s_%ld.fst", g_tmpDir, tag, InterlockedIncrement(&g_tmpSeq));
     return p;
 }
@@ -1211,38 +1540,64 @@ static char *tmp_path(const char *tag) {
 // Returns malloc'd bytes (caller frees) or NULL (empty slot / failure).
 static unsigned char *unit_save(int unit, int a, int b, size_t *n) {
     void *obj = unit_obj(unit, a, b);
+    unsigned char *data;
+    *n = 0;
     if (!obj) return NULL;
     if (unit == U_FX && !plugin_inst(obj)) return NULL;     // never save an empty slot
     char path[MAX_PATH];
+    if (strlen(g_tmpDir) + 10 >= sizeof(path)) {
+        sharing_fail("Shared plugin: session stopped", "The temporary folder path is too long to save a complete plugin snapshot.");
+        return NULL;
+    }
     sprintf_s(path, sizeof(path), "%s\\snap.fst", g_tmpDir);
     DeleteFileA(path);
     wchar_t *w = dstr_new(path);
     int r = -1;
+    if (!w) {
+        sharing_fail("Shared plugin: session stopped", "There is not enough memory to save a complete plugin snapshot.");
+        return NULL;
+    }
     __try { r = g_savePreset(w, unit_mask(unit), obj, 1); }
     __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("SAVE faulted unit=%d %d/%d", unit, a, b); r = -1; }
     dstr_free(w);
-    if (r != 0) return NULL;
-    return read_file(path, n);
+    data = r == 0 ? read_file(path, n) : NULL;
+    if (data && !*n) { free(data); data = NULL; }
+    if (!data) sharing_fail("Shared plugin: session stopped", "FL Studio could not save or read a complete plugin snapshot. Check available disk space and the temporary folder before reconnecting.");
+    return data;
 }
 
 static void b64enc(const unsigned char *in, int n, char *out);
 
 // Serialize {"unit":"ch","ch":i | "unit":"fx","trk":t,"slot":s, "data":"<b64>"} fields.
 static char *unit_json_fields(int unit, int a, int b, const unsigned char *data, size_t n) {
-    size_t cap = 96 + (n + 2) / 3 * 4 + 1;
-    char *j = (char *)malloc(cap);
-    int o = unit == U_CH ? sprintf_s(j, cap, "\"unit\":\"ch\",\"ch\":%d,\"data\":\"", a)
+    size_t cap;
+    char *j;
+    int o;
+    if (n > FLIM_CLOUD_MAX || (n && !data)) goto failed;
+    cap = 160 + (n + 2) / 3 * 4 + 1;
+    j = (char *)malloc(cap);
+    if (!j) goto failed;
+    o = unit == U_CH ? sprintf_s(j, cap, "\"unit\":\"ch\",\"ch\":%d,\"data\":\"", a)
                          : sprintf_s(j, cap, "\"unit\":\"fx\",\"trk\":%d,\"slot\":%d,\"data\":\"", a, b);
     b64enc(data, (int)n, j + o);
     strcat_s(j, cap, "\"");
+    { Unit *u = unit_ptr(unit, a, b);
+      if (u && u->unavailable && u->presetFl[0]) { size_t used = strlen(j); sprintf_s(j + used, cap - used, ",\"preset_fl\":\"%s\"", u->presetFl); } }
     return j;
+failed:
+    sharing_fail("Shared plugin: session stopped", "The plugin state exceeds its size limit or could not fit in memory. No incomplete state was sent.");
+    return NULL;
 }
 
 // key: the plugin lock the op is sent under (NULL = none); the server drops it if a peer holds it.
 static void send_unit(const char *kind, int unit, int a, int b, const unsigned char *data, size_t n, const char *key) {
     char *f = unit_json_fields(unit, a, b, data, n);
-    size_t cap = strlen(f) + 128;
-    char *m = (char *)malloc(cap);
+    size_t cap;
+    char *m;
+    if (!f) return;
+    cap = strlen(f) + 128;
+    m = (char *)malloc(cap);
+    if (!m) { free(f); sharing_fail("Shared plugin: session stopped", "There is not enough memory to send the shared plugin state."); return; }
     if (key) sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"%s\",\"key\":\"%s\",%s}}", kind, key, f);
     else sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"%s\",%s}}", kind, f);
     ws_send_samples(m, data, n);         // lists (and uploads) the samples the state uses
@@ -1253,7 +1608,7 @@ static void send_unit(const char *kind, int unit, int a, int b, const unsigned c
 static void do_snap(const QItem *it) {
     Unit *u = unit_ptr(it->unit, it->a, it->b);
     size_t n = 0;
-    if (!u || unit_applying(u, GetTickCount())) return;
+    if (!u || u->unavailable || unit_applying(u, GetTickCount())) return;
     unsigned char *d = unit_save(it->unit, it->a, it->b, &n);
     if (!d) return;
     uint64_t h = state_hash(d, n);
@@ -1276,6 +1631,12 @@ static void do_snap(const QItem *it) {
     default: break;
     }
     if (send) {
+        if (!compat_plugin_send()) {
+            free(d);
+            plug_revert_state(it->unit, it->a, it->b);
+            fl_hint("This room's oldest FL host must change plugin presets. The agreed preset is being restored; notes and controls remain shared.");
+            return;
+        }
         if (!plug_lock_send(it->unit, it->a, it->b, key, sizeof(key))) {
             // someone else is editing this plugin: put back the state everyone agreed on
             free(d);
@@ -1293,26 +1654,96 @@ static void do_snap(const QItem *it) {
 static void do_load(const QItem *it) {
     Unit *u = unit_ptr(it->unit, it->a, it->b);
     void *obj = unit_obj(it->unit, it->a, it->b);
-    if (!u || !obj) { logmsg("LOAD: no target unit=%d %d/%d", it->unit, it->a, it->b); return; }
+    if (!u || !obj || !it->path) {
+        sharing_fail("Shared plugin: session stopped", "The shared plugin target no longer exists. Reconnect and resync before continuing to share.");
+        return;
+    }
     size_t n = 0;
     unsigned char *in = read_file(it->path, &n);
-    uint64_t hin = in ? state_hash(in, n) : 0;
-    if (in) plug_agreed_set(it->unit, it->a, it->b, in, n);   // what a plugin-lock revert restores
-    free(in);
-    if (it->mode == 1) {                         // join: skip units that are already identical
+    if (!in || !n) {
+        free(in);
+        sharing_fail("Shared plugin: session stopped", "The received preset could not be read completely. Your previous agreed plugin state was kept.");
+        return;
+    }
+    uint64_t hin = state_hash(in, n);
+    unsigned char *local = NULL;
+    size_t localn = 0;
+    char reason[320] = "";
+    uint64_t retryStamp = 0;
+    if (u->unavailable && u->hash == hin && it->mode != 2) {
+        if (it->mode == 3) {
+            strcpy_s(u->presetFl, sizeof(u->presetFl), it->presetFl);
+            u->retryStamp = 0;
+            InterlockedExchange(&u->unavailable, 2);
+            plugins_changed();
+        }
+        free(in); return;
+    }
+    if (it->mode == 3) { strcpy_s(reason, sizeof(reason), "Newer FL preset retained without passing it to this older FL loader"); goto unavailable; }
+    int prepared = plugin_prepare(in, n, it->unit, &local, &localn, reason, sizeof(reason));
+    retryStamp = plugin_retry_stamp(in, n, it->unit);
+    if (prepared < 0) {
+        free(in);
+        sharing_fail("Shared plugin: session stopped", "There is not enough memory to adapt the shared plugin path.");
+        return;
+    }
+    if (!prepared) goto unavailable;
+    if (!u->unavailable && it->mode == 1) {       // join: skip units that are already identical
         size_t m = 0;
         unsigned char *own = unit_save(it->unit, it->a, it->b, &m);
         uint64_t hown = own ? state_hash(own, m) : 0;
         free(own);
-        if (hown && hown == hin) { u->hash = hown; return; }
+        if (g_compatFault) { free(local); free(in); return; }
+        if (hown && hown == hin) {
+            plug_agreed_set(it->unit, it->a, it->b, in, n);
+            free(local); free(in); u->hash = hown; return;
+        }
+    }
+    char *adapted = NULL;
+    if (local) {
+        FILE *f = NULL;
+        int ok = 0;
+        adapted = tmp_path("vp");
+        if (adapted && !fopen_s(&f, adapted, "wb") && f) {
+            ok = fwrite(local, 1, localn, f) == localn;
+            if (fclose(f)) ok = 0;
+        }
+        free(local); local = NULL;
+        if (!ok) {
+            if (adapted) { DeleteFileA(adapted); free(adapted); }
+            free(in);
+            sharing_fail("Shared plugin: session stopped", "The local plugin preset could not be written completely. Check the temporary folder and free disk space.");
+            return;
+        }
+    }
+    wchar_t *w = dstr_new(adapted ? adapted : it->path);
+    if (!w) {
+        if (adapted) { DeleteFileA(adapted); free(adapted); }
+        free(in);
+        sharing_fail("Shared plugin: session stopped", "There is not enough memory to load the shared preset. Your previous agreed plugin state was kept.");
+        return;
     }
     InterlockedIncrement(&u->applyGen);
-    u->identAt = 0; u->lastAct = 0; u->burst = 0;
-    wchar_t *w = dstr_new(it->path);
-    int r = -1;
+    int r = -1, fault = 0;
     __try { r = g_loadPreset(w, unit_mask(it->unit), obj, 0); }
-    __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("LOAD faulted unit=%d %d/%d", it->unit, it->a, it->b); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { fault = 1; logmsg("LOAD faulted unit=%d %d/%d", it->unit, it->a, it->b); }
     dstr_free(w);
+    if (adapted) { DeleteFileA(adapted); free(adapted); }
+    if (fault) {
+        free(in);
+        InterlockedIncrement(&u->applyGen);
+        sharing_fail("Shared plugin: session stopped", "A native plugin load faulted. Sharing stopped because FL's memory state may be unsafe. The previous agreed state was kept.");
+        return;
+    }
+    if (r != 0 || (reason[0] && !plugin_inst(obj))) {
+        InterlockedIncrement(&u->applyGen);
+        strcpy_s(reason, sizeof(reason), "FL Studio rejected this preset or did not create the requested plugin");
+        goto unavailable;
+    }
+    if (!plug_agreed_set(it->unit, it->a, it->b, in, n)) { free(in); InterlockedIncrement(&u->applyGen); return; }
+    free(in);
+    if (InterlockedExchange(&u->unavailable, 0)) plugins_changed();
+    u->identAt = 0; u->lastAct = 0; u->burst = 0;
     u->inst = plugin_inst(obj);                 // ours: the structure scan must not report it back
     // The load moved this unit's params; take them as the new truth right away
     // (instead of ignoring local edits for seconds), plus a short window for
@@ -1338,17 +1769,33 @@ static void do_load(const QItem *it) {
     }
     InterlockedIncrement(&u->applyGen);
     logmsg("PLUG applied unit=%s %d/%d ret=%d", it->unit == U_CH ? "ch" : "fx", it->a, it->b, r);
+    return;
+unavailable:
+    free(local);
+    if (!plug_agreed_set(it->unit, it->a, it->b, in, n)) { free(in); return; }
+    free(in);
+    u->hash = hin;
+    u->identAt = u->addAt = u->lastAct = u->baselineAt = 0; u->burst = 0;
+    u->inst = plugin_inst(obj);
+    u->retryStamp = retryStamp;
+    strcpy_s(u->presetFl, sizeof(u->presetFl), it->presetFl);
+    InterlockedExchange(&u->unavailable, it->mode == 3 ? 2 : 1);
+    plugins_changed();
+    logmsg("PLUGIN unavailable unit=%s %d/%d: %s; remote state retained, room stays connected", it->unit == U_CH ? "ch" : "fx", it->a, it->b, reason);
+    fl_hint("Plugin unavailable here. Notes and shared controls continue. Matching scanned plugins recover automatically.");
 }
 
 static void units_shift_after_delete(int idx, int n) {
     int i;
+    pending_channels(NULL, n, idx);
+    plug_agreed_channels(NULL, n, idx);
     for (i = idx; i + 1 < n && i + 1 < MAX_CH; i++) g_chU[i] = g_chU[i + 1];
     if (n - 1 >= 0 && n - 1 < MAX_CH) memset(&g_chU[n - 1], 0, sizeof(Unit));
     for (i = idx; i < MAX_CH; i++) {
         g_chanPlugN[i] = 0;          // param ranges re-probed by rescan
         g_chU[i].hash = 0;           // saved state is index-dependent: re-baseline, don't send
     }
-    plug_agreed_reset(1, 0);
+    plugins_changed();
     InterlockedIncrement(&g_structGen);
 }
 
@@ -1360,15 +1807,23 @@ static void known_from_list(void) {
 
 static void do_addch(const QItem *it) {
     void **items; int n = chan_list(&items);
-    if (n != it->a) { logmsg("chan.add: expected index %d but have %d channels; skipped", it->a, n); return; }
+    if (n != it->a || n >= MAX_CH) {
+        logmsg("chan.add: expected index %d but have %d channels", it->a, n);
+        sharing_fail("Shared channel: session stopped", "The channel lists no longer match. Reconnect and resync before continuing to share.");
+        return;
+    }
     void *obj = NULL;
     __try { obj = g_addChannel(-1, 0, 1); } __except (EXCEPTION_EXECUTE_HANDLER) { obj = NULL; }
-    if (!obj) { logmsg("chan.add: AddChannel failed"); return; }
+    if (!obj) {
+        sharing_fail("Shared channel: session stopped", "FL Studio could not add the shared channel. Reconnect and resync before continuing to share.");
+        return;
+    }
     known_from_list();
     memset(&g_chU[it->a], 0, sizeof(Unit));
     g_chU[it->a].absorbUntil = GetTickCount() + SUPPRESS_MS + SETTLE_IDENT_MS;
     logmsg("CHAN added index %d (remote)", it->a);
-    enqueue_unit(T_LOAD, U_CH, it->a, 0, 0, it->path);    // load its plugin on a later tick
+    // Initialize before later parameter, delete or reorder tasks can change this index.
+    do_load(it);
 }
 
 static void do_delch(const QItem *it) {
@@ -1389,6 +1844,8 @@ static void units_permute(const int *from, int n) {
     static Unit old[MAX_CH];
     int i;
     memcpy(old, g_chU, sizeof(Unit) * (size_t)n);
+    pending_channels(from, n, -1);
+    plug_agreed_channels(from, n, -1);
     for (i = 0; i < n; i++) {
         g_chU[i] = old[from[i]];
         if (from[i] != i) {
@@ -1396,7 +1853,7 @@ static void units_permute(const int *from, int n) {
             g_chanPlugN[i] = 0;
         }
     }
-    plug_agreed_reset(1, 0);
+    plugins_changed();
     InterlockedIncrement(&g_structGen);
 }
 
@@ -1405,17 +1862,37 @@ static void units_permute(const int *from, int n) {
 static void do_fxclear(const QItem *it) {
     Unit *u = unit_ptr(U_FX, it->a, it->b);
     void *obj = fx_obj(it->a, it->b);
-    if (!u || !obj || !plugin_inst(obj)) return;              // already empty
+    if (!u || !obj) {
+        sharing_fail("Shared effect: session stopped", "The shared mixer slot no longer exists. Reconnect and resync before continuing to share.");
+        return;
+    }
+    if (!plugin_inst(obj)) {
+        if (u->unavailable) {
+            memset(u, 0, offsetof(Unit, applyGen));
+            u->absorbUntil = GetTickCount() + ABSORB_MS;
+            plug_agreed_set(U_FX, it->a, it->b, NULL, 0); plugins_changed();
+            logmsg("PLUGIN unavailable state discarded for empty fx %d/%d (remote clear)", it->a, it->b);
+        }
+        return;
+    }
     wchar_t *w = dstr_new(g_fxDeletePreset);
+    if (!w) { sharing_fail("Shared effect: session stopped", "There is not enough memory to clear the shared effect. Your previous agreed plugin state was kept."); return; }
     int r = -1;
+    InterlockedIncrement(&u->applyGen);
     __try { r = g_loadPreset(w, MASK_FX, obj, 0); }
     __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("FX clear faulted %d/%d", it->a, it->b); }
     dstr_free(w);
-    memset(u, 0, sizeof(Unit));
+    if (r != 0 || plugin_inst(obj)) {
+        InterlockedIncrement(&u->applyGen);
+        sharing_fail("Shared effect: session stopped", "FL Studio could not remove the shared effect. Check the plugin error before reconnecting; the previous agreed state was kept.");
+        return;
+    }
+    memset(u, 0, offsetof(Unit, applyGen));
     plug_agreed_set(U_FX, it->a, it->b, NULL, 0);
-    u->inst = plugin_inst(obj);
     u->absorbUntil = GetTickCount() + ABSORB_MS;
-    logmsg("PLUG cleared fx %d/%d (remote) ret=%d%s", it->a, it->b, r, u->inst ? " BUT SLOT STILL OCCUPIED" : "");
+    InterlockedIncrement(&u->applyGen);
+    plugins_changed();
+    logmsg("PLUG cleared fx %d/%d (remote) ret=%d", it->a, it->b, r);
 }
 
 // Join: slots the leader has empty (absent from plug.full) must be empty here too.
@@ -1424,7 +1901,7 @@ static void do_fxsync(const QItem *it) {
     int t, s, n = 0, nm = mix_count();
     for (t = 0; t < nm; t++)
         for (s = 0; s < MAX_FX_SLOTS; s++) {
-            if (keep[t * MAX_FX_SLOTS + s] || !plugin_inst(fx_obj(t, s))) continue;
+            if (keep[t * MAX_FX_SLOTS + s] || (!g_fxU[t][s].unavailable && !plugin_inst(fx_obj(t, s)))) continue;
             enqueue_unit(T_FXCLEAR, U_FX, t, s, 0, NULL);
             n++;
         }
@@ -1573,6 +2050,7 @@ static void do_struct(void) {
     for (i = 0; i < n; i++) {
         void *inst = plugin_inst(items[i]);
         Unit *u = &g_chU[i];
+        if (u->unavailable) { u->inst = inst; continue; }
         if (inst != u->inst) {
             u->inst = inst;
             if (now < u->absorbUntil || u->addAt) continue;
@@ -1582,12 +2060,13 @@ static void do_struct(void) {
     int nm = mix_count(), gone = 0;
     for (t = 0; t < nm; t++)
         for (s = 0; s < MAX_FX_SLOTS; s++)
-            if (g_fxU[t][s].inst && !plugin_inst(fx_obj(t, s)) && now >= g_fxU[t][s].absorbUntil) gone++;
+            if (!g_fxU[t][s].unavailable && g_fxU[t][s].inst && !plugin_inst(fx_obj(t, s)) && now >= g_fxU[t][s].absorbUntil) gone++;
     if (gone >= PROJ_FX_MASS) { proj_begin("many effects removed at once"); return; }
     for (t = 0; t < nm; t++)
         for (s = 0; s < MAX_FX_SLOTS; s++) {
             Unit *u = &g_fxU[t][s];
             void *inst = plugin_inst(fx_obj(t, s));
+            if (u->unavailable) { u->inst = inst; continue; }
             if (inst == u->inst) continue;
             void *was = u->inst;
             u->inst = inst;
@@ -1609,24 +2088,34 @@ static void do_full(void) {
     void **items; int n = chan_list(&items), i, t, s, cnt = 0;
     size_t cap = 256, len;
     char *m = (char *)malloc(cap);
+    if (!m) goto failed;
     len = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"plug.full\",\"nch\":%d,\"items\":[", n);
     for (i = 0; i < n + mix_count() * MAX_FX_SLOTS; i++) {
         int unit = i < n ? U_CH : U_FX;
         int a = i < n ? i : (i - n) / MAX_FX_SLOTS, b = i < n ? 0 : (i - n) % MAX_FX_SLOTS;
         size_t dn = 0;
-        unsigned char *d = unit_save(unit, a, b, &dn);
-        if (!d) continue;
         Unit *u = unit_ptr(unit, a, b);
+        unsigned char *d = u && u->unavailable ? plug_agreed_copy(unit, a, b, &dn) : unit_save(unit, a, b, &dn);
+        if (g_compatFault) { free(d); goto failed; }
+        if (!d) { if (unit == U_CH || (u && u->unavailable)) goto failed; continue; }
         if (u) u->hash = state_hash(d, dn);
         char *f = unit_json_fields(unit, a, b, d, dn);
         free(d);
+        if (!f) goto failed;
         size_t fl = strlen(f);
-        if (len + fl + 8 > cap) { cap = (len + fl + 8) * 2; m = (char *)realloc(m, cap); }
+        if (len > FLIM_CLOUD_MAX - 8 || fl > FLIM_CLOUD_MAX - 8 - len) { free(f); goto failed; }
+        if (len + fl + 8 > cap) {
+            size_t need = len + fl + 8;
+            char *next;
+            cap = need > FLIM_CLOUD_MAX / 2 ? FLIM_CLOUD_MAX : need * 2;
+            next = (char *)realloc(m, cap);
+            if (!next) { free(f); goto failed; }
+            m = next;
+        }
         len += sprintf_s(m + len, cap - len, "%s{%s}", cnt ? "," : "", f);
         free(f);
         cnt++;
     }
-    if (len + 8 > cap) { cap = len + 8; m = (char *)realloc(m, cap); }
     strcat_s(m, cap, "]}}");
     ws_send(m);
     free(m);
@@ -1634,6 +2123,10 @@ static void do_full(void) {
     (void)t; (void)s;
     send_notes_full();
     send_full_state();
+    return;
+failed:
+    free(m);
+    sharing_fail("Shared plugins: session stopped", "The complete plugin snapshot could not be prepared within its size and memory limits. No incomplete snapshot was sent.");
 }
 
 // ---------------- notes ----------------
@@ -1644,12 +2137,28 @@ static void do_full(void) {
 static uint64_t g_patHash[MAX_PAT];       // last state sent or applied (0 = no notes)
 static uint64_t g_patSeen[MAX_PAT];       // last state the scanner saw
 static DWORD    g_patChangedAt[MAX_PAT];  // when g_patSeen last moved (0 = settled/handled)
+static DWORD    g_patDirtyAt[MAX_PAT];    // first unsent observation, bounded during recording
 static volatile DWORD g_patSuppress[MAX_PAT];
 static volatile LONG g_notesReady = 0;    // baseline taken
+static volatile LONG g_notesCrdt = 0;     // negotiated by every participant through the relay
+static FncState g_noteSets[MAX_PAT];
+static unsigned g_noteSetCount;
+static CRITICAL_SECTION g_ulockLock;
+static void notes_crdt_rebaseline(void);
+static int sha_hex(const void *p, size_t n, char hex[65]);
 
 #define NOTES_SCAN_MS   100
-#define NOTES_SETTLE_MS 250     // a drag rewrites notes every frame: send once it stops
+#define NOTES_SETTLE_MS 100
+#define NOTES_STREAM_MS 200     // keep recorded MIDI moving while notes are still being added
 #define NOTES_BULK      8       // this many patterns changing at once = project load, not an edit
+
+static int notes_suppressed(volatile DWORD *until, DWORD now) {
+    LONG deadline = InterlockedCompareExchange((volatile LONG *)until, 0, 0);
+    if (!deadline) return 0;
+    if ((LONG)(now - (DWORD)deadline) < 0) return 1;
+    InterlockedCompareExchange((volatile LONG *)until, 0, deadline);
+    return 0;
+}
 
 // Hash of note records with the selection bit masked out: selecting is not an edit.
 static uint64_t notes_fnv(const unsigned char *p, unsigned n) {
@@ -1694,12 +2203,16 @@ static unsigned char *notes_copy(int p, unsigned *n) {
     __try {
         char *a = pat_notes_arr(p);
         unsigned c = a ? *(unsigned *)(a + NOTES_COUNT) : 0;
-        if (c && c <= 1000000) {
+        if (c > 1000000) { *n = UINT_MAX; }
+        else if (c) {
             buf = (unsigned char *)malloc((size_t)c * NOTE_SIZE);
-            memcpy(buf, *(unsigned char **)(a + NOTES_DATA), (size_t)c * NOTE_SIZE);
-            *n = c;
+            if (!buf) *n = UINT_MAX;
+            else {
+                memcpy(buf, *(unsigned char **)(a + NOTES_DATA), (size_t)c * NOTE_SIZE);
+                *n = c;
+            }
         }
-    } __except (EXCEPTION_EXECUTE_HANDLER) { free(buf); buf = NULL; *n = 0; }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { free(buf); buf = NULL; *n = UINT_MAX; }
     LeaveCriticalSection(note_lock());
     return buf;
 }
@@ -1707,7 +2220,8 @@ static unsigned char *notes_copy(int p, unsigned *n) {
 // Take the current note state of every pattern as already known (no sends).
 static void notes_rebaseline(int channels_only) {
     int p;
-    for (p = 1; p < MAX_PAT; p++) { g_patSeen[p] = g_patHash[p] = notes_hash(p); g_patChangedAt[p] = 0; }
+    for (p = 1; p < MAX_PAT; p++) { g_patSeen[p] = g_patHash[p] = notes_hash(p); g_patChangedAt[p] = g_patDirtyAt[p] = 0; }
+    if (g_notesCrdt) notes_crdt_rebaseline();
     clips_rebaseline();          // audio clips reference channels: same structural events
     meta_rebaseline(channels_only); // channel changes must preserve unrelated pending metadata
     units_capture_all();         // and it is the state a lock conflict reverts to
@@ -1715,43 +2229,78 @@ static void notes_rebaseline(int channels_only) {
 
 static void redraw_editors(void);
 
-// Replace pattern p's notes with recs[0..n). Main thread. Selection is local: incoming
-// selection bits are dropped, and notes this user had selected stay selected when an
-// identical note (ignoring the bit) is still there after the replace.
+typedef struct { unsigned char rec[NOTE_SIZE]; unsigned index, selected; } NoteApplyRef;
+static int notes_apply_cmp(const void *a, const void *b) {
+    const NoteApplyRef *x = (const NoteApplyRef *)a, *y = (const NoteApplyRef *)b;
+    int order = memcmp(x->rec, y->rec, NOTE_SIZE);
+    if (order) return order;
+    if (x->selected != y->selected) return x->selected ? -1 : 1;
+    return x->index < y->index ? -1 : x->index > y->index;
+}
+
+// Match identical records before mutating FL. Keep selected duplicates first so
+// reducing a stack of identical notes does not unnecessarily discard the selection.
+static int notes_apply_plan(const unsigned char *old, unsigned c, const unsigned char *in, unsigned n,
+                            unsigned char *keep, unsigned char *insert) {
+    NoteApplyRef *before = c ? (NoteApplyRef *)malloc((size_t)c * sizeof(*before)) : NULL;
+    NoteApplyRef *after = n ? (NoteApplyRef *)malloc((size_t)n * sizeof(*after)) : NULL;
+    unsigned i, a = 0, b = 0;
+    if ((c && !before) || (n && !after)) { free(before); free(after); return 0; }
+    for (i = 0; i < c; i++) {
+        memcpy(before[i].rec, old + (size_t)i * NOTE_SIZE, NOTE_SIZE);
+        before[i].selected = !!(before[i].rec[NOTE_SEL_OFS] & NOTE_SEL_BIT);
+        before[i].rec[NOTE_SEL_OFS] &= (unsigned char)~NOTE_SEL_BIT; before[i].index = i;
+    }
+    for (i = 0; i < n; i++) { memcpy(after[i].rec, in + (size_t)i * NOTE_SIZE, NOTE_SIZE); after[i].index = i; after[i].selected = 0; }
+    if (c) qsort(before, c, sizeof(*before), notes_apply_cmp);
+    if (n) qsort(after, n, sizeof(*after), notes_apply_cmp);
+    if (n) memset(insert, 1, n);
+    while (a < c && b < n) {
+        int order = memcmp(before[a].rec, after[b].rec, NOTE_SIZE);
+        if (!order) { keep[before[a++].index] = 1; insert[after[b++].index] = 0; }
+        else if (order < 0) a++; else b++;
+    }
+    free(before); free(after); return 1;
+}
+
+// Main thread under FL's note lock. Preserve unchanged records in place; a small
+// incoming delta must not delete and re-add thousands of unrelated recorded notes.
 static void notes_apply(int p, const unsigned char *recs, unsigned n) {
-    unsigned i, j, nold = 0;
-    int k;
+    unsigned i;
+    int k, applied = 0, changed = 0;
     unsigned char *in = n ? (unsigned char *)malloc((size_t)n * NOTE_SIZE) : NULL;
-    unsigned char *old = NULL;
+    unsigned char *keep = NULL, *insert = n ? (unsigned char *)malloc(n) : NULL;
+    if (n > 1000000 || (n && (!in || !insert || !recs))) {
+        free(in); free(insert);
+        sharing_fail("Note sync: session stopped", "There is not enough memory to apply the remote notes. Your local notes were kept.");
+        return;
+    }
     if (in) { memcpy(in, recs, (size_t)n * NOTE_SIZE); notes_clear_sel(in, n); }
-    unit_agreed(1, p, in, n);
     EnterCriticalSection(note_lock());
     __try {
         char *a = (char *)g_noteArr(p, 1);
         if (a) {
             noteadd_t add = (noteadd_t)(*(void ***)a)[NOTEADD_VSLOT];
             unsigned c = *(unsigned *)(a + NOTES_COUNT);
-            if (c && c <= 1000000 && in) {
-                old = (unsigned char *)malloc((size_t)c * NOTE_SIZE);
-                memcpy(old, *(unsigned char **)(a + NOTES_DATA), (size_t)c * NOTE_SIZE);
-                nold = c;
-            }
-            for (j = 0; j < nold; j++) {
-                unsigned char *o = old + (size_t)j * NOTE_SIZE;
-                if (!(o[NOTE_SEL_OFS] & NOTE_SEL_BIT)) continue;
-                o[NOTE_SEL_OFS] &= (unsigned char)~NOTE_SEL_BIT;
-                for (i = 0; i < n; i++) {
-                    unsigned char *r = in + (size_t)i * NOTE_SIZE;
-                    if (!(r[NOTE_SEL_OFS] & NOTE_SEL_BIT) && memcmp(r, o, NOTE_SIZE) == 0) { r[NOTE_SEL_OFS] |= NOTE_SEL_BIT; break; }
-                }
-            }
-            for (k = (int)*(unsigned *)(a + NOTES_COUNT) - 1; k >= 0; k--) g_noteDel(a, k, 0);
-            for (i = 0; i < n; i++) add(a, in + (size_t)i * NOTE_SIZE);
+            if (c > 1000000) __leave;
+            keep = c ? (unsigned char *)calloc(c, 1) : NULL;
+            if (c && !keep) __leave;
+            if (!notes_apply_plan(c ? *(unsigned char **)(a + NOTES_DATA) : NULL, c, in, n, keep, insert)) __leave;
+            for (k = (int)c - 1; k >= 0; k--) if (!keep[k]) { g_noteDel(a, k, 0); changed = 1; }
+            for (i = 0; i < n; i++) if (insert[i]) { add(a, in + (size_t)i * NOTE_SIZE); changed = 1; }
+            applied = *(unsigned *)(a + NOTES_COUNT) == n;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("NOTES apply faulted pat %d", p); }
     LeaveCriticalSection(note_lock());
-    free(old); free(in);
-    {
+    free(keep); free(insert);
+    if (!applied) {
+        free(in);
+        sharing_fail("Note sync: session stopped", "FL could not apply the remote notes. Reconnect and resync before continuing to share.");
+        return;
+    }
+    unit_agreed(1, p, recs, n);
+    free(in);
+    if (changed) {
         void **items; int nc = chan_list(&items);
         __try {
             for (k = 0; k < nc; k++) {
@@ -1760,44 +2309,183 @@ static void notes_apply(int p, const unsigned char *recs, unsigned n) {
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("NOTES grid refresh faulted"); }
     }
-    redraw_editors();
+    if (changed) redraw_editors();
     g_patSeen[p] = g_patHash[p] = notes_hash(p);
-    g_patChangedAt[p] = 0;
+    g_patChangedAt[p] = g_patDirtyAt[p] = 0;
     g_patSuppress[p] = GetTickCount() + NOTES_SETTLE_MS;
 }
 
 static char *notes_json_item(int p, const unsigned char *d, unsigned n) {
     size_t cap = 48 + ((size_t)n * NOTE_SIZE + 2) / 3 * 4 + 1;
     char *j = (char *)malloc(cap);
+    if (!j) { sharing_fail("Note sync: session stopped", "There is not enough memory to send the shared notes."); return NULL; }
     int o = sprintf_s(j, cap, "\"pat\":%d,\"data\":\"", p);
     b64enc(d ? d : (const unsigned char *)"", (int)(n * NOTE_SIZE), j + o);
     strcat_s(j, cap, "\"");
     return j;
 }
 
+static int notes_crdt_id(unsigned char id[16]) {
+    return BCRYPT_SUCCESS(BCryptGenRandom(NULL, id, 16, BCRYPT_USE_SYSTEM_PREFERRED_RNG));
+}
+
+static int notes_crdt_budget(unsigned before, unsigned after) {
+    if (g_noteSetCount - before + after > 262144) return 0;
+    g_noteSetCount = g_noteSetCount - before + after;
+    return 1;
+}
+
+static void notes_crdt_rebaseline(void) {
+    int p, failed = 0;
+    EnterCriticalSection(&g_ulockLock);
+    if (!g_notesCrdt) { LeaveCriticalSection(&g_ulockLock); return; }
+    for (p = 1; p < MAX_PAT; p++) {
+        unsigned n, old = g_noteSets[p].count, i;
+        unsigned char *d = notes_copy(p, &n), scope[16]; char hex[65];
+        if (n == UINT_MAX || n > FNC_LIMIT) { free(d); failed = 1; break; }
+        if (d) { notes_clear_sel(d, n); qsort(d, n, NOTE_SIZE, fnc_notecmp); }
+        if (g_noteSets[p].known) {
+            unsigned active;
+            unsigned char *materialized = fnc_materialize(&g_noteSets[p], &active);
+            int unchanged = active == n && (!n || !memcmp(materialized, d, (size_t)n * NOTE_SIZE));
+            free(materialized);
+            if (active == UINT_MAX) { free(d); failed = 1; break; }
+            if (unchanged) { free(d); continue; }
+        }
+        if (!n) strcpy_s(hex, sizeof(hex), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+        else if (!sha_hex(d, (size_t)n * NOTE_SIZE, hex)) { free(d); failed = 1; break; }
+        for (i = 0; i < 16; i++) { char pair[3] = {hex[i * 2], hex[i * 2 + 1], 0}; scope[i] = (unsigned char)strtoul(pair, NULL, 16); }
+        if (g_noteSets[p].known) {
+            unsigned char chain[32];
+            /* Returning to an earlier visible pattern must not reuse its retired IDs. */
+            memcpy(chain, g_noteSets[p].scope, 16); memcpy(chain + 16, scope, 16);
+            if (!sha_hex(chain, sizeof(chain), hex)) { free(d); failed = 1; break; }
+            for (i = 0; i < 16; i++) { char pair[3] = {hex[i * 2], hex[i * 2 + 1], 0}; scope[i] = (unsigned char)strtoul(pair, NULL, 16); }
+        }
+        if (g_noteSetCount - old + n > 262144 || !fnc_seed(&g_noteSets[p], d, n, scope)) { free(d); failed = 1; break; }
+        notes_crdt_budget(old, n); free(d);
+    }
+    LeaveCriticalSection(&g_ulockLock);
+    if (failed) sharing_fail("Note merge: session stopped", "The shared note baseline exceeds its history or memory limit, or could not be read. Your local notes were kept.");
+}
+
+static char *notes_crdt_item(int p, const FncEntry *entries, unsigned count) {
+    unsigned bytes = 0;
+    unsigned char *wire = fnc_pack(&g_noteSets[p], entries, count, &bytes);
+    size_t cap = 96 + ((size_t)bytes + 2) / 3 * 4;
+    char *json = wire ? (char *)malloc(cap) : NULL;
+    if (json) {
+        int offset = sprintf_s(json, cap, "\"pat\":%d,\"crdt\":1,\"data\":\"", p);
+        b64enc(wire, bytes, json + offset); strcat_s(json, cap, "\"");
+    }
+    free(wire);
+    if (!json) sharing_fail("Note merge: session stopped", "There is not enough memory to prepare the shared note changes.");
+    return json;
+}
+
+static void notes_crdt_send(int p, const FncEntry *entries, unsigned count) {
+    char *item = notes_crdt_item(p, entries, count), *message;
+    size_t cap;
+    if (!item) return;
+    cap = strlen(item) + 64; message = (char *)malloc(cap);
+    if (!message) { free(item); sharing_fail("Note merge: session stopped", "There is not enough memory to send the note changes."); return; }
+    sprintf_s(message, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"notes.set\",%s}}", item);
+    ws_send(message); free(message); free(item);
+}
+
+static int notes_crdt_capture(int p, const unsigned char *d, unsigned n, int send) {
+    FncEntry *delta = NULL; unsigned changed = 0, old = g_noteSets[p].count;
+    unsigned limit = 262144 - (g_noteSetCount - old);
+    if (limit > FNC_LIMIT) limit = FNC_LIMIT;
+    if (!fnc_capture(&g_noteSets[p], d, n, notes_crdt_id, &delta, &changed, limit)) {
+        sharing_fail("Note merge: session stopped", "The note history reached its limit or a complete change could not be prepared. Your local notes were kept. Start a fresh room to reset the history.");
+        return 0;
+    }
+    notes_crdt_budget(old, g_noteSets[p].count);
+    if (changed && send) notes_crdt_send(p, delta, changed);
+    free(delta);
+    return !g_compatFault;
+}
+
+static void notes_crdt_receive(const QItem *it) {
+    unsigned char scope[16], *local = NULL, *merged = NULL;
+    const FncEntry *incoming;
+    unsigned count, n = 0, old; int p = it->a, ok = 0;
+    FncState next = {0};
+    if (!g_notesCrdt || !fnc_unpack((const unsigned char *)it->order, (unsigned)it->mode, scope, &incoming, &count)) goto failed;
+    EnterCriticalSection(&g_ulockLock);
+    EnterCriticalSection(note_lock());
+    if (it->b == 2 && !count && !notes_hash(p) &&
+        (!g_noteSets[p].known || !g_noteSets[p].count || memcmp(scope, g_noteSets[p].scope, 16))) {
+        old = g_noteSets[p].count;
+        if (!fnc_seed(&g_noteSets[p], NULL, 0, scope)) goto unlock;
+        notes_crdt_budget(old, 0);
+        g_patSeen[p] = g_patHash[p] = 0;
+        g_patChangedAt[p] = g_patDirtyAt[p] = 0;
+        ok = 1; goto unlock;
+    }
+    if (it->b == 2 && (!g_noteSets[p].known || memcmp(scope, g_noteSets[p].scope, 16))) {
+        if (!fnc_seed(&next, NULL, 0, scope) || !fnc_merge(&next, scope, incoming, count)) goto unlock;
+    } else {
+        if (!g_noteSets[p].known || memcmp(scope, g_noteSets[p].scope, 16)) goto unlock;
+        /* Validate immutable identities before publishing any pending local recording. */
+        if (!fnc_seed(&next, NULL, 0, scope) || !fnc_merge(&next, scope, g_noteSets[p].entries, g_noteSets[p].count) ||
+            !fnc_merge(&next, scope, incoming, count)) goto unlock;
+        fnc_free(&next);
+        local = notes_copy(p, &n);
+        if (n == UINT_MAX) goto unlock;
+        if (local) notes_clear_sel(local, n);
+        if (!notes_crdt_capture(p, local, n, 1) || !fnc_seed(&next, NULL, 0, scope) ||
+            !fnc_merge(&next, scope, g_noteSets[p].entries, g_noteSets[p].count) || !fnc_merge(&next, scope, incoming, count)) goto unlock;
+    }
+    old = g_noteSets[p].count;
+    if (g_noteSetCount - old + next.count > 262144) goto unlock;
+    merged = fnc_materialize(&next, &n);
+    if (n == UINT_MAX) goto unlock;
+    fnc_free(&g_noteSets[p]); g_noteSets[p] = next; memset(&next, 0, sizeof(next));
+    notes_crdt_budget(old, g_noteSets[p].count);
+    notes_apply(p, merged, n); ok = !g_compatFault;
+unlock:
+    LeaveCriticalSection(note_lock()); LeaveCriticalSection(&g_ulockLock);
+    free(local); free(merged); fnc_free(&next);
+    if (ok || g_compatFault) return;
+failed:
+    sharing_fail("Note merge: session stopped", "The incoming note history is invalid, exceeds its limit or uses a different baseline. Your local notes were kept. Reconnect and resync before continuing.");
+}
+
 static void do_notesnap(const QItem *it) {
     int p = it->a;
     unsigned n;
     unsigned char *d = notes_copy(p, &n);
+    if (n == UINT_MAX) { logmsg("NOTES snapshot failed pat %d: retrying without sending an empty pattern", p); return; }
     uint64_t h = n ? notes_fnv(d, n) : 0;
     if (d) notes_clear_sel(d, n);
     if (h != g_patHash[p]) {
+        if (g_notesCrdt) {
+            EnterCriticalSection(&g_ulockLock);
+            if (notes_crdt_capture(p, d, n, 1)) { g_patHash[p] = h; g_patDirtyAt[p] = 0; }
+            LeaveCriticalSection(&g_ulockLock); free(d); return;
+        }
         char key[16];
         sprintf_s(key, sizeof(key), "pat:%d", p);
         if (!unit_before_send(key, 1, p, d, n)) { free(d); unit_revert(key); return; }
         char *f = notes_json_item(p, d, n);
+        if (!f) { free(d); return; }
         size_t cap = strlen(f) + 96;
         char *m = (char *)malloc(cap);
+        if (!m) { free(f); free(d); sharing_fail("Note sync: session stopped", "There is not enough memory to send the shared notes."); return; }
         sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"notes.set\",\"key\":\"%s\",%s}}", key, f);
         ws_send(m);
         free(m); free(f);
         g_patHash[p] = h;
+        g_patDirtyAt[p] = 0;
         logmsg("NOTES sent pattern %d (%u notes)", p, n);
     }
     free(d);
 }
 
 static void do_notes(const QItem *it) {
+    if (it->b) { notes_crdt_receive(it); return; }
     if (g_patSeen[it->a] != g_patHash[it->a]) {   // our unsent edit is about to be replaced
         char key[16]; sprintf_s(key, sizeof(key), "pat:%d", it->a); hint_if_held(key);
     }
@@ -1807,6 +2495,7 @@ static void do_notes(const QItem *it) {
 
 // Join: patterns the leader has no notes in must be empty here too.
 static void do_notesync(const QItem *it) {
+    if (g_notesCrdt) return; /* Absence from a concurrent snapshot is not an observed removal. */
     const unsigned char *keep = (const unsigned char *)it->order;
     int p, n = 0;
     for (p = 1; p < MAX_PAT; p++) {
@@ -1818,32 +2507,54 @@ static void do_notesync(const QItem *it) {
 }
 
 // Leader: every pattern that has notes (join / project load).
-static void send_notes_full(void) {
+static void send_notes_full_to(const char *target) {
     size_t cap = 256, len;
     char *m = (char *)malloc(cap);
     int p, cnt = 0;
+    if (!m) goto memory;
     len = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"notes.full\",\"items\":[");
     for (p = 1; p < MAX_PAT; p++) {
         unsigned n;
-        if (!notes_hash(p)) continue;
+        /* Empty patterns also need the host's scope after a joining project load. */
+        if (!g_notesCrdt && !notes_hash(p)) continue;
         unsigned char *d = notes_copy(p, &n);
+        if (n == UINT_MAX) {
+            free(m);
+            sharing_fail("Note sync: session stopped", "The complete note snapshot could not be read. No incomplete snapshot was sent.");
+            return;
+        }
         g_patSeen[p] = g_patHash[p] = n ? notes_fnv(d, n) : 0;
-        if (!n) { free(d); continue; }
+        if (!n && !g_notesCrdt) { free(d); continue; }
         notes_clear_sel(d, n);
-        char *f = notes_json_item(p, d, n);
+        char *f;
+        if (g_notesCrdt) {
+            EnterCriticalSection(&g_ulockLock);
+            f = notes_crdt_capture(p, d, n, target != NULL) ? notes_crdt_item(p, g_noteSets[p].entries, g_noteSets[p].count) : NULL;
+            LeaveCriticalSection(&g_ulockLock);
+        } else f = notes_json_item(p, d, n);
         free(d);
+        if (!f) { free(m); return; }
         size_t fl = strlen(f);
-        if (len + fl + 8 > cap) { cap = (len + fl + 8) * 2; m = (char *)realloc(m, cap); }
+        if (len + fl + 8 > cap) {
+            size_t next = (len + fl + 8) * 2;
+            char *grown = (char *)realloc(m, next);
+            if (!grown) { free(f); free(m); goto memory; }
+            cap = next; m = grown;
+        }
         len += sprintf_s(m + len, cap - len, "%s{%s}", cnt ? "," : "", f);
         free(f);
         cnt++;
     }
-    if (len + 8 > cap) { cap = len + 8; m = (char *)realloc(m, cap); }
     strcat_s(m, cap, "]}}");
-    ws_send(m);
+    ws_send_to(m, target);
     free(m);
     logmsg("NOTES full state sent: %d patterns", cnt);
+    return;
+memory:
+    sharing_fail("Note sync: session stopped", "There is not enough memory for the complete note snapshot. No incomplete snapshot was sent.");
 }
+
+static void send_notes_full(void) { send_notes_full_to(NULL); }
 
 // Poll thread: find patterns whose notes changed locally and have settled.
 static void scan_notes(DWORD now) {
@@ -1856,24 +2567,30 @@ static void scan_notes(DWORD now) {
     for (p = 1; p < MAX_PAT; p++) {
         uint64_t h = notes_hash(p);
         if (h != g_patSeen[p]) { g_patSeen[p] = h; g_patChangedAt[p] = now; }
-        if (g_patChangedAt[p] && now - g_patChangedAt[p] >= NOTES_SETTLE_MS) {
-            g_patChangedAt[p] = 0;
-            if (g_patSeen[p] != g_patHash[p] && (LONG)(now - g_patSuppress[p]) >= 0) pend[np++] = p;
-        }
+        if (h == g_patHash[p]) { g_patChangedAt[p] = g_patDirtyAt[p] = 0; continue; }
+        if (!g_patDirtyAt[p]) g_patDirtyAt[p] = now;
+        if (notes_suppressed(&g_patSuppress[p], now)) continue;
+        if ((g_patChangedAt[p] && now - g_patChangedAt[p] >= NOTES_SETTLE_MS) ||
+            now - g_patDirtyAt[p] >= NOTES_STREAM_MS) pend[np++] = p;
     }
     if (np >= NOTES_BULK) {
         // project load/new: never broadcast as edits (the param bulk guard syncs the whole project)
-        for (i = 0; i < np; i++) g_patHash[pend[i]] = g_patSeen[pend[i]];
+        for (i = 0; i < np; i++) { g_patHash[pend[i]] = g_patSeen[pend[i]]; g_patDirtyAt[pend[i]] = 0; }
         logmsg("NOTES bulk change in %d patterns: not sent", np);
         return;
     }
-    for (i = 0; i < np; i++) enqueue_unit(T_NOTESNAP, 0, pend[i], 0, 0, NULL);
+    for (i = 0; i < np; i++) {
+        enqueue_unit(T_NOTESNAP, 0, pend[i], 0, 0, NULL);
+        g_patDirtyAt[pend[i]] = now;
+    }
 }
 
 static unsigned char *b64dec(const char *s, size_t n, size_t *outn) {
     unsigned char *out = (unsigned char *)malloc(n / 4 * 3 + 3);
     size_t o = 0, i;
-    int acc = 0, bits = 0;
+    unsigned acc = 0; int bits = 0;
+    *outn = 0;
+    if (!out) { sharing_fail("Shared data: session stopped", "There is not enough memory to decode the shared edit."); return NULL; }
     for (i = 0; i < n; i++) {
         int v = b64val(s[i]);
         if (v < 0) continue;
@@ -1884,26 +2601,82 @@ static unsigned char *b64dec(const char *s, size_t n, size_t *outn) {
     return out;
 }
 
-// Parse one {"pat":P,"data":"..."} starting at p; queue its apply. Returns the end or NULL.
-static const char *parse_notes_item(const char *p, unsigned char *keep) {
+static int shared_b64(FlJson value, FlJson *data, size_t max_bytes, size_t *bytes) {
+    size_t n, padding = 0, i;
+    if (value.n < 2 || value.p[0] != '"' || value.p[value.n - 1] != '"') return 0;
+    data->p = value.p + 1; data->n = value.n - 2; n = data->n;
+    if (n % 4 || n / 4 > (max_bytes + 2) / 3) return 0;
+    if (n && data->p[n - 1] == '=') padding++;
+    if (n > 1 && data->p[n - 2] == '=') padding++;
+    for (i = 0; i < n - padding; i++) if (b64val(data->p[i]) < 0) return 0;
+    if ((padding == 1 && (b64val(data->p[n - 2]) & 3)) ||
+        (padding == 2 && (b64val(data->p[n - 3]) & 15))) return 0;
+    *bytes = n / 4 * 3 - padding;
+    return *bytes <= max_bytes;
+}
+
+static int notes_item_data(FlJson item, int *pat, FlJson *data) {
+    FlJson value; uint64_t number; size_t n, i;
+    int crdt = fj_get(item, "crdt", &value);
+    if ((crdt && (!g_notesCrdt || !fj_is(value, "1"))) || (!crdt && g_notesCrdt)) return 0;
+    if (!fj_get(item, "pat", &value) || !fc_uint(value, &number) || !number || number >= MAX_PAT ||
+        !fj_get(item, "data", &value) || !shared_b64(value, data,
+            crdt ? FNC_HEADER + FNC_LIMIT * FNC_ENTRY : 1000000 * NOTE_SIZE, &n)) return 0;
+    *pat = (int)number;
+    if (crdt) {
+        unsigned char scope[16], *wire; const FncEntry *entries; unsigned count; size_t bytes;
+        wire = b64dec(data->p, data->n, &bytes);
+        i = wire && fnc_unpack(wire, (unsigned)bytes, scope, &entries, &count);
+        free(wire); if (!i) return 0;
+    } else if (n % NOTE_SIZE) return 0;
+    return 1;
+}
+
+static int parse_notes_item(FlJson item, int full) {
+    int pat; FlJson data; size_t n;
+    if (!notes_item_data(item, &pat, &data)) return 0;
+    unsigned char *recs = b64dec(data.p, data.n, &n);
+    if (!recs) return 0;
+    QItem it; memset(&it, 0, sizeof(it));
+    it.type = T_NOTES; it.a = pat; it.mode = (int)(g_notesCrdt ? n : n / NOTE_SIZE); it.b = g_notesCrdt ? (full ? 2 : 1) : 0; it.order = (int *)recs;
+    enqueue(&it);
+    return !g_compatFault;
+}
+
+static void on_notes(const char *m, int full) {
+    FlJson root = {m, strlen(m)}, op, items, item, data;
+    const char *p, *end, *start;
+    unsigned char *keep = NULL;
     int pat;
-    const char *q = strstr(p, "\"pat\":");
-    if (!q) return NULL;
-    pat = atoi(q + 6);
-    const char *d = strstr(q, "\"data\":\"");
-    if (!d) return NULL;
-    d += 8;
-    const char *e = strchr(d, '"');
-    if (!e) return NULL;
-    if (pat >= 1 && pat < MAX_PAT) {
-        size_t n;
-        unsigned char *recs = b64dec(d, (size_t)(e - d), &n);
-        QItem it; memset(&it, 0, sizeof(it));
-        it.type = T_NOTES; it.a = pat; it.mode = (int)(n / NOTE_SIZE); it.order = (int *)recs;
-        enqueue(&it);
-        if (keep) keep[pat] = 1;
+    if (!fj_get(root, "op", &op)) goto invalid;
+    if (!full) { if (!parse_notes_item(op, 0) && !g_compatFault) goto invalid; return; }
+    if (!fj_get(op, "items", &items) || items.n < 2 || items.p[0] != '[') goto invalid;
+    keep = (unsigned char *)calloc(MAX_PAT, 1);
+    if (!keep) { sharing_fail("Shared notes: session stopped", "There is not enough memory to receive the shared patterns."); return; }
+    p = items.p + 1; end = items.p + items.n - 1;
+    fj_space(&p, end);
+    while (p < end) {
+        start = p;
+        if (!fj_value(&p, end, 0)) goto invalid;
+        item.p = start; item.n = (size_t)(p - start);
+        if (!notes_item_data(item, &pat, &data) || keep[pat]) goto invalid;
+        keep[pat] = 1;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); }
     }
-    return e + 1;
+    // Validate every pattern before any replacement or removal is queued.
+    p = items.p + 1; fj_space(&p, end);
+    while (p < end) {
+        start = p; fj_value(&p, end, 0);
+        item.p = start; item.n = (size_t)(p - start);
+        if (!parse_notes_item(item, 1)) { free(keep); return; }
+        fj_space(&p, end); if (p < end) { p++; fj_space(&p, end); }
+    }
+    { QItem it = {0}; it.type = T_NOTESYNC; it.order = (int *)keep; enqueue(&it); }
+    return;
+invalid:
+    free(keep);
+    sharing_fail("Shared notes: session stopped", "The shared pattern data is incomplete or invalid. Reconnect and resync before continuing to share.");
 }
 
 // ---------------- playlist clips ----------------
@@ -1918,6 +2691,28 @@ static volatile DWORD g_clipSuppress = 0;
 static int      g_clipArr = -1;                  // arrangement the baseline belongs to
 
 static int clip_cmp(const void *a, const void *b) { return memcmp(a, b, CLIP_SIZE); }
+
+static size_t clip_native_size(void) {
+    return flim_profile_fl24(&g_fl) ? FLIM_CLIP_FL24_SIZE : FLIM_CLIP_WIRE_SIZE;
+}
+
+static unsigned char *clips_from_native(const unsigned char *native, unsigned n) {
+    unsigned i;
+    size_t stride = clip_native_size();
+    unsigned char *wire;
+    if (!n || n > 200000 || !native) return NULL;
+    wire = (unsigned char *)malloc((size_t)n * CLIP_SIZE);
+    if (!wire) return NULL;
+    __try {
+        for (i = 0; i < n; i++)
+            if (!flim_clip_from_native(wire + (size_t)i * CLIP_SIZE, native + (size_t)i * stride, stride)) {
+                free(wire); return NULL;
+            }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        free(wire); return NULL;
+    }
+    return wire;
+}
 
 static char *arr_clips(int arr) {
     char *arrs = *(char **)(g_flBase + (ARRS_VA - IMG_BASE));
@@ -1952,9 +2747,8 @@ static uint64_t clips_hash(int arr) {
         unsigned n = ca ? *(unsigned *)(ca + CLIPS_COUNT) : 0;
         if (n > 200000) h = 1;
         else if (n) {
-            buf = (unsigned char *)malloc((size_t)n * CLIP_SIZE);
-            memcpy(buf, *(unsigned char **)(ca + CLIPS_DATA), (size_t)n * CLIP_SIZE);
-            h = clips_fnv(buf, n);
+            buf = clips_from_native(*(unsigned char **)(ca + CLIPS_DATA), n);
+            h = buf ? clips_fnv(buf, n) : 1;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) { h = 1; }
     free(buf);
@@ -1970,17 +2764,17 @@ static void clips_rebaseline(void) {
 // Copy of an arrangement's clips (main thread, under FL's note lock).
 static unsigned char *clips_copy(int arr, unsigned *n) {
     unsigned char *buf = NULL;
-    *n = 0;
+    *n = UINT_MAX;
     EnterCriticalSection(note_lock());
     __try {
         char *ca = arr_clips(arr);
         unsigned c = ca ? *(unsigned *)(ca + CLIPS_COUNT) : 0;
+        if (ca && !c) *n = 0;
         if (c && c <= 200000) {
-            buf = (unsigned char *)malloc((size_t)c * CLIP_SIZE);
-            memcpy(buf, *(unsigned char **)(ca + CLIPS_DATA), (size_t)c * CLIP_SIZE);
-            *n = c;
+            buf = clips_from_native(*(unsigned char **)(ca + CLIPS_DATA), c);
+            if (buf) *n = c;
         }
-    } __except (EXCEPTION_EXECUTE_HANDLER) { free(buf); buf = NULL; *n = 0; }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { free(buf); buf = NULL; *n = UINT_MAX; }
     LeaveCriticalSection(note_lock());
     return buf;
 }
@@ -1988,21 +2782,38 @@ static unsigned char *clips_copy(int arr, unsigned *n) {
 static void playlist_refresh(void) {
     __try {
         void *form = **(void ***)(g_flBase + (PLFORM_VA - IMG_BASE));
-        if (form) ((formfn_t)(g_flBase + (PLREFRESH_VA - IMG_BASE)))(form);
+        if (form && flim_profile_fl24(&g_fl)) {
+            void *grid = *(void **)((char *)form + g_fl.PR_GRID);
+            gridrefresh_t invalidate = (gridrefresh_t)(g_flBase + (PLREFRESH_VA - IMG_BASE));
+            if (grid) {
+                invalidate(grid);
+                ((void (*)(void))(g_flBase + (0x118a8c0 - IMG_BASE)))();
+            }
+            grid = *(void **)((char *)form + g_fl.PL_GRID);
+            if (grid) invalidate(grid);
+        } else if (form) ((formfn_t)(g_flBase + (PLREFRESH_VA - IMG_BASE)))(form);
     } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("CLIPS refresh faulted"); }
 }
 
 // Replace an arrangement's clips with recs[0..n) (main thread). Selection stays local:
 // clips this user had selected stay selected if an identical clip is still there.
-static void clips_apply(int arr, const unsigned char *recs, unsigned n) {
+static int clips_apply(int arr, const unsigned char *recs, unsigned n) {
     unsigned i, j, nold = 0;
-    unsigned char *in = n ? (unsigned char *)malloc((size_t)n * CLIP_SIZE) : NULL;
+    size_t stride = clip_native_size();
+    unsigned char *in, *native;
     unsigned char *old = NULL;
+    int applied = 0, faulted = 0;
+    if (n > 200000 || !flim_clips_compatible(recs, n, stride)) {
+        compat_fail("A playlist clip uses data this FL build cannot preserve. The session stopped before replacing any clips.");
+        return 0;
+    }
+    in = n ? (unsigned char *)malloc((size_t)n * CLIP_SIZE) : NULL;
+    native = n ? (unsigned char *)malloc((size_t)n * stride) : NULL;
+    if (n && (!in || !native)) { free(in); free(native); return 0; }
     for (i = 0; i < n; i++) {
         memcpy(in + (size_t)i * CLIP_SIZE, recs + (size_t)i * CLIP_SIZE, CLIP_SIZE);
         in[(size_t)i * CLIP_SIZE + CLIP_SEL_OFS] &= (unsigned char)~CLIP_SEL_BIT;
     }
-    unit_agreed(0, arr, in, n);
     EnterCriticalSection(note_lock());
     __try {
         char *ca = arr_clips(arr);
@@ -2013,10 +2824,11 @@ static void clips_apply(int arr, const unsigned char *recs, unsigned n) {
             unsigned c = *(unsigned *)(ca + CLIPS_COUNT);
             unsigned char *d = *(unsigned char **)(ca + CLIPS_DATA);
             if (c && c <= 200000) {
-                old = (unsigned char *)malloc((size_t)c * CLIP_SIZE);
-                memcpy(old, d, (size_t)c * CLIP_SIZE);
+                old = clips_from_native(d, c);
+                if (!old) __leave;
                 nold = c;
             }
+            if (c > 200000) __leave;
             for (j = 0; j < nold; j++) {
                 unsigned char *o = old + (size_t)j * CLIP_SIZE;
                 if (!(o[CLIP_SEL_OFS] & CLIP_SEL_BIT)) continue;
@@ -2029,25 +2841,35 @@ static void clips_apply(int arr, const unsigned char *recs, unsigned n) {
                     }
                 }
             }
+            for (i = 0; i < n; i++)
+                if (!flim_clip_to_native(native + (size_t)i * stride, in + (size_t)i * CLIP_SIZE, stride)) __leave;
             // FL's own delete: mark every clip deleted, then purge (also frees their resources)
-            for (j = 0; j < c && c <= 200000; j++) *(int32_t *)(d + (size_t)j * CLIP_SIZE + CLIP_DEL_OFS) = -1;
+            for (j = 0; j < c; j++) *(int32_t *)(d + (size_t)j * stride + CLIP_DEL_OFS) = -1;
             if (c) purge(ca);
-            for (i = 0; i < n; i++) add(ca, in + (size_t)i * CLIP_SIZE);
+            for (i = 0; i < n; i++) add(ca, native + (size_t)i * stride);
+            applied = *(unsigned *)(ca + CLIPS_COUNT) == n;
+            if (!applied) faulted = 1;
         }
-    } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("CLIPS apply faulted arr %d", arr); }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { faulted = 1; logmsg("CLIPS apply faulted arr %d", arr); }
     LeaveCriticalSection(note_lock());
-    free(old); free(in);
+    if (applied) unit_agreed(0, arr, in, n);
+    free(old); free(in); free(native);
+    if (faulted) compat_fail("FL could not apply a playlist edit. Sharing stopped to avoid continuing with different clip lists.");
+    if (!applied) return 0;
     playlist_refresh();
     if (arr == g_clipArr) { g_clipSeen = g_clipHash = clips_hash(arr); g_clipChangedAt = 0; }
     g_clipSuppress = GetTickCount() + NOTES_SETTLE_MS;
+    return 1;
 }
 
 static void do_clipsnap(const QItem *it) {
     unsigned n;
     unsigned char *d = clips_copy(it->a, &n);
+    if (n > 200000) return;
     unsigned char *h = n ? (unsigned char *)malloc((size_t)n * CLIP_SIZE) : NULL;
     uint64_t hv;
     unsigned i;
+    if (n && !h) { free(d); return; }
     if (h) memcpy(h, d, (size_t)n * CLIP_SIZE);
     hv = n ? clips_fnv(h, n) : 0;
     free(h);
@@ -2055,9 +2877,10 @@ static void do_clipsnap(const QItem *it) {
         char key[16];
         for (i = 0; i < n; i++) d[(size_t)i * CLIP_SIZE + CLIP_SEL_OFS] &= (unsigned char)~CLIP_SEL_BIT;
         sprintf_s(key, sizeof(key), "clips:%d", it->a);
-        if (!unit_before_send(key, 0, it->a, d, n)) { free(d); unit_revert(key); return; }
         size_t cap = 96 + ((size_t)n * CLIP_SIZE + 2) / 3 * 4;
         char *m = (char *)malloc(cap);
+        if (!m) { free(d); return; }
+        if (!unit_before_send(key, 0, it->a, d, n)) { free(m); free(d); unit_revert(key); return; }
         int o = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"clips.set\",\"key\":\"%s\",\"arr\":%d,\"data\":\"", key, it->a);
         b64enc(d ? d : (const unsigned char *)"", (int)(n * CLIP_SIZE), m + o);
         strcat_s(m, cap, "\"}}");
@@ -2073,8 +2896,8 @@ static void do_clips(const QItem *it) {
     if (it->a == g_clipArr && g_clipSeen != g_clipHash) {
         char key[16]; sprintf_s(key, sizeof(key), "clips:%d", it->a); hint_if_held(key);
     }
-    clips_apply(it->a, (const unsigned char *)it->order, (unsigned)it->mode);
-    logmsg("CLIPS applied arrangement %d (%d clips)", it->a, it->mode);
+    if (clips_apply(it->a, (const unsigned char *)it->order, (unsigned)it->mode))
+        logmsg("CLIPS applied arrangement %d (%d clips)", it->a, it->mode);
 }
 
 // A locally added channel whose chan.add has not been queued yet (poll thread).
@@ -2098,25 +2921,29 @@ static void scan_clips(DWORD now) {
     if (g_clipChangedAt && now - g_clipChangedAt >= NOTES_SETTLE_MS) {
         // a new automation clip / audio clip channel: its chan.add must go out first
         if (chan_add_pending()) return;
-        g_clipChangedAt = 0;
-        if (g_clipSeen != g_clipHash && (LONG)(now - g_clipSuppress) >= 0) enqueue_unit(T_CLIPSNAP, 0, arr, 0, 0, NULL);
+        if (notes_suppressed(&g_clipSuppress, now)) return;
+        if (g_clipSeen != g_clipHash) enqueue_unit(T_CLIPSNAP, 0, arr, 0, 0, NULL);
+        else g_clipChangedAt = 0;
     }
 }
 
 // Inbound clips.set (recv thread).
 static void on_clips_set(const char *m) {
-    int arr = -1;
-    const char *q = strstr(m, "\"arr\":"), *d = strstr(m, "\"data\":\"");
-    if (!q || !d) return;
-    arr = atoi(q + 6);
-    d += 8;
-    const char *e = strchr(d, '"');
-    if (!e) return;
-    size_t n;
-    unsigned char *recs = b64dec(d, (size_t)(e - d), &n);
+    FlJson root = {m, strlen(m)}, op, value, data;
+    uint64_t arr;
+    size_t n = 0, bytes;
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fj_get(op, "arr", &value) || !fc_uint(value, &arr) || arr > INT_MAX ||
+        !fj_get(op, "data", &value) || !shared_b64(value, &data, 200000 * CLIP_SIZE, &bytes) ||
+        bytes % CLIP_SIZE) goto invalid;
+    unsigned char *recs = b64dec(data.p, data.n, &n);
+    if (!recs) return;
     QItem it; memset(&it, 0, sizeof(it));
-    it.type = T_CLIPS; it.a = arr; it.mode = (int)(n / CLIP_SIZE); it.order = (int *)recs;
+    it.type = T_CLIPS; it.a = (int)arr; it.mode = (int)(n / CLIP_SIZE); it.order = (int *)recs;
     enqueue(&it);
+    return;
+invalid:
+    sharing_fail("Shared clips: session stopped", "The shared playlist data is incomplete or invalid. Your local clips were kept. Reconnect and resync before continuing to share.");
 }
 
 // ---------------- names, colors, mixer routing ("meta") ----------------
@@ -2374,6 +3201,7 @@ static char *meta_json(int t, int i) {
         __except (EXCEPTION_EXECUTE_HANDLER) { return NULL; }
     }
     m = (char *)malloc(cap);
+    if (!m) { sharing_fail("Shared details: sharing paused", "There is not enough memory to send the shared project details."); return NULL; }
     int o = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"meta.set\",\"e\":\"%s\",\"i\":%d", M_TAG[t], i);
     __try {
         const wchar_t *name = NULL;
@@ -2492,46 +3320,88 @@ static void on_meta_set(const char *m) {
 
 static wchar_t *meta_name_arg(const wchar_t *w) { return w[0] ? dstr_keep(w) : NULL; }   // '' = nil string
 
-// Replace a marker list (arrangement or pattern) with the ones in "mk":[...] (main thread, inside
-// do_meta's SEH): empty the array the way FL's own delete shrinks it, re-add each with FL's adder,
-// then FL's refresh for that kind of list.
-static void marks_apply(int t, int i, const char *m) {
-    const char *q = strstr(m, "\"mk\":["), *e;
-    char **list = marks_of(t, i);
-    void *ti = *(void **)(g_flBase + (MARKTYPE_VA - IMG_BASE));
-    markadd_t add = (markadd_t)(g_flBase + (MARKADD_VA - IMG_BASE));
+static int shared_int32(FlJson value, int *out) {
+    uint64_t n; int negative = value.n && value.p[0] == '-';
+    if (negative) { value.p++; value.n--; }
+    if (!fc_uint(value, &n) || n > (negative ? 2147483648ull : 2147483647ull)) return 0;
+    *out = negative ? (int)-(int64_t)n : (int)n;
+    return 1;
+}
+
+static int shared_array_fields(FlJson array, FlJson *fields, int count) {
+    const char *p = array.p, *end = p + array.n, *start;
     int n = 0;
-    if (!q) return;
-    q += 6;
+    if (array.n < 2 || *p++ != '[' || end[-1] != ']') return 0;
+    end--; fj_space(&p, end);
+    while (p < end) {
+        start = p;
+        if (n == count || !fj_value(&p, end, 0)) return 0;
+        fields[n].p = start; fields[n++].n = (size_t)(p - start);
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') return 0; fj_space(&p, end); if (p == end) return 0; }
+    }
+    return n == count;
+}
+
+typedef struct { int pos, action; unsigned char tail[MARK_SIZE - MARK_TAIL]; wchar_t *name; } IncomingMarker;
+
+// Parse every marker and allocate its name before replacing the local list.
+static int marks_apply(int t, int i, const char *m) {
+    FlJson root = {m, strlen(m)}, op, markers;
+    const char *p, *end, *start;
+    IncomingMarker *parsed = NULL;
+    char **list;
+    void *ti;
+    markadd_t add = (markadd_t)(g_flBase + (MARKADD_VA - IMG_BASE));
+    int n = 0, k, applied = 0;
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fj_get(op, "mk", &markers) || markers.n < 2 || markers.p[0] != '[') goto invalid;
+    parsed = (IncomingMarker *)calloc(MARK_MAX, sizeof(*parsed));
+    if (!parsed) goto memory;
+    p = markers.p + 1; end = markers.p + markers.n - 1; fj_space(&p, end);
+    while (p < end) {
+        FlJson item, fields[4], tail, name;
+        size_t tn, nn; unsigned char *bytes; wchar_t wide[256];
+        start = p;
+        if (n == MARK_MAX || !fj_value(&p, end, 0)) goto invalid;
+        item.p = start; item.n = (size_t)(p - start);
+        if (!shared_array_fields(item, fields, 4) || !shared_int32(fields[0], &parsed[n].pos) ||
+            !shared_int32(fields[1], &parsed[n].action) ||
+            !shared_b64(fields[2], &tail, MARK_SIZE - MARK_TAIL, &tn) || tn != MARK_SIZE - MARK_TAIL ||
+            !shared_b64(fields[3], &name, 510, &nn) || nn % 2) goto invalid;
+        bytes = b64dec(tail.p, tail.n, &tn);
+        if (!bytes) goto cleanup;
+        memcpy(parsed[n].tail, bytes, tn); free(bytes);
+        bytes = b64dec(name.p, name.n, &nn);
+        if (!bytes) goto cleanup;
+        memcpy(wide, bytes, nn); free(bytes); wide[nn / 2] = 0;
+        if (wcslen(wide) != nn / 2) goto invalid;
+        if (nn && !(parsed[n].name = dstr_keep(wide))) goto memory;
+        n++;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); }
+    }
+    list = marks_of(t, i);
+    ti = *(void **)(g_flBase + (MARKTYPE_VA - IMG_BASE));
     EnterCriticalSection(song_lock());
     __try {
-    ((dynsetlen_t)(g_flBase + (DYNSETLEN_VA - IMG_BASE)))(list, ti, 1, 0);
-    while (*q == '[' && n < MARK_MAX) {
-        char *x;
-        int pos = (int)strtol(q + 1, &x, 10), action;
-        size_t tn = 0, nn = 0;
-        unsigned char *tail = NULL, *nb = NULL;
-        wchar_t name[256];
-        if (*x != ',') break;
-        action = (int)strtol(x + 1, &x, 10);
-        if (strncmp(x, ",\"", 2) != 0 || !(e = strchr(x + 2, '"'))) break;
-        tail = b64dec(x + 2, (size_t)(e - x - 2), &tn);
-        x = (char *)e + 1;
-        if (strncmp(x, ",\"", 2) != 0 || !(e = strchr(x + 2, '"'))) { free(tail); break; }
-        nb = b64dec(x + 2, (size_t)(e - x - 2), &nn);
-        nn = nn / 2 > 255 ? 255 : nn / 2;
-        memcpy(name, nb, nn * 2); name[nn] = 0;
-        add(list, pos, nn ? dstr_keep(name) : NULL, action,
-            tn > 0 ? tail[0] : 4, tn > 1 ? tail[1] : 4);
-        if (tn == MARK_SIZE - MARK_TAIL && mark_count(*list) == n + 1)
-            memcpy(*list + (size_t)n * MARK_SIZE + MARK_TAIL, tail, MARK_SIZE - MARK_TAIL);
-        free(tail); free(nb);
-        n++;
-        q = e + 1;
-        if (*q == ']') q++;
-        if (*q == ',') q++;
-    }
+        __try {
+            ((dynsetlen_t)(g_flBase + (DYNSETLEN_VA - IMG_BASE)))(list, ti, 1, 0);
+            for (k = 0; k < n; k++) {
+                IncomingMarker *marker = &parsed[k];
+                wchar_t *name = marker->name;
+                marker->name = NULL; // FL may retain this Delphi literal.
+                add(list, marker->pos, name, marker->action, marker->tail[0], marker->tail[1]);
+                if (mark_count(*list) != k + 1) __leave;
+                memcpy(*list + (size_t)k * MARK_SIZE + MARK_TAIL, marker->tail, sizeof(marker->tail));
+            }
+            applied = k == n;
+        } __except (EXCEPTION_EXECUTE_HANDLER) { applied = 0; }
     } __finally { LeaveCriticalSection(song_lock()); }
+    if (!applied) {
+        sharing_fail("Shared markers: session stopped", "FL Studio could not apply the shared markers. Check your local markers before reconnecting.");
+        goto cleanup;
+    }
     if (t == M_PMARK) {
         // what the piano roll's MarkersChanged does for its pattern, for any pattern
         ((formfn_t)(g_flBase + (MARKSORT_VA - IMG_BASE)))(list);
@@ -2546,6 +3416,37 @@ static void marks_apply(int t, int i, const char *m) {
         }
     }
     ((setmod_t)(g_flBase + (MODIFIED_VA - IMG_BASE)))(1);
+    goto cleanup;
+invalid:
+    sharing_fail("Shared markers: session stopped", "The shared marker list is incomplete or invalid. Your local markers were kept.");
+    goto cleanup;
+memory:
+    sharing_fail("Shared markers: session stopped", "There is not enough memory to receive the shared marker list. Your local markers were kept.");
+cleanup:
+    if (parsed) for (k = 0; k < MARK_MAX; k++) dstr_free(parsed[k].name);
+    free(parsed);
+    return applied;
+}
+
+static int routes_parse(const char *m, unsigned char *on, int *levels) {
+    FlJson root = {m, strlen(m)}, op, routes;
+    const char *p, *end, *start;
+    memset(on, 0, MIX_ROUTE_MAX);
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fj_get(op, "r", &routes) || routes.n < 2 || routes.p[0] != '[') return 0;
+    p = routes.p + 1; end = routes.p + routes.n - 1; fj_space(&p, end);
+    while (p < end) {
+        FlJson item, fields[2]; uint64_t target; int level;
+        start = p;
+        if (!fj_value(&p, end, 0)) return 0;
+        item.p = start; item.n = (size_t)(p - start);
+        if (!shared_array_fields(item, fields, 2) || !fc_uint(fields[0], &target) ||
+            target >= MIX_ROUTE_MAX || on[target] || !shared_int32(fields[1], &level)) return 0;
+        on[target] = 1; levels[target] = level;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') return 0; fj_space(&p, end); }
+    }
+    return 1;
 }
 
 // Project time signature: FL's setter reads the toolbar's time controls, so put the new values in
@@ -2562,33 +3463,43 @@ static void tsig_apply(int nu, int de) {
 }
 
 static void do_meta(const QItem *it) {
-    const char *m = it->path, *e = strstr(m, "\"e\":\""), *q;
-    int t, i = -1, len = 0, hasL, hasC = 0;
+    const char *m = it->path;
+    FlJson root = {m, strlen(m)}, op, value, data;
+    char tag[8];
+    int t, i = -1, len = 0, hasL = 0, hasC = 0, faulted = 0, nu = 0, de = 0;
     uint32_t color = 0;
     wchar_t *name = NULL;
     DWORD now = GetTickCount();
-    if (!e) return;
-    for (t = 0; t < M_NTYPES && strncmp(e + 5, M_TAG[t], 2) != 0; t++) {}
-    if (t == M_NTYPES || !int_after(m, NULL, "\"i\":", &i) || !meta_valid(t, i)) { logmsg("META %.2s %d: no such target here", e + 5, i); return; }
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fc_text(op, "e", tag, sizeof(tag)) || !fj_get(op, "i", &value) || !shared_int32(value, &i)) goto invalid;
+    for (t = 0; t < M_NTYPES && strcmp(tag, M_TAG[t]); t++) {}
+    if (t == M_NTYPES || !meta_valid(t, i)) goto invalid;
+    if (fj_get(op, "n", &value)) {
+        unsigned char *decoded; size_t bytes, j;
+        if (!shared_b64(value, &data, 8192, &bytes) || bytes % 2) goto invalid;
+        decoded = b64dec(data.p, data.n, &bytes);
+        if (!decoded) return;
+        name = (wchar_t *)calloc(bytes / 2 + 1, sizeof(wchar_t));
+        if (!name) { free(decoded); goto invalid; }
+        memcpy(name, decoded, bytes); free(decoded);
+        for (j = 0; j < bytes / 2; j++) {
+            unsigned c = name[j];
+            if (!c || (c >= 0xdc00 && c <= 0xdfff)) goto invalid;
+            if (c >= 0xd800 && c <= 0xdbff && (++j >= bytes / 2 || name[j] < 0xdc00 || name[j] > 0xdfff)) goto invalid;
+        }
+    }
+    if (fj_get(op, "c", &value)) { if (!fj_u32(value, &color)) goto invalid; hasC = 1; }
+    if (fj_get(op, "l", &value)) { if (!shared_int32(value, &len)) goto invalid; hasL = 1; }
+    if (t == M_TSIG && (!fj_get(op, "nu", &value) || !shared_int32(value, &nu) || nu < 1 || nu > 16 ||
+        !fj_get(op, "de", &value) || !shared_int32(value, &de) || de < 1 || de > 16)) goto invalid;
     if (g_isLeader && g_mSentAt[t][i] && now - g_mSentAt[t][i] < META_CONFLICT_MS) {
         // both changed it at once: the leader's value wins; send ours again so the peer converges
         g_mHash[t][i] = 0;
         enqueue_unit(T_METASNAP, t, i, 0, 0, NULL);
         logmsg("META %s %d: changed here too, keeping ours", M_TAG[t], i);
+        free(name);
         return;
     }
-    if ((q = strstr(m, "\"n\":\"")) != NULL) {
-        const char *qe = strchr(q + 5, '"');
-        if (qe) {
-            size_t bn;
-            unsigned char *b = b64dec(q + 5, (size_t)(qe - q - 5), &bn);
-            name = (wchar_t *)calloc(bn / 2 + 1, 2);
-            memcpy(name, b, bn / 2 * 2);
-            free(b);
-        }
-    }
-    if ((q = strstr(m, "\"c\":")) != NULL) { color = (uint32_t)strtoul(q + 4, NULL, 10); hasC = 1; }
-    hasL = int_after(m, NULL, "\"l\":", &len);
     meta_observe(now); // Preserve local edits that arrived before the next scanner tick.
     __try {
         switch (t) {
@@ -2604,23 +3515,14 @@ static void do_meta(const QItem *it) {
         case M_ROUTE: {
             static unsigned char on[MIX_ROUTE_MAX];
             static int lvl[MIX_ROUTE_MAX];
-            char *r = mix_rec(i), *end;
+            char *r = mix_rec(i);
             void *mixer = **(void ***)(g_flBase + (MIXOBJ_VA - IMG_BASE));
             int d, nm = mix_count(), changed = 0;
-            memset(on, 0, sizeof(on));
-            q = strstr(m, "\"r\":[");
-            if (!q || !mixer) break;
-            q += 5;
-            while (*q == '[') {
-                int l;
-                d = (int)strtol(q + 1, &end, 10);
-                if (*end != ',') break;
-                l = (int)strtol(end + 1, &end, 10);
-                if (*end != ']') break;
-                if (d >= 0 && d < MIX_ROUTE_MAX) { on[d] = 1; lvl[d] = l; }
-                q = end + 1;
-                if (*q == ',') q++;
+            if (!routes_parse(m, on, lvl)) {
+                sharing_fail("Shared routing: session stopped", "The shared mixer routing is incomplete or invalid. Your local routes were kept.");
+                free(name); return;
             }
+            if (!mixer) break;
             for (d = 0; d < nm && d < MIX_ROUTE_MAX; d++) {
                 int cur = r[MIX_ROUTE + d * 8 + 4] != 0;
                 if (cur != on[d]) { ((setroute_t)(g_flBase + (SETROUTE_VA - IMG_BASE)))(mixer, i, d, on[d], 1); changed = 1; }
@@ -2661,19 +3563,23 @@ static void do_meta(const QItem *it) {
                     hasC ? color : *(uint32_t *)(r + PL_TRK_COLOR));
             break; }
         case M_MARK: case M_PMARK:
-            marks_apply(t, i, m);
+            if (!marks_apply(t, i, m)) { free(name); return; }
             break;
         case M_TSIG: {
-            int nu = 0, de = 0;
-            if (int_after(m, NULL, "\"nu\":", &nu) && int_after(m, NULL, "\"de\":", &de)) tsig_apply(nu, de);
+            tsig_apply(nu, de);
             break; }
         }
-    } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("META apply faulted %s %d", M_TAG[t], i); }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { faulted = 1; logmsg("META apply faulted %s %d", M_TAG[t], i); }
     free(name);
+    if (faulted) { sharing_fail("Shared details: sharing paused", "FL could not apply the shared project details. Reconnect and resync before continuing."); return; }
     g_mSeen[t][i] = g_mHash[t][i] = meta_hash(t, i);
     g_mAt[t][i] = 0;
     meta_absorb();
     logmsg("META applied %s %d", M_TAG[t], i);
+    return;
+invalid:
+    free(name);
+    sharing_fail("Shared details: sharing paused", "The shared name, color, length or time signature is invalid. Your local details were kept.");
 }
 
 // ---------------- window guard ----------------
@@ -2803,22 +3709,15 @@ static void wguard_pass(void) {
     g_wguardLast = now;
 }
 
-// ---------------- toolbar: Connect button + connection status ----------------
-// Our own child window in FL's top toolbar row (FL's Delphi code doesn't know about it),
-// filling the empty stretch after the meters:   [ Connect ] [ Host ]  * Not connected      TIME LEFT
-// Connect opens the join dialog (session link + password), or offers to disconnect; Host opens
-// the host dialog (hidden while connected). Clicking the status while hosting shows the link again.
+// Room connections are managed by the desktop app; FL's toolbar only shows status.
 enum { NET_OFF, NET_CONNECTING, NET_ON, NET_ERR };
 #define WM_FLIM_STATUS  (WM_APP + 0x31)
-#define WM_FLIM_HOSTED  (WM_APP + 0x32)    // net thread: our session is open, show its link
-#define WM_FLIM_ALERT   (WM_APP + 0x33)    // net thread: show g_alert in a message box
+#define WM_FLIM_HOSTED  (WM_APP + 0x32)    // user requested the session link
+#define WM_FLIM_ALERT   (WM_APP + 0x33)    // net thread: show a passive hint
 #define BAR_H_REF       26         // bar height at FL's 41 px toolbar row; sizes below scale with it
-#define BTN_W_REF       88
-#define HOST_W_REF      60
 static HWND     g_netBar = NULL, g_netRow = NULL;
-static int      g_btnHover = 0, g_btnDown = 0, g_btnW = BTN_W_REF;   // hover / down: 1 Connect, 2 Host
-static int      g_btnX = 0;        // the button starts after the badge (bean + "flim v.YY.MM.DD")
-static int      g_hostX = 0, g_hostW = HOST_W_REF;
+static int      g_badgeEnd = 0;
+static int      g_barShowVersion = 1;
 static HWND     g_tip = NULL;      // tooltip over the timer
 static RECT     g_timerRc;         // where the timer was drawn (empty = none)
 
@@ -2857,7 +3756,7 @@ static void cursor_update(void);
 // Any thread: set the status text (UTF-8) and repaint the bar.
 static void net_status(int state, const char *fmt, ...) {
     char a[256];
-    va_list ap; va_start(ap, fmt); vsprintf_s(a, sizeof(a), fmt, ap); va_end(ap);
+    va_list ap; va_start(ap, fmt); _vsnprintf_s(a, sizeof(a), _TRUNCATE, fmt, ap); va_end(ap);
     EnterCriticalSection(&g_netTextLock);
     MultiByteToWideChar(CP_UTF8, 0, a, -1, g_netText, 256);
     LeaveCriticalSection(&g_netTextLock);
@@ -2870,21 +3769,12 @@ static char g_netShown[300];       // the server as shown in the status ("host[:
 static char g_netRoot[300];        // the server alone ("host[:port]")
 static NetUrl g_netUrl;            // the server of the current connection
 static char g_netErr[160];         // why the server ended the current connection, if it said so
-static char g_session[4];          // our session's slot ("03") once welcomed
+static char g_session[FLIM_SESSION_CAP]; // legacy slot or desktop room code once welcomed
 static char g_hostPw[256];         // hosting: the session password, until the welcome
 static char g_hostedText[700];     // hosting: session + link + password, for the "you're hosting" dialog
 static char g_alert[400];          // message box text (g_netTextLock)
 static int  g_alertInfo;           // ... shown as information, not a warning
 static volatile LONG g_hosting = 0;  // this connection hosts (vs joins)
-
-static int bar_host_shown(void) { int st = g_netState; return !(st == NET_ON || st == NET_CONNECTING); }
-// Which button is at x: 1 = Connect / Disconnect, 2 = Host, 0 = none.
-static int bar_btn_at(int x) {
-    if (x >= g_btnX && x < g_btnX + g_btnW) return 1;
-    if (bar_host_shown() && x >= g_hostX && x < g_hostX + g_hostW) return 2;
-    return 0;
-}
-static int bar_btns_end(void) { return bar_host_shown() ? g_hostX + g_hostW : g_btnX + g_btnW; }
 
 // Any thread: a message box on FL's main thread.
 static void net_alert_v(int info, const char *fmt, va_list ap) {
@@ -2926,6 +3816,20 @@ static void net_show_connected(const char *m) {
                n, n == 1 ? "person" : "people", where[0] ? " \xC2\xB7 " : "", where);
 }
 
+static void plugins_changed(void) {
+    int i, n = 0, retryable = 0;
+    for (i = 0; i < MAX_CH; i++) if (g_chU[i].unavailable) { n++; retryable += g_chU[i].unavailable == 1; }
+    for (i = 0; i < MAX_MIX * MAX_FX_SLOTS; i++) { LONG unavailable = g_fxU[i / MAX_FX_SLOTS][i % MAX_FX_SLOTS].unavailable; if (unavailable) { n++; retryable += unavailable == 1; } }
+    InterlockedExchange(&g_pluginMissing, n);
+    InterlockedExchange(&g_pluginRetryable, retryable);
+    if (g_netBar) PostMessageW(g_netBar, WM_FLIM_STATUS, 0, 0);
+}
+
+static void plugins_dialog(HWND h) {
+    (void)h;
+    if (g_pluginMissing) fl_hint("Unavailable sounds are retained. Notes and shared controls continue. Matching scanned plugins recover automatically; details are in the log.");
+}
+
 static void bar_paint(HWND h) {
     PAINTSTRUCT ps;
     HDC dc = BeginPaint(h, &ps);
@@ -2959,31 +3863,15 @@ static void bar_paint(HWND h) {
         }
         if (g_bean) DrawIconEx(mem, 0, (H - S) / 2, g_bean, S, S, 0, NULL, DI_NORMAL);
         oldFont = SelectObject(mem, g_verFont);
-        SetTextColor(mem, RGB(0x9a, 0xa3, 0xa9));
-        SetRect(&vr, S + H / 8, 0, g_btnX, H);
-        DrawTextW(mem, L"flim v." FLIM_VERSION_W, -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SetTextColor(mem, RGB(0xd4, 0xda, 0xde));
+        SetRect(&vr, S + H / 8, 0, g_badgeEnd, H);
+        if (g_barShowVersion) DrawTextW(mem, L"flim v." FLIM_VERSION_W, -1, &vr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         SelectObject(mem, g_barFont);
-    }
-    {   // buttons
-        int b, on = (st == NET_ON || st == NET_CONNECTING);
-        for (b = 1; b <= (on ? 1 : 2); b++) {
-            int r = H / 4, bx = b == 1 ? g_btnX : g_hostX, bw = b == 1 ? g_btnW : g_hostW;
-            COLORREF face = g_btnDown == b ? RGB(0x2e, 0x34, 0x38) : g_btnHover == b ? RGB(0x6a, 0x76, 0x7e) : RGB(0x5a, 0x64, 0x6b);
-            HBRUSH fb = CreateSolidBrush(face);
-            HPEN pen = CreatePen(PS_SOLID, 1, RGB(0x37, 0x3e, 0x43));
-            HGDIOBJ ob = SelectObject(mem, fb), op = SelectObject(mem, pen);
-            RECT br = { bx, 0, bx + bw, H };
-            RoundRect(mem, bx, 0, bx + bw, H, r, r);
-            SelectObject(mem, ob); SelectObject(mem, op); DeleteObject(fb); DeleteObject(pen);
-            SetTextColor(mem, RGB(0xee, 0xf1, 0xf3));
-            if (g_btnDown == b) OffsetRect(&br, 0, 1);
-            DrawTextW(mem, b == 2 ? L"Host" : on ? L"Disconnect" : L"Connect", -1, &br, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        }
     }
     {   // status dot + text
         COLORREF dot = st == NET_ON ? RGB(0x5c, 0xd6, 0x6b) : st == NET_CONNECTING ? RGB(0xf2, 0xb7, 0x3a)
                      : st == NET_ERR ? RGB(0xf0, 0x6a, 0x5f) : RGB(0x8d, 0x97, 0x9e);
-        int d = H * 8 / BAR_H_REF, x = bar_btns_end() + H / 2;
+        int d = H * 8 / BAR_H_REF, x = g_badgeEnd + H / 2;
         HBRUSH db = CreateSolidBrush(dot);
         HGDIOBJ ob = SelectObject(mem, db), op = SelectObject(mem, GetStockObject(NULL_PEN));
         RECT tr;
@@ -3012,8 +3900,12 @@ static void bar_paint(HWND h) {
         SetRect(&tr, x + d + H / 4, 0, g_timerRc.right ? g_timerRc.left - H / 2 : W, H);
         SetTextColor(mem, st == NET_ERR ? RGB(0xff, 0xa0, 0x96) : RGB(0xd4, 0xda, 0xde));
         EnterCriticalSection(&g_netTextLock);
-        DrawTextW(mem, g_netText, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
+        wchar_t status[320];
+        if (g_pluginMissing) _snwprintf_s(status, 320, _TRUNCATE, L"%ld sound%s unavailable | %s", g_pluginMissing, g_pluginMissing == 1 ? L"" : L"s", g_netText);
+        else wcscpy_s(status, 320, g_netText);
+        DrawTextW(mem, status, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
         LeaveCriticalSection(&g_netTextLock);
+        if (GetFocus() == h) DrawFocusRect(mem, &tr);
     }
     BitBlt(dc, 0, 0, W, H, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldFont); SelectObject(mem, oldBmp); DeleteObject(bmp); DeleteDC(mem);
@@ -3029,7 +3921,6 @@ static void bar_layout(void) {
     GetClientRect(g_netRow, &rr);
     rowH = rr.bottom > 0 ? rr.bottom : 41;
     h = rowH * BAR_H_REF / 41; if (h < 18) h = 18;
-    g_btnW = h * BTN_W_REF / BAR_H_REF;
     {   // badge width = bean (h) + gap + version text + gap
         HDC dc = GetDC(g_netBar);
         HFONT f = CreateFontW(-(h * 12 / BAR_H_REF), 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
@@ -3038,10 +3929,8 @@ static void bar_layout(void) {
         SIZE sz = { 0, 0 };
         GetTextExtentPoint32W(dc, L"flim v." FLIM_VERSION_W, (int)wcslen(L"flim v." FLIM_VERSION_W), &sz);
         SelectObject(dc, of); DeleteObject(f); ReleaseDC(g_netBar, dc);
-        g_btnX = BEAN_SZ(h) + h / 8 + sz.cx + h * 2 / 3;
+        g_badgeEnd = BEAN_SZ(h) + h / 8 + sz.cx + h * 2 / 3;
     }
-    g_hostW = h * HOST_W_REF / BAR_H_REF;
-    g_hostX = g_btnX + g_btnW + h / 4;
     right = rr.right - 8; minX = rr.right / 2;
     spl = FindWindowExW(g_netRow, NULL, L"TQuickEditToolbarPanel", L"Splitter_1");
     if (spl && IsWindowVisible(spl)) {
@@ -3064,7 +3953,10 @@ static void bar_layout(void) {
     // left-aligned right after FL's meters (CPU / MB), filling the gap: the status gets all the room
     // there is, the timer sits at the right end
     w = right - minX;
-    if (w < g_hostX + g_hostW) w = g_hostX + g_hostW;
+    if (w < h * 2) { ShowWindow(g_netBar, SW_HIDE); return; }
+    g_barShowVersion = w >= g_badgeEnd + h * 6;
+    if (!g_barShowVersion) g_badgeEnd = BEAN_SZ(h) + h / 4;
+    if (!IsWindowVisible(g_netBar)) ShowWindow(g_netBar, SW_SHOWNOACTIVATE);
     x = minX;
     GetWindowRect(g_netBar, &cur);
     MapWindowPoints(NULL, g_netRow, (POINT *)&cur, 2);
@@ -3128,7 +4020,7 @@ static INT_PTR CALLBACK connect_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
     if (m == WM_COMMAND && LOWORD(wp) == IDOK) {
         wchar_t w[512];
         NetUrl u;
-        char sess[4];
+        char sess[FLIM_SESSION_CAP];
         int remember = IsDlgButtonChecked(dlg, IDC_REMEMBER) == BST_CHECKED;
         dlg_text8(dlg, IDC_URL, g_dlgUrl, sizeof(g_dlgUrl));
         if (!parse_link(g_dlgUrl, &u, sess)) {
@@ -3209,7 +4101,7 @@ static INT_PTR CALLBACK host_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
         wchar_t w[512];
         NetUrl u;
         dlg_text8(dlg, IDC_HSERVER, g_dlgUrl, sizeof(g_dlgUrl));
-        if (!parse_url(g_dlgUrl, &u)) {
+        if (!parse_host(g_dlgUrl, &u)) {
             MessageBoxW(dlg, L"That doesn't look like a server address.\n\nExamples:\n  flim.fly.dev\n  localhost:8080",
                         L"flim", MB_OK | MB_ICONWARNING);
             SetFocus(GetDlgItem(dlg, IDC_HSERVER));
@@ -3276,56 +4168,21 @@ static INT_PTR CALLBACK hosted_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
     return FALSE;
 }
 
-// Main thread (the bar's click).
-static void bar_clicked(HWND h) {
-    int st = g_netState;
-    HWND owner = g_mainForm ? g_mainForm : h;
-    if (st == NET_ON || st == NET_CONNECTING) {
-        if (MessageBoxW(owner, L"Disconnect from the flim session?\n\n"
-                        L"Your FL project stays as it is; nothing is synced until you connect again.",
-                        L"flim", MB_YESNO | MB_ICONQUESTION) == IDYES)
-            net_disconnect();
-        return;
-    }
-    if (DialogBoxParamW(g_hinst, MAKEINTRESOURCEW(IDD_CONNECT), owner, connect_proc, 0) == IDOK) {
-        net_connect(g_dlgUrl, g_dlgPw, 0, NULL);
-        SecureZeroMemory(g_dlgPw, sizeof(g_dlgPw));
-    }
-}
-
-// Main thread (Host's click; ownerMode = Ctrl was held).
-static void host_clicked(HWND h, int ownerMode) {
-    HWND owner = g_mainForm ? g_mainForm : h;
-    unsigned cs = cooldown_secs();
-    if (!bar_host_shown()) return;
-    if (cs && !ownerMode) {
-        wchar_t msg[200];
-        swprintf_s(msg, 200, L"COOLDOWN: you can host a session again in %u:%02u.\n\n"
-                   L"After a session's time runs out, everyone in it waits 5 minutes, so others get a turn.",
-                   cs / 60, cs % 60);
-        MessageBoxW(owner, msg, L"flim", MB_OK | MB_ICONINFORMATION);
-        return;
-    }
-    if (DialogBoxParamW(g_hinst, MAKEINTRESOURCEW(IDD_HOST), owner, host_proc, ownerMode) == IDOK) {
-        net_connect(g_dlgUrl, g_dlgPw, 1, g_dlgOwner);
-        SecureZeroMemory(g_dlgPw, sizeof(g_dlgPw));
-        SecureZeroMemory(g_dlgOwner, sizeof(g_dlgOwner));
-    }
-}
-
 static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
     switch (m) {
     case WM_PAINT: bar_paint(h); return 0;
     case WM_ERASEBKGND: return 1;
-    case WM_FLIM_STATUS: InvalidateRect(h, NULL, FALSE); return 0;
-    case WM_FLIM_HOSTED: {
-        static int showing = 0;
-        if (showing || !g_hostedText[0]) return 0;
-        showing = 1;
-        DialogBoxParamW(g_hinst, MAKEINTRESOURCEW(IDD_HOSTED), g_mainForm ? g_mainForm : h, hosted_proc, 0);
-        showing = 0;
-        return 0;
-    }
+    case WM_FLIM_STATUS:
+        EnterCriticalSection(&g_netTextLock); SetWindowTextW(h, g_netText); LeaveCriticalSection(&g_netTextLock);
+        InvalidateRect(h, NULL, FALSE); return 0;
+    case WM_SETFOCUS: case WM_KILLFOCUS: InvalidateRect(h, NULL, FALSE); return 0;
+    case WM_GETDLGCODE: return DLGC_WANTCHARS;
+    case WM_KEYDOWN:
+        if ((wp == VK_RETURN || wp == VK_SPACE) && g_pluginMissing) { plugins_dialog(h); return 0; }
+        break;
+    case WM_CONTEXTMENU:
+        if (g_pluginMissing) { plugins_dialog(h); return 0; }
+        break;
     case WM_FLIM_ALERT: {
         wchar_t w[400];
         EnterCriticalSection(&g_netTextLock);
@@ -3335,7 +4192,8 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
         info = g_alertInfo;
         LeaveCriticalSection(&g_netTextLock);
         if (!w[0]) return 0;
-        MessageBoxW(g_mainForm ? g_mainForm : h, w, L"flim", MB_OK | (info ? MB_ICONINFORMATION : MB_ICONWARNING));
+        { char hint[1200] = ""; WideCharToMultiByte(CP_UTF8, 0, w, -1, hint, sizeof(hint), NULL, NULL); fl_hint(hint); }
+        logmsg("NOTICE %s: %S", info ? "info" : "error", w);
         return 0;
     }
     case WM_NOTIFY:
@@ -3354,46 +4212,25 @@ static LRESULT CALLBACK bar_proc(HWND h, UINT m, WPARAM wp, LPARAM lp) {
             wchar_t tt[48];
             int cool, last;
             bar_layout();
+            plugins_auto_tick(GetTickCount());
             if (bar_timer_text(tt, 48, &cool, &last) || g_timerRc.right) InvalidateRect(h, NULL, FALSE);   // the countdown
         }
         return 0;
     case WM_SETCURSOR: {
         POINT p; GetCursorPos(&p); ScreenToClient(h, &p);
-        SetCursor(LoadCursor(NULL, bar_btn_at(p.x) || (p.x >= bar_btns_end() && g_hostedText[0] && g_netState == NET_ON)
-                                   ? IDC_HAND : IDC_ARROW));
+        SetCursor(LoadCursor(NULL, p.x >= g_badgeEnd && g_pluginMissing ? IDC_HAND : IDC_ARROW));
         return TRUE;
     }
-    case WM_MOUSEMOVE: {
-        int x = (short)LOWORD(lp), on = bar_btn_at(x);
-        if (on != g_btnHover) { g_btnHover = on; InvalidateRect(h, NULL, FALSE); }
-        if (on) { TRACKMOUSEEVENT t = { sizeof(t), TME_LEAVE, h, 0 }; TrackMouseEvent(&t); }
-        else if (x >= bar_btns_end() && g_netState == NET_ON) {
-            // over the status: what everyone is working on, in FL's hint bar (like FL's own controls)
+    case WM_MOUSEMOVE:
+        if ((short)LOWORD(lp) >= g_badgeEnd && g_netState == NET_ON) {
             static char last[1200];
             char where[1200];
             focus_summary(where, sizeof(where), "   |   ");
             if (where[0] && strcmp(where, last) != 0) { strcpy_s(last, sizeof(last), where); fl_hint(where); }
         }
         return 0;
-    }
-    case WM_MOUSELEAVE: g_btnHover = 0; InvalidateRect(h, NULL, FALSE); return 0;
-    case WM_LBUTTONDOWN: {
-        int x = (short)LOWORD(lp), b = bar_btn_at(x);
-        if (b) { g_btnDown = b; SetCapture(h); InvalidateRect(h, NULL, FALSE); }
-        else if (x >= bar_btns_end() && g_hostedText[0] && g_netState == NET_ON) PostMessageW(h, WM_FLIM_HOSTED, 0, 0);
-        return 0;
-    }
-    case WM_LBUTTONUP:
-        if (g_btnDown) {
-            RECT rc; POINT p = { (short)LOWORD(lp), (short)HIWORD(lp) };
-            int b = g_btnDown;
-            GetClientRect(h, &rc);
-            g_btnDown = 0; g_btnHover = 0; ReleaseCapture(); InvalidateRect(h, NULL, FALSE);
-            if (PtInRect(&rc, p) && bar_btn_at(p.x) == b) {
-                if (b == 1) bar_clicked(h);
-                else host_clicked(h, GetKeyState(VK_CONTROL) < 0);
-            }
-        }
+    case WM_LBUTTONDOWN:
+        if ((short)LOWORD(lp) >= g_badgeEnd && g_pluginMissing) { SetFocus(h); plugins_dialog(h); }
         return 0;
     }
     return DefWindowProcW(h, m, wp, lp);
@@ -3432,7 +4269,7 @@ static void ui_create(void) {
     wc.lpszClassName = L"FlimNetBar";
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     RegisterClassW(&wc);
-    g_netBar = CreateWindowExW(0, L"FlimNetBar", L"flim", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+    g_netBar = CreateWindowExW(0, L"FlimNetBar", L"flim", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_TABSTOP,
                                0, 0, 1, 1, row, NULL, g_hinst, NULL);
     if (!g_netBar) { logmsg("UI: CreateWindow failed %lu", GetLastError()); return; }
     bar_layout();
@@ -3453,7 +4290,6 @@ static void ui_create(void) {
             SendMessageW(g_tip, TTM_SETDELAYTIME, TTDT_AUTOPOP, 20000);
         }
     }
-    if (g_hostedText[0]) PostMessageW(g_netBar, WM_FLIM_HOSTED, 0, 0);   // auto-connect was quicker than FL's UI
     if (g_alert[0]) PostMessageW(g_netBar, WM_FLIM_ALERT, 0, 0);
     {
         RECT b; GetWindowRect(g_netBar, &b);
@@ -3481,6 +4317,9 @@ static CRITICAL_SECTION g_heldLock;            // member: ops that arrived durin
 typedef struct { char *msg; LONG gen; } HeldMsg;
 static HeldMsg *g_held = NULL;
 static int    g_nheld = 0, g_capheld = 0;
+static size_t g_heldBytes;
+#define HELD_MAX_COUNT 4096
+#define HELD_MAX_BYTES (16u * 1024u * 1024u)
 
 #define PROJ_SETTLE_MS  1500    // quiet time after FL's load before baselines are re-taken
 #define PROJ_MAX_MS     180000  // give up waiting for quiet after this long
@@ -3529,6 +4368,7 @@ static void fl_ustr(uint64_t va, wchar_t *out, int cap) {
 static wchar_t *dstr_keep(const wchar_t *s) {
     int n = (int)wcslen(s);
     unsigned char *m = (unsigned char *)calloc(1, 16 + (n + 1) * 2);
+    if (!m) return NULL;
     *(uint16_t *)(m + 4) = 1200; *(uint16_t *)(m + 6) = 2;
     *(int32_t *)(m + 8) = -1;    *(int32_t *)(m + 12) = n;
     memcpy(m + 16, s, (size_t)n * 2);
@@ -3538,19 +4378,66 @@ static wchar_t *dstr_keep(const wchar_t *s) {
 static unsigned char *read_file_w(const wchar_t *path, size_t *n) {
     FILE *f = NULL;
     *n = 0;
-    if (_wfopen_s(&f, path, L"rb") != 0 || !f) return NULL;
-    fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
-    unsigned char *buf = (unsigned char *)malloc(sz > 0 ? sz : 1);
-    *n = fread(buf, 1, sz > 0 ? sz : 0, f);
-    fclose(f);
-    return buf;
+    if (!path || _wfopen_s(&f, path, L"rb") != 0 || !f) return NULL;
+    return read_file_checked(f, n);
+}
+static HANDLE sibling_file_w(const wchar_t *path, wchar_t *temporary) {
+    const wchar_t *slash, *other;
+    size_t prefix;
+    int tries;
+    temporary[0] = 0;
+    if (!path || !*path || wcsnlen_s(path, MAX_PATH) >= MAX_PATH) return INVALID_HANDLE_VALUE;
+    slash = wcsrchr(path, L'\\'); other = wcsrchr(path, L'/');
+    if (other && (!slash || other > slash)) slash = other;
+    prefix = slash ? (size_t)(slash - path) + 1 : 0;
+    if (prefix > MAX_PATH - 40) return INVALID_HANDLE_VALUE;
+    for (tries = 0; tries < 16; tries++) {
+        HANDLE file;
+        memcpy(temporary, path, prefix * sizeof(wchar_t));
+        swprintf_s(temporary + prefix, MAX_PATH - prefix, L".flim-%08lx-%08lx.tmp",
+                   GetCurrentProcessId(), (DWORD)InterlockedIncrement(&g_tmpSeq));
+        file = CreateFileW(temporary, GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (file != INVALID_HANDLE_VALUE) return file;
+        if (GetLastError() != ERROR_FILE_EXISTS && GetLastError() != ERROR_ALREADY_EXISTS) break;
+    }
+    temporary[0] = 0;
+    return INVALID_HANDLE_VALUE;
 }
 static int write_file_w(const wchar_t *path, const unsigned char *d, size_t n) {
-    FILE *f = NULL;
-    if (_wfopen_s(&f, path, L"wb") != 0 || !f) return 0;
-    size_t w = fwrite(d, 1, n, f);
-    fclose(f);
-    return w == n;
+    wchar_t temporary[MAX_PATH];
+    HANDLE file;
+    size_t offset = 0;
+    int ok = 1;
+    if ((!d && n) || n > FLIM_CLOUD_MAX) return 0;
+    file = sibling_file_w(path, temporary);
+    if (file == INVALID_HANDLE_VALUE) return 0;
+    while (offset < n) {
+        DWORD written = 0, bytes = (DWORD)((n - offset) > 1024 * 1024 ? 1024 * 1024 : n - offset);
+        if (!WriteFile(file, d + offset, bytes, &written, NULL) || !written || written > bytes) { ok = 0; break; }
+        offset += written;
+    }
+    if (ok && !FlushFileBuffers(file)) ok = 0;
+    if (!CloseHandle(file)) ok = 0;
+    if (ok) ok = MoveFileExW(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (!ok) DeleteFileW(temporary);
+    return ok;
+}
+static int copy_file_w(const wchar_t *source, const wchar_t *path) {
+    wchar_t temporary[MAX_PATH];
+    HANDLE file = sibling_file_w(path, temporary);
+    int ok;
+    if (file == INVALID_HANDLE_VALUE) return 0;
+    ok = CloseHandle(file) != 0;
+    if (ok) ok = CopyFileW(source, temporary, FALSE) != 0;
+    if (ok) ok = SetFileAttributesW(temporary, FILE_ATTRIBUTE_NORMAL) != 0;
+    if (ok) {
+        file = CreateFileW(temporary, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (file == INVALID_HANDLE_VALUE) ok = 0;
+        else { ok = FlushFileBuffers(file) != 0; if (!CloseHandle(file)) ok = 0; }
+    }
+    if (ok) ok = MoveFileExW(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+    if (!ok) { SetFileAttributesW(temporary, FILE_ATTRIBUTE_NORMAL); DeleteFileW(temporary); }
+    return ok;
 }
 static int file_exists_w(const wchar_t *p) {
     DWORD a = GetFileAttributesW(p);
@@ -3577,31 +4464,46 @@ static int is_flim_name(const wchar_t *p) {
     return 1;
 }
 // path with its extension replaced by "_flim_MMDD_hhmm.flp" (local time).
-static void flim_name(const wchar_t *path, wchar_t *out, int cap) {
+static int flim_name(const wchar_t *path, wchar_t *out, int cap) {
     SYSTEMTIME st;
+    const wchar_t *dot, *base;
+    size_t n;
+    if (!out || cap < 1) return 0;
+    out[0] = 0;
+    if (!path || !*path || wcsnlen_s(path, MAX_PATH) >= MAX_PATH) return 0;
+    dot = wcsrchr(path, L'.'); base = base_name(path);
+    n = dot && dot >= base ? (size_t)(dot - path) : wcslen(path);
+    if (!*base || n + 20 > (size_t)cap) return 0;
     GetLocalTime(&st);
-    wcscpy_s(out, cap, path);
-    wchar_t *dot = wcsrchr(out, L'.'), *sl = wcsrchr(out, L'\\');
-    if (dot && (!sl || dot > sl)) *dot = 0;
-    size_t n = wcslen(out);
+    memcpy(out, path, n * sizeof(wchar_t));
     swprintf_s(out + n, cap - n, L"_flim_%02d%02d_%02d%02d.flp", st.wMonth, st.wDay, st.wHour, st.wMinute);
+    return 1;
 }
 
 // An existing file at p is kept as p.bak (replacing an older .bak) before p is rewritten.
-static void backup_existing(const wchar_t *p) {
-    wchar_t bak[MAX_PATH + 8];
-    if (!file_exists_w(p)) return;
-    swprintf_s(bak, MAX_PATH + 8, L"%s.bak", p);
-    if (MoveFileExW(p, bak, MOVEFILE_REPLACE_EXISTING)) logmsg("PROJECT kept the previous copy as %S", bak);
+static int backup_existing(const wchar_t *p) {
+    wchar_t bak[MAX_PATH];
+    DWORD attributes;
+    if (!p || !*p || wcsnlen_s(p, MAX_PATH) + 4 >= MAX_PATH) return 0;
+    attributes = GetFileAttributesW(p);
+    if (attributes == INVALID_FILE_ATTRIBUTES) return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY) return 0;
+    swprintf_s(bak, MAX_PATH, L"%s.bak", p);
+    if (!copy_file_w(p, bak)) return 0;
+    logmsg("PROJECT kept the previous copy as %S", bak);
+    return 1;
 }
 
 // Make path FL's current project (title, Ctrl+S target, recent files). Main thread.
-static void set_project_file(const wchar_t *path) {
+static int set_project_file(const wchar_t *path) {
     void *form = fl_form();
-    wchar_t *w = dstr_keep(path);
-    if (!form) return;
+    wchar_t *w;
+    if (!form || !path || !*path || wcsnlen_s(path, MAX_PATH) >= MAX_PATH) return 0;
+    w = dstr_keep(path);
+    if (!w) return 0;
     __try { ((setproj_t)(g_flBase + (SETPROJ_VA - IMG_BASE)))(form, w, w, 1); }
-    __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PROJECT set name faulted"); }
+    __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PROJECT set name faulted"); return 0; }
+    return 1;
 }
 
 // Re-take every baseline after a project change (main thread). Nothing is sent.
@@ -3611,6 +4513,7 @@ static void proj_rebaseline(void) {
     memset(g_chU, 0, sizeof(g_chU));
     memset(g_fxU, 0, sizeof(g_fxU));
     plug_agreed_reset(1, 1);
+    plugins_changed();
     memset(g_chanPlugN, 0, sizeof(g_chanPlugN));
     memset(g_fxN, 0, sizeof(g_fxN));
     for (i = 0; i < n; i++) g_chU[i].inst = plugin_inst(items[i]);
@@ -3643,23 +4546,43 @@ static void send_project(const unsigned char *d, size_t n, const wchar_t *name) 
     esc[o] = 0;
     size_t cap = strlen(esc) + (n + 2) / 3 * 4 + 128;
     char *m = (char *)malloc(cap);
+    if (!m) { sharing_fail("Project sync: session stopped", "There is not enough memory to send the shared project."); return; }
     int len = sprintf_s(m, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"project.load\",\"name\":\"%s\",\"data\":\"", esc);
     b64enc(d, (int)n, m + len);
     strcat_s(m, cap, "\"}}");
     ws_send_samples(m, d, n);
     logmsg("PROJECT sent %S (%zu bytes)", (name && *name) ? name : L"(untitled)", n);
+    /* FL's project saver may write a missing-plugin placeholder. Restore the retained
+       presets after that snapshot, in the same ordered outbox, for late joiners. */
+    for (i = 0; i < MAX_CH + MAX_MIX * MAX_FX_SLOTS; i++) {
+        int unit = i < MAX_CH ? U_CH : U_FX;
+        int a = i < MAX_CH ? i : (i - MAX_CH) / MAX_FX_SLOTS, b = i < MAX_CH ? 0 : (i - MAX_CH) % MAX_FX_SLOTS;
+        Unit *u = unit_ptr(unit, a, b);
+        if (u && u->unavailable) {
+            size_t bytes;
+            unsigned char *saved = plug_agreed_copy(unit, a, b, &bytes);
+            if (!saved) { sharing_fail("Shared plugin: session stopped", "A retained plugin state could not be prepared for the joining member."); return; }
+            send_unit("plug.state", unit, a, b, saved, bytes, NULL);
+            free(saved);
+        }
+    }
+    if (g_pluginMissing) send_full_state();
 }
 
 // Leader: snapshot of the current project (FL's own project writer; the current file
 // name stays as it is). Returns malloc'd bytes or NULL. Main thread.
 static unsigned char *project_snapshot(size_t *n) {
     wchar_t path[MAX_PATH];
+    wchar_t *savedPath;
     char r = 0;
     *n = 0;
+    if (strlen(g_tmpDir) + 40 >= MAX_PATH) return NULL;
     swprintf_s(path, MAX_PATH, L"%S\\snapshot_%ld.flp", g_tmpDir, InterlockedIncrement(&g_tmpSeq));
-    __try { r = ((saveproj_t)(g_flBase + (SAVEPROJ_VA - IMG_BASE)))(dstr_keep(path), 0); }
+    savedPath = dstr_keep(path);
+    if (!savedPath) return NULL;
+    __try { r = ((saveproj_t)(g_flBase + (SAVEPROJ_VA - IMG_BASE)))(savedPath, 0); }
     __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PROJECT snapshot faulted"); r = 0; }
-    if (!r) { logmsg("PROJECT snapshot failed"); return NULL; }
+    if (!r) { logmsg("PROJECT snapshot failed"); DeleteFileW(path); return NULL; }
     unsigned char *d = read_file_w(path, n);
     DeleteFileW(path);
     return d;
@@ -3668,25 +4591,24 @@ static unsigned char *project_snapshot(size_t *n) {
 // Leader, after a local load: work on <name>_flim_MMDD_hhmm.flp (a copy next to the original) and
 // send that file to the members. Untitled projects (new from template) go as a snapshot.
 static void leader_project_loaded(void) {
-    wchar_t cur[MAX_PATH], flim[MAX_PATH + 16];
+    wchar_t cur[MAX_PATH], flim[MAX_PATH];
     size_t n = 0;
     unsigned char *d = NULL;
     fl_ustr(PROJNAME_VA, cur, MAX_PATH);
     if (cur[0] && file_exists_w(cur)) {
         if (!is_flim_name(cur)) {
-            flim_name(cur, flim, MAX_PATH + 16);
-            backup_existing(flim);                       // only if reopened within the same minute
-            if (CopyFileW(cur, flim, FALSE)) {
-                set_project_file(flim);
-                logmsg("PROJECT working copy %S (original %S is never saved by flim sessions)", flim, cur);
-                wcscpy_s(cur, MAX_PATH, flim);
-            } else logmsg("PROJECT could not create %S (error %lu); staying on the original", flim, GetLastError());
+            if (!flim_name(cur, flim, MAX_PATH) || !backup_existing(flim) || !copy_file_w(cur, flim) || !set_project_file(flim)) {
+                sharing_fail("Project copy failed: session stopped", "A separate working copy of your project could not be prepared. Move the project to a writable folder with a shorter path before reconnecting.");
+                return;
+            }
+            logmsg("PROJECT working copy %S (original %S is never saved by flim sessions)", flim, cur);
+            wcscpy_s(cur, MAX_PATH, flim);
         }
         d = project_snapshot(&n);
-        if (d) { send_project(d, n, base_name(cur)); free(d); return; }
-    }
-    d = project_snapshot(&n);
-    if (d) { send_project(d, n, NULL); free(d); }
+        if (d) { send_project(d, n, base_name(cur)); free(d); portable_send_peers(); return; }
+    } else d = project_snapshot(&n);
+    if (d) { send_project(d, n, NULL); free(d); portable_send_peers(); return; }
+    sharing_fail("Project snapshot failed: session stopped", "FL Studio could not save a complete project snapshot. Check available disk space and the temporary folder before reconnecting.");
 }
 
 static void proj_end(void) {
@@ -3700,7 +4622,7 @@ static void replay_held(void) {
     int n, i;
     EnterCriticalSection(&g_heldLock);
     h = g_held; n = g_nheld;
-    g_held = NULL; g_nheld = g_capheld = 0;
+    g_held = NULL; g_nheld = g_capheld = 0; g_heldBytes = 0;
     LeaveCriticalSection(&g_heldLock);
     if (n) logmsg("PROJECT replaying %d ops that arrived during the load", n);
     for (i = 0; i < n; i++) { if (h[i].gen == g_netGen) handle_msg(h[i].msg); free(h[i].msg); }
@@ -3733,24 +4655,45 @@ static void do_projdone(void) {
     if (g_isLeader) leader_project_loaded();
     else {
         logmsg("PROJECT loaded locally on a member: re-syncing to the leader's project");
-        ws_send("{\"t\":\"op\",\"op\":{\"kind\":\"state.req\"}}");
+        request_state();
     }
 }
 
 // Member: open the leader's project. it->path = UTF-16 path of the received file.
+static void sharing_fail(const char *status, const char *why);
 static void do_projload(const QItem *it) {
     const wchar_t *path = (const wchar_t *)it->path;
     void *form = fl_form(), *proj = fl_project();
     char r = 0;
+    int began = 0, faulted = 0;
     DWORD t0 = GetTickCount();
-    if (!form || !proj) { logmsg("PROJECT load: FL objects not found"); return; }
+    if (!form || !proj || !path || !*path || wcsnlen_s(path, MAX_PATH) >= MAX_PATH) {
+        sharing_fail("Project loading failed: session stopped", "FL Studio was not ready to load the host's project. Reconnect after FL has finished starting.");
+        return;
+    }
     wchar_t *w = dstr_keep(path);
+    if (!w) {
+        sharing_fail("Project loading failed: session stopped", "There was not enough memory to load the host's project.");
+        return;
+    }
     __try {
         ((formfn_t)(g_flBase + (BUSYBEGIN_VA - IMG_BASE)))(form);
+        began = 1;
         r = ((projload_t)(*(void ***)proj)[FLPROJ_LOAD_SLOT])(proj, w, 0);   // flags 0: no "save changes?" prompt
-        ((formfn_t)(g_flBase + (BUSYEND_VA - IMG_BASE)))(form);
-    } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PROJECT load faulted"); }
-    if (it->mode) set_project_file(path);                     // named: Ctrl+S saves the member's own copy
+    } __except (EXCEPTION_EXECUTE_HANDLER) { faulted = 1; }
+    if (began) {
+        __try { ((formfn_t)(g_flBase + (BUSYEND_VA - IMG_BASE)))(form); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { faulted = 1; }
+    }
+    if (!r || faulted) {
+        logmsg("PROJECT load failed %S ret=%d fault=%d in %lu ms", path, r, faulted, GetTickCount() - t0);
+        sharing_fail("Project loading failed: session stopped", "FL Studio could not open the host's project. Check FL's error or license message before reconnecting.");
+        return;
+    }
+    if (it->mode && !set_project_file(path)) {
+        sharing_fail("Project save target failed: session stopped", "FL Studio opened the shared project, but its separate save location could not be confirmed. Use Save As to preserve your local changes before reconnecting.");
+        return;
+    }
     logmsg("PROJECT opened %S ret=%d in %lu ms", path, r, GetTickCount() - t0);
 }
 
@@ -3759,7 +4702,10 @@ static void do_projsnap(void) {
     wchar_t cur[MAX_PATH];
     size_t n = 0;
     unsigned char *d = project_snapshot(&n);
-    if (!d) return;
+    if (!d) {
+        sharing_fail("Project snapshot failed: session stopped", "FL Studio could not save a complete project snapshot for the joining member. Check available disk space and the temporary folder before reconnecting.");
+        return;
+    }
     fl_ustr(PROJNAME_VA, cur, MAX_PATH);
     send_project(d, n, cur[0] ? base_name(cur) : NULL);
     free(d);
@@ -3767,31 +4713,27 @@ static void do_projsnap(void) {
 
 // Member (recv thread): store the leader's project and queue the load.
 static void on_project_load(const char *m) {
-    const char *nk = strstr(m, "\"name\":\""), *dk = strstr(m, "\"data\":\"");
-    wchar_t name[MAX_PATH], dir[MAX_PATH], path[MAX_PATH * 2];
+    if (g_portableLocal) { logmsg("PORTABLE skipped newer FL project; sharing notes and controls without opening newer project data"); return; }
+    FlJson root = {m, strlen(m)}, op, value, data;
+    wchar_t name[MAX_PATH], dir[MAX_PATH], path[MAX_PATH];
     char nm[MAX_PATH * 3];
-    int o = 0, i;
-    size_t n = 0;
-    if (!dk) return;
-    if (nk) {
-        for (nk += 8; *nk && *nk != '"' && o < (int)sizeof(nm) - 1; nk++) {
-            if (*nk == '\\' && nk[1]) nk++;
-            nm[o++] = *nk;
-        }
-    }
-    nm[o] = 0;
+    int i;
+    size_t n = 0, bytes;
+    unsigned char *d = NULL;
+    QItem q = {0};
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fj_get(op, "name", &value) || !fj_text(value, nm, sizeof(nm)) ||
+        !fj_get(op, "data", &value) || !shared_b64(value, &data, FLIM_CLOUD_MAX, &bytes) || !bytes) goto invalid;
     name[0] = 0;
-    if (o) MultiByteToWideChar(CP_UTF8, 0, nm, -1, name, MAX_PATH);
+    if (*nm && !MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, nm, -1, name, MAX_PATH)) goto invalid;
     for (i = 0; name[i]; i++) if (wcschr(L"\\/:*?\"<>|", name[i])) name[i] = L'_';
     if (name[0] && !is_flim_name(name)) {                      // members also work on a session copy
         wchar_t tmp[MAX_PATH];
-        flim_name(name, tmp, MAX_PATH);
+        if (!flim_name(name, tmp, MAX_PATH)) goto path_failed;
         wcscpy_s(name, MAX_PATH, tmp);
     }
-    dk += 8;
-    const char *e = strchr(dk, '"');
-    if (!e) return;
-    unsigned char *d = b64dec(dk, (size_t)(e - dk), &n);
+    d = b64dec(data.p, data.n, &n);
+    if (!d) return;
     {
         char theirs[32], mine[32];
         FlpBuildCheck check = flp_check_build(d, n, theirs, mine);
@@ -3817,41 +4759,69 @@ static void on_project_load(const char *m) {
     }
     logmsg("PROJECT compatible with FL %S (host %s); original version event preserved", g_fl.build, g_hostFlBuild);
     samples_rewrite(&d, &n);
+    if (g_compatFault) { free(d); return; }
     if (name[0]) {
-        DWORD k = GetEnvironmentVariableW(L"USERPROFILE", dir, MAX_PATH);
-        if (!k || k >= MAX_PATH) wcscpy_s(dir, MAX_PATH, L"C:");
-        wcscat_s(dir, MAX_PATH, L"\\Documents\\flim");
-        SHCreateDirectoryExW(NULL, dir, NULL);
-        swprintf_s(path, MAX_PATH * 2, L"%s\\%s", dir, name);
-        backup_existing(path);
-    } else swprintf_s(path, MAX_PATH * 2, L"%S\\project_%ld.flp", g_tmpDir, InterlockedIncrement(&g_tmpSeq));
-    if (!write_file_w(path, d, n)) { logmsg("PROJECT could not write %S", path); free(d); return; }
+        int created;
+        if (FAILED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, dir)) || !*dir ||
+            wcslen(dir) + 6 >= MAX_PATH || wcslen(dir) + 7 + wcslen(name) >= MAX_PATH) goto path_failed;
+        wcscat_s(dir, MAX_PATH, L"\\flim");
+        created = SHCreateDirectoryExW(NULL, dir, NULL);
+        if (created != ERROR_SUCCESS && created != ERROR_ALREADY_EXISTS && created != ERROR_FILE_EXISTS) goto path_failed;
+        swprintf_s(path, MAX_PATH, L"%s\\%s", dir, name);
+        if (!backup_existing(path)) goto path_failed;
+    } else {
+        if (strlen(g_tmpDir) + 40 >= MAX_PATH) goto path_failed;
+        swprintf_s(path, MAX_PATH, L"%S\\project_%ld.flp", g_tmpDir, InterlockedIncrement(&g_tmpSeq));
+    }
+    q.path = (char *)_wcsdup(path);
+    if (!q.path) goto path_failed;
+    if (!write_file_w(path, d, n)) { free(q.path); goto path_failed; }
     free(d);
     // supersede anything queued or held from the previous project
     EnterCriticalSection(&g_heldLock);
     for (i = 0; i < g_nheld; i++) free(g_held[i].msg);
-    g_nheld = 0;
+    g_nheld = 0; g_heldBytes = 0;
     LeaveCriticalSection(&g_heldLock);
     InterlockedExchange(&g_projBusy, 1);
     InterlockedExchange(&g_projRemote, 1);
     InterlockedExchange(&g_projDoneQueued, 0);
     g_projSince = GetTickCount();
     logmsg("PROJECT received %S (%zu bytes): loading", path, n);
-    QItem q; memset(&q, 0, sizeof(q));
     q.type = T_PROJLOAD;
     q.mode = name[0] != 0;
-    q.path = (char *)_wcsdup(path);
     enqueue(&q);
+    return;
+invalid:
+    free(d);
+    sharing_fail("Shared project: session stopped", "The shared project name or contents were incomplete or invalid. The previous local project was kept.");
+    return;
+path_failed:
+    free(d);
+    sharing_fail("Project save failed: session stopped", "The shared project could not be saved safely. Check disk space, folder permissions, and the project name length before reconnecting.");
 }
 
 // Member (recv thread): keep ops for after the load. Returns 1 if held.
 static int hold_if_loading(const char *m) {
-    if (!g_projBusy || g_isLeader || !strstr(m, "\"t\":\"op\"")) return 0;
+    size_t bytes;
+    char *copy = NULL;
+    int failed = 0;
+    if (!g_projBusy || g_isLeader || !fj_member_is((FlJson){m, strlen(m)}, "t", "\"op\"")) return 0;
+    bytes = strlen(m) + 1;
     EnterCriticalSection(&g_heldLock);
-    if (g_nheld == g_capheld) { g_capheld = g_capheld ? g_capheld * 2 : 64; g_held = (HeldMsg *)realloc(g_held, sizeof(HeldMsg) * g_capheld); }
-    g_held[g_nheld].gen = session_generation();
-    g_held[g_nheld++].msg = _strdup(m);
+    if (g_nheld >= HELD_MAX_COUNT || bytes > HELD_MAX_BYTES - g_heldBytes || g_compatFault) failed = 1;
+    if (!failed && g_nheld == g_capheld) {
+        int cap = g_capheld ? g_capheld * 2 : 64;
+        HeldMsg *items = (HeldMsg *)realloc(g_held, sizeof(HeldMsg) * cap);
+        if (!items) failed = 1;
+        else { g_held = items; g_capheld = cap; }
+    }
+    if (!failed && !(copy = _strdup(m))) failed = 1;
+    if (!failed) {
+        g_held[g_nheld].gen = session_generation();
+        g_held[g_nheld++].msg = copy; g_heldBytes += bytes;
+    }
     LeaveCriticalSection(&g_heldLock);
+    if (failed) sharing_fail("Project edit backlog: session stopped", "Too many edits arrived while loading the project, or memory ran out. Reconnect and resync before continuing to share.");
     return 1;
 }
 
@@ -4052,36 +5022,56 @@ static void on_pat_op(const char *m) {
 
 // A peer's pattern op (main thread): the same call here, dialogs answered as the peer did.
 static void do_patop(const QItem *it) {
-    const char *m = it->path, *q = strstr(m, "\"p\":[");
-    int slot = 0, k, n = 0, a = 0, b = 0, c = 0;
+    const char *m = it->path, *p, *end, *start;
+    FlJson root = {m, strlen(m)}, op, value, patterns;
+    int slot = 0, k, n = 0, a = 0, b = 0, c = 0, faulted = 0;
+    unsigned char seen[MAX_PAT] = {0};
     static int pats[MAX_PAT];
-    void *proj = fl_project();
-    if (!q || !proj || !int_after(m, NULL, "\"s\":", &slot)) return;
+    void *proj;
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fj_get(op, "s", &value) || !shared_int32(value, &slot) ||
+        !fj_get(op, "p", &patterns) || patterns.n < 2 || patterns.p[0] != '[') goto invalid;
     for (k = 0; k < PATOP_N && PATOP_SLOT[k] != slot; k++) {}
-    if (k == PATOP_N || !g_patOrig[k]) { logmsg("PATTERN op 0x%x: not supported here", slot); return; }
-    for (q += 5; *q && *q != ']' && n < MAX_PAT; ) {
-        char *e;
-        pats[n++] = (int)strtol(q, &e, 10);
-        if (e == q) break;
-        q = e;
-        if (*q == ',') q++;
+    if (k == PATOP_N) goto invalid;
+    p = patterns.p + 1; end = patterns.p + patterns.n - 1; fj_space(&p, end);
+    while (p < end) {
+        uint64_t pattern;
+        start = p;
+        if (n == MAX_PAT || !fj_value(&p, end, 0)) goto invalid;
+        value.p = start; value.n = (size_t)(p - start);
+        if (!fc_uint(value, &pattern) || !pattern || pattern >= MAX_PAT || seen[pattern]) goto invalid;
+        seen[pattern] = 1; pats[n++] = (int)pattern;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); }
     }
-    if (!n) return;
-    int_after(m, NULL, "\"a\":", &a);
-    int_after(m, NULL, "\"b\":", &b);
-    int_after(m, NULL, "\"c\":", &c);
+    if (!n || (k == PATOP_INSERT && n != 1) ||
+        (fj_get(op, "a", &value) && !shared_int32(value, &a)) ||
+        (fj_get(op, "b", &value) && !shared_int32(value, &b)) ||
+        (fj_get(op, "c", &value) && (!shared_int32(value, &c) || c < 0 || c > 65535))) goto invalid;
+    proj = fl_project();
+    if (!proj || !g_patOrig[k]) {
+        sharing_fail("Shared pattern operation: session stopped", "FL Studio is not ready to apply the shared pattern operation. Reconnect and resync before continuing to share.");
+        return;
+    }
     InterlockedExchange(&g_patRemote, 1);
     InterlockedExchange(&g_mbAuto, 1);
     InterlockedIncrement(&g_patDepth);
     __try {
         if (k == PATOP_INSERT) g_patOrig[k](proj, (uint64_t)(int64_t)pats[0], 0, 0, 0, 0);
         else g_patOrig[k](proj, (uint64_t)pats, (uint64_t)(int64_t)(n - 1), (uint64_t)(int64_t)a, (uint64_t)(int64_t)b, (uint64_t)(uint16_t)c);
-    } __except (EXCEPTION_EXECUTE_HANDLER) { logmsg("PATTERN op 0x%x faulted", slot); }
+    } __except (EXCEPTION_EXECUTE_HANDLER) { faulted = 1; logmsg("PATTERN op 0x%x faulted", slot); }
     InterlockedDecrement(&g_patDepth);
     InterlockedExchange(&g_mbAuto, 0);
     InterlockedExchange(&g_patRemote, 0);
+    if (faulted) {
+        sharing_fail("Shared pattern operation: session stopped", "FL Studio could not complete the shared pattern operation. Check your local patterns before reconnecting.");
+        return;
+    }
     notes_rebaseline(0);
     logmsg("PATTERN op applied: slot 0x%x, %d patterns (first %d)", slot, n, pats[0]);
+    return;
+invalid:
+    sharing_fail("Shared pattern operation: session stopped", "The shared pattern operation is incomplete or invalid. Your local patterns were kept.");
 }
 
 // ---------------- unit locks (mutexing) ----------------
@@ -4106,7 +5096,6 @@ typedef struct {
 } ULock;
 static ULock g_ulocks[ULOCK_MAX];
 static int   g_nulocks = 0;
-static CRITICAL_SECTION g_ulockLock;   // also guards the last/pending state buffers below
 static char  g_peersJson[4096];        // last welcome/presence message (id -> name for hints)
 
 // Last agreed state per unit (what a revert restores) and our sent-but-unconfirmed state.
@@ -4115,11 +5104,16 @@ static UState g_patLast[MAX_PAT], g_patPend[MAX_PAT];
 static UState g_clipLast, g_clipPend;
 static int    g_clipLastArr = -1;
 
-static void ustate_set(UState *s, const unsigned char *d, unsigned n, size_t rec) {
+static int ustate_set(UState *s, const unsigned char *d, unsigned n, size_t rec) {
+    unsigned char *copy;
+    if (!rec || n > SIZE_MAX / rec || (n && !d)) return 0;
+    copy = n ? (unsigned char *)malloc((size_t)n * rec) : NULL;
+    if (n && !copy) return 0;
+    if (n) memcpy(copy, d, (size_t)n * rec);
     free(s->d);
-    s->d = n ? (unsigned char *)malloc((size_t)n * rec) : NULL;
-    if (n) memcpy(s->d, d, (size_t)n * rec);
+    s->d = copy;
     s->n = n; s->known = 1;
+    return 1;
 }
 static void ustate_move(UState *dst, UState *src) { free(dst->d); *dst = *src; memset(src, 0, sizeof(*src)); }
 
@@ -4152,10 +5146,24 @@ static void fl_hint(const char *msg) {
 }
 
 // "plug:ch:<i>" / "plug:fx:<track>:<slot>" -> unit. Returns 0 if key is no plugin key.
+static int lock_index(const char *p, size_t n, unsigned limit, int *out) {
+    FlJson value = {p, n}; uint32_t number;
+    if (!fj_u32(value, &number) || number >= limit) return 0;
+    *out = (int)number; return 1;
+}
 static int plug_parse(const char *key, int *unit, int *a, int *b) {
+    const char *sep;
     *b = 0;
-    if (sscanf_s(key, "plug:ch:%d", a) == 1) { *unit = U_CH; return *a >= 0 && *a < MAX_CH; }
-    if (sscanf_s(key, "plug:fx:%d:%d", a, b) == 2) { *unit = U_FX; return *a >= 0 && *a < MAX_MIX && *b >= 0 && *b < MAX_FX_SLOTS; }
+    if (!strncmp(key, "plug:ch:", 8) && lock_index(key + 8, strlen(key + 8), MAX_CH, a)) { *unit = U_CH; return 1; }
+    if (!strncmp(key, "plug:fx:", 8) && (sep = strchr(key + 8, ':')) != NULL &&
+        lock_index(key + 8, (size_t)(sep - key - 8), MAX_MIX, a) && lock_index(sep + 1, strlen(sep + 1), MAX_FX_SLOTS, b)) { *unit = U_FX; return 1; }
+    return 0;
+}
+static int unit_key_valid(const char *key) {
+    int unit, a, b;
+    if (plug_parse(key, &unit, &a, &b)) return 1;
+    if (!strncmp(key, "pat:", 4)) return lock_index(key + 4, strlen(key + 4), MAX_PAT, &a) && a;
+    if (!strncmp(key, "clips:", 6)) return lock_index(key + 6, strlen(key + 6), 256, &a);
     return 0;
 }
 
@@ -4262,14 +5270,22 @@ static void unit_revert(const char *key) {
         idx = atoi(key + 4);
         if (idx >= 1 && idx < MAX_PAT && g_patLast[idx].known) {
             known = 1; n = g_patLast[idx].n;
-            if (n) { d = (unsigned char *)malloc((size_t)n * NOTE_SIZE); memcpy(d, g_patLast[idx].d, (size_t)n * NOTE_SIZE); }
+            if (n) {
+                d = (unsigned char *)malloc((size_t)n * NOTE_SIZE);
+                if (!d) { LeaveCriticalSection(&g_ulockLock); return; }
+                memcpy(d, g_patLast[idx].d, (size_t)n * NOTE_SIZE);
+            }
             free(g_patPend[idx].d); memset(&g_patPend[idx], 0, sizeof(UState));
         }
     } else if (strncmp(key, "clips:", 6) == 0) {
         idx = atoi(key + 6);
         if (g_clipLast.known && g_clipLastArr == idx) {
             known = 1; n = g_clipLast.n;
-            if (n) { d = (unsigned char *)malloc((size_t)n * CLIP_SIZE); memcpy(d, g_clipLast.d, (size_t)n * CLIP_SIZE); }
+            if (n) {
+                d = (unsigned char *)malloc((size_t)n * CLIP_SIZE);
+                if (!d) { LeaveCriticalSection(&g_ulockLock); return; }
+                memcpy(d, g_clipLast.d, (size_t)n * CLIP_SIZE);
+            }
             free(g_clipPend.d); memset(&g_clipPend, 0, sizeof(UState));
         }
     }
@@ -4290,18 +5306,14 @@ static void do_unitrevert(const QItem *it) {
 
 // Inbound lock messages for unit keys (recv thread). Returns 1 if handled.
 static int on_unit_lock(const char *m) {
-    const char *k = strstr(m, "\"key\":\"");
+    FlJson root = {m, strlen(m)}, value;
     char key[32], owner[64] = "";
-    int i = 0, granted, released = strstr(m, "\"t\":\"lock_released\"") != NULL;
-    if (!k) return 0;
-    k += 7;
-    if (strncmp(k, "pat:", 4) != 0 && strncmp(k, "clips:", 6) != 0 && strncmp(k, "plug:", 5) != 0) return 0;
-    while (k[i] && k[i] != '"' && i < (int)sizeof(key) - 1) { key[i] = k[i]; i++; }
-    key[i] = 0;
-    granted = strstr(m, "\"granted\":true") != NULL;
-    {
-        const char *o = strstr(m, "\"owner\":\"");
-        if (o) { o += 9; for (i = 0; o[i] && o[i] != '"' && i < (int)sizeof(owner) - 1; i++) owner[i] = o[i]; owner[i] = 0; }
+    int granted = 0, released = fj_member_is(root, "t", "\"lock_released\"");
+    if (!fc_text(root, "key", key, sizeof(key)) || !unit_key_valid(key)) return 0;
+    if (!released) {
+        if (!fj_get(root, "granted", &value) || (!fj_is(value, "true") && !fj_is(value, "false")) ||
+            !fc_text(root, "owner", owner, sizeof(owner)) || !owner[0] || !fc_target(owner)) return 1;
+        granted = fj_is(value, "true");
     }
     EnterCriticalSection(&g_ulockLock);
     ULock *l = ulock_get(key, 1);
@@ -4358,14 +5370,53 @@ static int plug_param_unit(uint32_t id, int *unit, int *a, int *b) {
 }
 
 // Last agreed state of a plugin (.fst bytes): set on baseline, send and remote apply. NULL clears.
-static void plug_agreed_set(int unit, int a, int b, const unsigned char *d, size_t n) {
+static int plug_agreed_set(int unit, int a, int b, const unsigned char *d, size_t n) {
+    int ok = 1;
     EnterCriticalSection(&g_ulockLock);
     UState *s = plug_last(unit, a, b);
     if (s) {
-        if (d && n) ustate_set(s, d, (unsigned)n, 1);
+        if (d && n) ok = n <= FLIM_CLOUD_MAX && ustate_set(s, d, (unsigned)n, 1);
         else { free(s->d); memset(s, 0, sizeof(*s)); }
     }
     LeaveCriticalSection(&g_ulockLock);
+    if (!ok) sharing_fail("Shared plugin: session stopped", "There is not enough memory to preserve the shared preset. No placeholder state was sent.");
+    return ok;
+}
+
+static unsigned char *plug_agreed_copy(int unit, int a, int b, size_t *n) {
+    unsigned char *d = NULL;
+    EnterCriticalSection(&g_ulockLock);
+    UState *s = plug_last(unit, a, b);
+    *n = 0;
+    if (s && s->known && s->n) {
+        d = (unsigned char *)malloc(s->n);
+        if (d) { memcpy(d, s->d, s->n); *n = s->n; }
+    }
+    LeaveCriticalSection(&g_ulockLock);
+    return d;
+}
+
+/* Keep unavailable states attached to their channels, never to the old rack index. */
+static void plug_agreed_channels(const int *from, int n, int deleted) {
+    static UState old[MAX_CH];
+    int i;
+    EnterCriticalSection(&g_ulockLock);
+    for (i = 0; i < MAX_CH; i++) {
+        old[i] = g_plugLastCh[i]; memset(&g_plugLastCh[i], 0, sizeof(UState));
+        if (!g_chU[i].unavailable) { free(old[i].d); memset(&old[i], 0, sizeof(UState)); }
+    }
+    for (i = 0; i < n - (deleted >= 0); i++) {
+        int src = from ? from[i] : i + (i >= deleted);
+        g_plugLastCh[i] = old[src]; memset(&old[src], 0, sizeof(UState));
+    }
+    for (i = 0; i < MAX_CH; i++) free(old[i].d);
+    LeaveCriticalSection(&g_ulockLock);
+}
+
+static int plug_param_blocked(uint32_t id) {
+    int unit, a, b;
+    Unit *u;
+    return plug_param_unit(id, &unit, &a, &b) && (g_portableLocal || ((u = unit_ptr(unit, a, b)) && u->unavailable));
 }
 // Channel indices moved / project replaced: stored states no longer belong to their index.
 static void plug_agreed_reset(int channels, int fx) {
@@ -4391,19 +5442,32 @@ static int load_queued(int unit, int a, int b) {
 static void plug_revert_state(int unit, int a, int b) {
     unsigned char *d = NULL;
     unsigned n = 0;
+    int failed = 0;
     if (load_queued(unit, a, b)) return;         // the holder's newer state is about to replace ours anyway
     EnterCriticalSection(&g_ulockLock);
     UState *s = plug_last(unit, a, b);
-    if (s && s->known && s->n) { d = (unsigned char *)malloc(s->n); memcpy(d, s->d, s->n); n = s->n; }
+    if (s && s->known && s->n) {
+        d = (unsigned char *)malloc(s->n);
+        if (d) { memcpy(d, s->d, s->n); n = s->n; }
+        else failed = 1;
+    }
     LeaveCriticalSection(&g_ulockLock);
+    if (failed) { sharing_fail("Shared plugin: session stopped", "There is not enough memory to restore the agreed plugin state."); return; }
     if (!d) { logmsg("PLUG %s %d/%d: no agreed state to revert to", unit == U_CH ? "ch" : "fx", a, b); return; }
     char *path = tmp_path("rv");
+    if (!path) { free(d); return; }
     FILE *f = NULL;
     if (fopen_s(&f, path, "wb") == 0 && f) {
-        fwrite(d, 1, n, f); fclose(f);
+        failed = fwrite(d, 1, n, f) != n;
+        if (fclose(f)) failed = 1;
+    } else failed = 1;
+    if (failed) {
+        DeleteFileA(path); free(path);
+        sharing_fail("Shared plugin: session stopped", "The agreed plugin state could not be written completely. Check free disk space before reconnecting.");
+    } else {
         enqueue_unit(T_LOAD, unit, a, b, 0, path);
         logmsg("PLUG %s %d/%d: reverting to the agreed state (%u bytes)", unit == U_CH ? "ch" : "fx", a, b, n);
-    } else free(path);
+    }
     free(d);
 }
 
@@ -4543,22 +5607,13 @@ static void focus_poll(DWORD now) {
 
 // Inbound focus op (recv thread): {"t":"op","seq":..,"from":"<id>","op":{"kind":"focus","w":"..."}}
 static void on_focus(const char *m) {
-    const char *f = strstr(m, "\"from\":\""), *w = strstr(m, "\"w\":\"");
-    char id[64], where[200];
-    int i, o = 0;
-    if (!f || !w) return;
-    for (f += 8, i = 0; f[i] && f[i] != '"' && i < (int)sizeof(id) - 1; i++) id[i] = f[i];
-    id[i] = 0;
-    for (w += 5; *w && *w != '"' && o < (int)sizeof(where) - 1; w++) {
-        if (*w == '\\' && w[1]) {
-            w++;
-            if (*w == 'u') { w += 4; continue; }             // json_esc only escapes control characters this way
-        }
-        where[o++] = *w;
-    }
-    where[o] = 0;
+    FlJson root = {m, strlen(m)}, op, value;
+    char id[64], where[200]; int i;
+    if (!fc_text(root, "from", id, sizeof(id)) || !fc_target(id) || !id[0] ||
+        !fj_get(root, "op", &op) || !fj_get(op, "w", &value) || !fj_decode(value, where, sizeof(where))) return;
+    for (i = 0; where[i]; i++) if ((unsigned char)where[i] < 32) where[i] = ' ';
     EnterCriticalSection(&g_netTextLock);
-    for (i = 0; i < g_nfocus && strcmp(g_focus[i].id, id) != 0; i++) {}
+    for (i = 0; i < g_nfocus && strcmp(g_focus[i].id, id); i++) {}
     if (i == g_nfocus && g_nfocus < FOCUS_MAX) strcpy_s(g_focus[g_nfocus++].id, sizeof(g_focus[0].id), id);
     if (i < g_nfocus) strcpy_s(g_focus[i].where, sizeof(g_focus[0].where), where);
     LeaveCriticalSection(&g_netTextLock);
@@ -4600,8 +5655,8 @@ static void focus_summary(char *out, int cap, const char *sep) {
 #define PL_GRID       (g_fl.PL_GRID)        // playlist form: TEventPanel_AU (clip grid)
 #define CTL_BOUNDS    0x90         // control: Left, Top, Width, Height in its form's client area
 #define GRID_VSCROLL  (g_fl.GRID_VSCROLL)        // grid panel: vertical scroll, pixels
-#define PR_TOPKEY     0x418        // piano roll grid: y = (topkey - key) * keyh - vscroll
-#define PR_KEYH       0x520
+#define PR_TOPKEY     (flim_profile_fl24(&g_fl) ? 0x3d4 : 0x418)
+#define PR_KEYH       (flim_profile_fl24(&g_fl) ? 0x510 : 0x520)
 #define TRK_TOP       0xb4         // playlist track (arrangement + t * 0x114): top y and height, pixels
 #define TRK_H         0xb8
 #define CUR_SEND_MS   80
@@ -4713,23 +5768,22 @@ static void cursor_poll(DWORD now) {
 
 // Inbound cur op (recv thread): {"t":"op",..,"from":"<id>","op":{"kind":"cur","w":"pr","p":3,"x":..,"y":..}}
 static void on_cursor(const char *m) {
-    const char *f = strstr(m, "\"from\":\""), *w = strstr(m, "\"w\":\"");
-    char id[64];
-    int i, p = 0, x = 0, y = 0;
-    if (!f || !w) return;
-    for (f += 8, i = 0; f[i] && f[i] != '"' && i < (int)sizeof(id) - 1; i++) id[i] = f[i];
-    id[i] = 0;
-    int_after(m, NULL, "\"p\":", &p);
-    int_after(m, NULL, "\"x\":", &x);
-    int_after(m, NULL, "\"y\":", &y);
+    FlJson root = {m, strlen(m)}, op, value;
+    char id[64], window[8]; int i, p = 0, x = 0, y = 0, on;
+    if (!fc_text(root, "from", id, sizeof(id)) || !id[0] || !fc_target(id) || !fj_get(root, "op", &op) ||
+        !fc_text(op, "w", window, sizeof(window))) return;
+    on = !strcmp(window, "pr") || !strcmp(window, "pl");
+    if (!on && window[0]) return;
+    if (on && (!fj_get(op, "p", &value) || !shared_int32(value, &p) || p < 0 ||
+        (!strcmp(window, "pr") && (!p || p >= MAX_PAT)) ||
+        !fj_get(op, "x", &value) || !shared_int32(value, &x) || x < 0 || x > 100000000 ||
+        !fj_get(op, "y", &value) || !shared_int32(value, &y) || y < 0 || y > 100000000)) return;
     EnterCriticalSection(&g_netTextLock);
-    for (i = 0; i < g_ncur && strcmp(g_cur[i].id, id) != 0; i++) {}
+    for (i = 0; i < g_ncur && strcmp(g_cur[i].id, id); i++) {}
     if (i == g_ncur && g_ncur < FOCUS_MAX) { memset(&g_cur[i], 0, sizeof(g_cur[i])); g_cur[i].why = -1; strcpy_s(g_cur[g_ncur++].id, sizeof(g_cur[0].id), id); }
     if (i < g_ncur) {
         PeerCursor *c = &g_cur[i];
-        int on = w[5] == 'p' && (w[6] == 'r' || w[6] == 'l');
-        c->w[0] = on ? 'p' : 0; c->w[1] = on ? w[6] : 0; c->w[2] = 0;
-        c->p = p; c->x = x; c->y = y; c->at = GetTickCount();
+        strcpy_s(c->w, sizeof(c->w), window); c->p = p; c->x = x; c->y = y; c->at = GetTickCount();
     }
     LeaveCriticalSection(&g_netTextLock);
 }
@@ -4852,7 +5906,9 @@ static int unit_before_send(const char *key, int isPat, int idx, const unsigned 
     int already;
     if (!ulock_local(key, &already)) return 0;
     EnterCriticalSection(&g_ulockLock);
-    ustate_set(isPat ? &g_patPend[idx] : &g_clipPend, d, n, isPat ? NOTE_SIZE : CLIP_SIZE);
+    if (!ustate_set(isPat ? &g_patPend[idx] : &g_clipPend, d, n, isPat ? NOTE_SIZE : CLIP_SIZE)) {
+        LeaveCriticalSection(&g_ulockLock); return 0;
+    }
     if (already) unit_commit(key);               // lock already ours: this state is agreed now
     LeaveCriticalSection(&g_ulockLock);
     return 1;
@@ -4860,8 +5916,12 @@ static int unit_before_send(const char *key, int isPat, int idx, const unsigned 
 // A unit was replaced from outside (remote op / revert): that state is the agreed one.
 static void unit_agreed(int isPat, int idx, const unsigned char *d, unsigned n) {
     EnterCriticalSection(&g_ulockLock);
-    if (isPat) { if (idx >= 1 && idx < MAX_PAT) ustate_set(&g_patLast[idx], d, n, NOTE_SIZE); }
-    else { ustate_set(&g_clipLast, d, n, CLIP_SIZE); g_clipLastArr = idx; }
+    if (isPat) {
+        if (idx >= 1 && idx < MAX_PAT && !ustate_set(&g_patLast[idx], d, n, NOTE_SIZE)) g_patLast[idx].known = 0;
+    } else {
+        if (!ustate_set(&g_clipLast, d, n, CLIP_SIZE)) g_clipLast.known = 0;
+        g_clipLastArr = idx;
+    }
     LeaveCriticalSection(&g_ulockLock);
 }
 // Baseline (start, project load, structural ops): the current state of every unit is agreed.
@@ -4875,7 +5935,9 @@ static void units_capture_all(void) {
             char *a = pat_notes_arr(p);
             unsigned n = a ? *(unsigned *)(a + NOTES_COUNT) : 0;
             if (n > 1000000) n = 0;
-            ustate_set(&g_patLast[p], n ? *(unsigned char **)(a + NOTES_DATA) : NULL, n, NOTE_SIZE);
+            if (!ustate_set(&g_patLast[p], n ? *(unsigned char **)(a + NOTES_DATA) : NULL, n, NOTE_SIZE)) {
+                g_patLast[p].known = 0; continue;
+            }
             for (i = 0; i < n; i++) g_patLast[p].d[(size_t)i * NOTE_SIZE + NOTE_SEL_OFS] &= (unsigned char)~NOTE_SEL_BIT;
         } __except (EXCEPTION_EXECUTE_HANDLER) { g_patLast[p].known = 0; }
     }
@@ -4883,8 +5945,12 @@ static void units_capture_all(void) {
         int arr = cur_arr();
         char *ca = arr_clips(arr);
         unsigned n = ca ? *(unsigned *)(ca + CLIPS_COUNT) : 0;
-        if (n > 200000) n = 0;
-        ustate_set(&g_clipLast, n ? *(unsigned char **)(ca + CLIPS_DATA) : NULL, n, CLIP_SIZE);
+        if (!ca || n > 200000) { g_clipLast.known = 0; __leave; }
+        unsigned char *wire = n ? clips_from_native(*(unsigned char **)(ca + CLIPS_DATA), n) : NULL;
+        if (n && !wire) { g_clipLast.known = 0; __leave; }
+        int stored = ustate_set(&g_clipLast, wire, n, CLIP_SIZE);
+        free(wire);
+        if (!stored) { g_clipLast.known = 0; __leave; }
         for (i = 0; i < n; i++) g_clipLast.d[(size_t)i * CLIP_SIZE + CLIP_SEL_OFS] &= (unsigned char)~CLIP_SEL_BIT;
         g_clipLastArr = arr;
     } __except (EXCEPTION_EXECUTE_HANDLER) { g_clipLast.known = 0; }
@@ -4895,7 +5961,7 @@ static void run_task(const QItem *it) {
     LONG previousGen = g_workGen; int previousBound = g_workBound;
     int remoteHeavy = it->type == T_LOAD || it->type == T_ADDCH || it->type == T_DELCH || it->type == T_FXCLEAR;
     EnterCriticalSection(&g_lifecycleLock);
-    if (it->sessionGen != g_netGen) { discard_task(it); LeaveCriticalSection(&g_lifecycleLock); return; }
+    if (it->sessionGen != g_netGen || g_compatFault) { discard_task(it); LeaveCriticalSection(&g_lifecycleLock); return; }
     g_workBound = 1; g_workGen = it->sessionGen;
     if (remoteHeavy) wguard_begin();
     run_task_inner(it);
@@ -4904,11 +5970,74 @@ static void run_task(const QItem *it) {
     LeaveCriticalSection(&g_lifecycleLock);
 }
 
+static int recovery_checkpoint(void) {
+    wchar_t dir[MAX_PATH], path[MAX_PATH], working[MAX_PATH]; SYSTEMTIME time; size_t n = 0;
+    unsigned char *d = project_snapshot(&n); int created, ok;
+    if (!d) return 0;
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, dir)) || wcslen(dir) + 90 >= MAX_PATH) { free(d); return 0; }
+    wcscat_s(dir, MAX_PATH, L"\\flim\\recovery");
+    created = SHCreateDirectoryExW(NULL, dir, NULL);
+    if (created != ERROR_SUCCESS && created != ERROR_ALREADY_EXISTS && created != ERROR_FILE_EXISTS) { free(d); return 0; }
+    GetLocalTime(&time);
+    swprintf_s(path, MAX_PATH, L"%s\\before-join-%04u%02u%02u-%02u%02u%02u-%lu-%ld.flp", dir,
+        time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond,
+        GetCurrentProcessId(), InterlockedIncrement(&g_tmpSeq));
+    ok = !file_exists_w(path) && write_file_w(path, d, n); free(d);
+    if (ok) {
+        logmsg("RECOVERY saved local project before portable join: %S", path);
+        swprintf_s(working, MAX_PATH, L"%s\\session-%lu-%ld.flp", dir, GetCurrentProcessId(), InterlockedIncrement(&g_tmpSeq));
+        ok = !file_exists_w(working) && copy_file_w(path, working) && set_project_file(working);
+    }
+    return ok;
+}
+
+static int portable_channels(int channels) {
+    void **items; int i, n, had;
+    if (channels < 0 || channels > MAX_CH) return 0;
+    n = chan_list(&items);
+    __try {
+        for (i = n - 1; i >= 1; i--) {
+            g_delChannel((unsigned)i, 0, DELCHAN_FLAGS);
+            if (chan_list(&items) != i) return 0;
+        }
+        /* Keep another sampler present when replacing FL's last channel. */
+        had = chan_list(&items);
+        if (!g_addChannel(-1, 0, 1) || chan_list(&items) != had + 1) return 0;
+        if (had) g_delChannel(0, 0, DELCHAN_FLAGS);
+        if (chan_list(&items) != 1) return 0;
+        for (i = 1; i < channels; i++) if (!g_addChannel(-1, 0, 1) || chan_list(&items) != i + 1) return 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    return 1;
+}
+
+static void portable_start(int channels) {
+    int i, t, s;
+    if (!g_portableLocal || channels < 0 || channels > MAX_CH) return;
+    if (!recovery_checkpoint()) {
+        sharing_fail("Recovery copy failed: sharing paused", "The local project could not be preserved before joining the newer host. Your local project was kept."); return;
+    }
+    InterlockedExchange(&g_projBusy, 1);
+    InterlockedExchange(&g_projDoneQueued, 1);
+    if (!portable_channels(channels)) { sharing_fail("Portable sync: sharing paused", "FL could not prepare the shared note channels. Your previous project is in the recovery folder."); proj_end(); return; }
+    for (i = 1; i < MAX_PAT && !g_compatFault; i++) if (notes_hash(i)) notes_apply(i, NULL, 0);
+    for (i = 0; i < arr_count() && !g_compatFault; i++) if (clips_hash(i)) clips_apply(i, NULL, 0);
+    for (t = 0; t < mix_count() && t < MAX_MIX && !g_compatFault; t++) for (s = 0; s < MAX_FX_SLOTS && !g_compatFault; s++) {
+        QItem clear = {0}; clear.a = t; clear.b = s; do_fxclear(&clear);
+    }
+    if (g_compatFault) { proj_end(); return; }
+    proj_rebaseline();
+    for (i = 0; i < channels; i++) g_chU[i].unavailable = 2;
+    plugins_changed();
+    proj_end();
+    logmsg("PORTABLE ready: %d note channels; newer plugin/project data stays outside the older FL loader", channels);
+    fl_hint("Connected to a newer FL host. Notes and shared controls sync automatically; unsupported sounds and playlist features are unavailable here.");
+}
+
 static void run_task_inner(const QItem *it) {
     switch (it->type) {
     case T_SNAP:   do_snap(it); break;
     case T_LOAD:   do_load(it); DeleteFileA(it->path); free(it->path); break;
-    case T_ADDCH:  do_addch(it); break;      // hands it->path on to a T_LOAD
+    case T_ADDCH:  do_addch(it); DeleteFileA(it->path); free(it->path); break;
     case T_DELCH:  do_delch(it); break;
     case T_STRUCT: do_struct(); break;
     case T_FULL:   do_full(); break;
@@ -4916,6 +6045,7 @@ static void run_task_inner(const QItem *it) {
     case T_FXCLEAR: do_fxclear(it); break;
     case T_FXSYNC: do_fxsync(it); free(it->order); break;
     case T_NOTESNAP: do_notesnap(it); break;
+    case T_NOTEBASE: notes_rebaseline(0); break;
     case T_NOTES:  do_notes(it); free(it->order); break;
     case T_NOTESYNC: do_notesync(it); free(it->order); break;
     case T_PROJLOAD: do_projload(it); free(it->path); break;
@@ -4928,6 +6058,9 @@ static void run_task_inner(const QItem *it) {
     case T_METASNAP: do_metasnap(it); break;
     case T_META:   do_meta(it); free(it->path); break;
     case T_PATOP:  do_patop(it); free(it->path); break;
+    case T_PLUGRETRY: plugins_retry(); break;
+    case T_PORTABLESEND: portable_send(it->path); free(it->path); break;
+    case T_PORTABLESTART: portable_start(it->a); break;
     }
 }
 
@@ -4935,6 +6068,7 @@ static void run_task_inner(const QItem *it) {
 static volatile LONG g_hookCalls = 0;
 
 static void drain_queue_mainthread(void) {
+    unsigned light = 0; DWORD started = GetTickCount();
     if (InterlockedExchange(&g_inHook, 1)) return;     // FL may pump messages inside a plugin load
     if (g_wguardUntil && GetTickCount() - g_wguardLast >= 30) wguard_pass();
     if (g_uiWanted && InterlockedExchange(&g_uiWanted, 0)) ui_create();
@@ -4945,7 +6079,7 @@ static void drain_queue_mainthread(void) {
         it = g_q[g_qh]; g_qh = (g_qh + 1) % QCAP;
         LeaveCriticalSection(&g_qLock);
 
-        if (it.sessionGen != g_netGen ||
+        if (it.sessionGen != g_netGen || g_compatFault ||
             (g_projBusy && it.type != T_PROJLOAD && it.type != T_PROJDONE && it.type != T_PROJSNAP)) {
             discard_task(&it);
             continue;
@@ -4953,15 +6087,22 @@ static void drain_queue_mainthread(void) {
 
         if (it.type != T_PARAM) {
             DWORD t0 = GetTickCount();
+            int emptyBaseline = it.type == T_NOTES && it.b == 2 && it.mode == FNC_HEADER &&
+                it.a > 0 && it.a < MAX_PAT && !g_noteSets[it.a].count && !notes_hash(it.a);
             run_task(&it);
             DWORD dt = GetTickCount() - t0;
             if (dt > 50) logmsg("SLOW main-thread task type=%d unit=%d %d/%d took %lu ms", it.type, it.unit, it.a, it.b, dt);
+            if (emptyBaseline && ++light < 32 && GetTickCount() - started < 4) continue;
             // one heavy FL call per tick; come back for the rest
             if (g_qh != g_qt && g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0);
             break;
         }
         EnterCriticalSection(&g_lifecycleLock);
-        if (it.sessionGen != g_netGen || (it.mode == 1 && !unit_poll_current(param_unit(it.id), it.applyGen, GetTickCount()))) { LeaveCriticalSection(&g_lifecycleLock); continue; }
+        if (it.sessionGen != g_netGen || g_compatFault || (it.mode == 1 && !unit_poll_current(param_unit(it.id), it.applyGen, GetTickCount()))) { LeaveCriticalSection(&g_lifecycleLock); continue; }
+        if (plug_param_blocked(it.id)) {
+            if (!it.mode) pend_put(it.id, it.v);
+            LeaveCriticalSection(&g_lifecycleLock); continue;
+        }
         Slot *s = slot_by_id(it.id);
         if (s) {
             // Record the value before writing so the poller sees no change, and bump
@@ -4975,6 +6116,10 @@ static void drain_queue_mainthread(void) {
         if (s) InterlockedIncrement(&s->gen);
         logmsg("APPLY id=0x%08x v=%u ret=%u", it.id, it.v, r);
         LeaveCriticalSection(&g_lifecycleLock);
+        if (++light >= 64 || GetTickCount() - started >= 4) {
+            if (g_qh != g_qt && g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0);
+            break;
+        }
     }
     InterlockedExchange(&g_inHook, 0);
 }
@@ -5025,16 +6170,6 @@ static LRESULT CALLBACK callWndHook(int code, WPARAM wp, LPARAM lp) {
     return CallNextHookEx(g_hookCwp, code, wp, lp);
 }
 
-static BOOL CALLBACK findMainWnd(HWND h, LPARAM lp) {
-    DWORD pid = 0;
-    GetWindowThreadProcessId(h, &pid);
-    if (pid == GetCurrentProcessId() && IsWindowVisible(h) && GetWindow(h, GW_OWNER) == NULL) {
-        *(HWND *)lp = h;
-        return FALSE;
-    }
-    return TRUE;
-}
-
 static BOOL CALLBACK findMainForm(HWND h, LPARAM lp) {
     DWORD pid = 0;
     char c[64];
@@ -5046,16 +6181,32 @@ static BOOL CALLBACK findMainForm(HWND h, LPARAM lp) {
 
 static int install_mainthread_hook(void) {
     HWND h = NULL;
+    DWORD pid = 0, tid, getError, callError;
+    HHOOK messages, calls;
     int tries;
-    for (tries = 0; tries < 600 && !h; tries++) { EnumWindows(findMainWnd, (LPARAM)&h); if (!h) Sleep(100); }
-    if (!h) { logmsg("main window not found"); return -1; }
-    g_mainWnd = h;
-    DWORD tid = GetWindowThreadProcessId(h, NULL);
-    g_hook = SetWindowsHookExW(WH_GETMESSAGE, getMsgHook, g_hinst, tid);
-    g_hookCwp = SetWindowsHookExW(WH_CALLWNDPROC, callWndHook, g_hinst, tid);
-    char cls[128] = { 0 }; GetClassNameA(h, cls, sizeof(cls));
-    logmsg("main window %p class=%s tid=%lu hook=%p", (void *)h, cls, tid, (void *)g_hook);
-    return g_hook ? 0 : -1;
+    for (tries = 0; tries < 600 && !h; tries++) { EnumWindows(findMainForm, (LPARAM)&h); if (!h) Sleep(100); }
+    if (!h) { logmsg("STARTUP FL main form not found within 60 seconds; sharing remains disabled"); return -1; }
+    tid = GetWindowThreadProcessId(h, &pid);
+    if (!tid || pid != GetCurrentProcessId()) {
+        logmsg("STARTUP FL main form no longer belongs to this process; sharing remains disabled"); return -1;
+    }
+    // These callbacks are already loaded in the target process. Passing the DLL module
+    // makes Windows resolve it again and can fail with ERROR_MOD_NOT_FOUND (126).
+    messages = SetWindowsHookExW(WH_GETMESSAGE, getMsgHook, NULL, tid);
+    getError = messages ? 0 : GetLastError();
+    calls = SetWindowsHookExW(WH_CALLWNDPROC, callWndHook, NULL, tid);
+    callError = calls ? 0 : GetLastError();
+    if (!messages || !calls) {
+        if (messages) UnhookWindowsHookEx(messages);
+        if (calls) UnhookWindowsHookEx(calls);
+        logmsg("STARTUP message hooks failed: get=%lu call=%lu; sharing remains disabled", getError, callError);
+        return -1;
+    }
+    g_mainWnd = g_mainForm = h;
+    g_hook = messages; g_hookCwp = calls;
+    logmsg("STARTUP main form %p tid=%lu message hooks ready", (void *)h, tid);
+    PostMessageW(h, WM_NULL, 0, 0);
+    return 0;
 }
 
 // ---------------- detect ----------------
@@ -5101,7 +6252,7 @@ static void schedule_units(DWORD now) {
         int unit = i < nch ? U_CH : U_FX;
         int a = i < nch ? i : (i - nch) / MAX_FX_SLOTS, b = i < nch ? 0 : (i - nch) % MAX_FX_SLOTS;
         Unit *u = unit_ptr(unit, a, b);
-        if (!u) continue;
+        if (!u || u->unavailable) continue;
         if (unit_applying(u, now)) continue;
         if (unit == U_FX && !u->inst && !u->identAt) continue;
         if (u->addAt && now - u->addAt > SETTLE_IDENT_MS) {
@@ -5129,7 +6280,7 @@ static void schedule_units(DWORD now) {
             int unit = k < nch ? U_CH : U_FX;
             int a = k < nch ? k : (k - nch) / MAX_FX_SLOTS, b = k < nch ? 0 : (k - nch) % MAX_FX_SLOTS;
             Unit *u = unit_ptr(unit, a, b);
-            if (!u || (unit == U_FX && !u->inst)) continue;
+            if (!u || u->unavailable || (unit == U_FX && !u->inst)) continue;
             if (u->lastAct || u->identAt || u->addAt || u->baselineAt || now < u->suppressUntil) continue;
             enqueue_unit(T_SNAP, unit, a, b, u->hash ? SNAP_IF_DIFF : SNAP_BASELINE, NULL);
             break;
@@ -5180,6 +6331,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
         for (i = 0; i < n; i++) {
             Slot *s = &g_slots[i];
             Unit *u = param_unit(s->id);
+            if (plug_param_blocked(s->id)) continue;
             LONG ug = u ? u->applyGen : 0;
             if (ug & 1) continue;
             LONG g0 = s->gen;
@@ -5238,7 +6390,7 @@ static DWORD WINAPI pollThread(LPVOID p) {
 
         for (i = 0; i < nc; i++) {
             Slot *s = g_changes[i].s;
-            if (s->gen != g_changes[i].gen || !unit_poll_current(param_unit(s->id), g_changes[i].applyGen, GetTickCount())) continue;
+            if (s->gen != g_changes[i].gen || plug_param_blocked(s->id) || !unit_poll_current(param_unit(s->id), g_changes[i].applyGen, GetTickCount())) continue;
             char key[32];
             int unit, a, b;
             if (plug_param_unit(s->id, &unit, &a, &b)) {
@@ -5272,57 +6424,145 @@ static DWORD WINAPI pollThread(LPVOID p) {
 
 // ---------------- inbound ----------------
 static int jget_u32(const char *s, const char *name, uint32_t *out) {
-    char pat[32]; sprintf_s(pat, sizeof(pat), "\"%s\":", name);
-    const char *p = strstr(s, pat);
-    if (!p) return 0;
-    *out = (uint32_t)strtoul(p + strlen(pat), NULL, 10);
-    return 1;
+    FlJson root = {s, strlen(s)}, value;
+    return fj_get(root, name, &value) && fj_u32(value, out);
 }
 static int jget_paramkey(const char *s, uint32_t *id) {
-    const char *p = strstr(s, "\"key\":\"param:");
-    if (!p) return 0;
-    *id = (uint32_t)strtoul(p + strlen("\"key\":\"param:"), NULL, 10);
-    return 1;
+    FlJson root = {s, strlen(s)}, value; char key[48];
+    if (!fj_get(root, "key", &value) || !fj_text(value, key, sizeof(key)) || strncmp(key, "param:", 6)) return 0;
+    value.p = key + 6; value.n = strlen(key + 6);
+    return fj_u32(value, id) && param_id_in_range(*id);
+}
+
+// Missing-plugin values remain bounded and coalesced here without touching FL.
+#define MAX_PEND 8192
+typedef struct { uint32_t id, v; LONG sessionGen; } Pend;
+static Pend g_pend[MAX_PEND];
+static int g_npend = 0;
+
+static void pending_channels(const int *from, int n, int deleted) {
+    int i, kept = 0;
+    EnterCriticalSection(&g_qLock);
+    for (i = 0; i < g_npend; i++) {
+        Pend p = g_pend[i];
+        if (p.id < 0x70000000u) {
+            int old = (int)(p.id >> 16), next;
+            if (old >= n || old == deleted) continue;
+            if (from) { for (next = 0; next < n && from[next] != old; next++) {} }
+            else next = old - (old > deleted);
+            p.id = ((uint32_t)next << 16) | (p.id & 0xffff);
+        }
+        g_pend[kept++] = p;
+    }
+    g_npend = kept;
+    LeaveCriticalSection(&g_qLock);
 }
 
 // Leader: send every known value so a joining member converges to our state.
-static void send_full_state(void) {
-    int i, n = 0, cap = 64 + g_nslot * 24;
+static void send_full_state_to(const char *target) {
+    int i, n = 0, cap = 64 + (g_nslot + MAX_PEND) * 24;
     char *buf = (char *)malloc(cap);
+    if (!buf) { sharing_fail("Shared controls: session stopped", "There is not enough memory to prepare the shared controls."); return; }
     int o = sprintf_s(buf, cap, "{\"t\":\"op\",\"op\":{\"kind\":\"state.full\",\"vals\":[");
     for (i = 0; i < g_nslot; i++) {
         uint32_t v = g_slots[i].last;
-        if (v == REC_NONE) continue;
+        int unit, a, b;
+        if (target && plug_param_unit(g_slots[i].id, &unit, &a, &b)) continue;
+        if (v == REC_NONE || plug_param_blocked(g_slots[i].id)) continue;
         o += sprintf_s(buf + o, cap - o, "%s[%u,%u]", n ? "," : "", g_slots[i].id, v);
         n++;
     }
+    EnterCriticalSection(&g_qLock);
+    for (i = 0; i < g_npend; i++) {
+        Pend p = g_pend[i];
+        if (target) continue;
+        if (p.sessionGen != g_netGen || !plug_param_blocked(p.id)) continue;
+        o += sprintf_s(buf + o, cap - o, "%s[%u,%u]", n ? "," : "", p.id, p.v); n++;
+    }
+    LeaveCriticalSection(&g_qLock);
     sprintf_s(buf + o, cap - o, "]}}");
-    ws_send(buf);
+    ws_send_to(buf, target);
     free(buf);
     logmsg("STATE sent %d values", n);
 }
 
+static void send_full_state(void) { send_full_state_to(NULL); }
+
+static int peer_id_valid(const char *id) {
+    size_t n = strlen(id), i;
+    if (!n || n > 64) return 0;
+    for (i = 0; i < n; i++) if (!isalnum((unsigned char)id[i]) && id[i] != '_' && id[i] != '-') return 0;
+    return 1;
+}
+
+static void ws_send_to(const char *msg, const char *target) {
+    const char *op; size_t prefix, cap; char *out;
+    if (!target) { ws_send(msg); return; }
+    if (!peer_id_valid(target) || !(op = strstr(msg, "\"op\":{"))) return;
+    prefix = (size_t)(op + 6 - msg); cap = strlen(msg) + strlen(target) + 16;
+    out = (char *)malloc(cap);
+    if (!out) { sharing_fail("Portable sync: sharing paused", "There is not enough memory to prepare the shared state."); return; }
+    memcpy(out, msg, prefix);
+    sprintf_s(out + prefix, cap - prefix, "\"for\":\"%s\",%s", target, msg + prefix);
+    ws_send(out); free(out);
+}
+
+static void request_state(void) {
+    ws_send(g_portableLocal ? "{\"t\":\"op\",\"op\":{\"kind\":\"state.req\",\"portable\":1}}" : "{\"t\":\"op\",\"op\":{\"kind\":\"state.req\"}}");
+}
+
+static void portable_send(const char *target) {
+    void **items; int n, i; char start[128];
+    if (!g_isLeader || !g_portableSync || !target || !peer_id_valid(target) || g_projBusy) return;
+    n = chan_list(&items);
+    sprintf_s(start, sizeof(start), "{\"t\":\"op\",\"op\":{\"kind\":\"portable.start\",\"nch\":%d}}", n);
+    ws_send_to(start, target);
+    send_notes_full_to(target);
+    send_full_state_to(target);
+    for (i = 0; i < n; i++) { char *m = meta_json(M_CHAN, i); if (m) { ws_send_to(m, target); free(m); } }
+    for (i = 0; i < mix_count(); i++) {
+        char *m = meta_json(M_MIX, i); if (m) { ws_send_to(m, target); free(m); }
+        m = meta_json(M_ROUTE, i); if (m) { ws_send_to(m, target); free(m); }
+    }
+    for (i = 1; i < MAX_PAT; i++) if (notes_hash(i)) { char *m = meta_json(M_PAT, i); if (m) { ws_send_to(m, target); free(m); } }
+    logmsg("PORTABLE sent notes and controls for %d channels to %s", n, target);
+}
+
+static void portable_send_peers(void) {
+    FlJson root = {g_peersJson, strlen(g_peersJson)}, peers, item, value;
+    const char *p, *end, *start; char id[65], version[32], mine[32];
+    if (!g_portableSync || !g_isLeader || !fj_get(root, "peers", &peers) || peers.n < 2 ||
+        !WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, sizeof(mine), NULL, NULL)) return;
+    p = peers.p + 1; end = peers.p + peers.n - 1; fj_space(&p, end);
+    while (p < end) {
+        start = p; if (!fj_value(&p, end, 0)) return; item.p = start; item.n = (size_t)(p - start);
+        if (fj_get(item, "id", &value) && fj_text(value, id, sizeof(id)) && strcmp(id, g_myId) &&
+            fj_get(item, "fl", &value) && fj_text(value, version, sizeof(version)) && flim_version_family(version) && flim_version_cmp(version, mine) < 0)
+            portable_send(id);
+        fj_space(&p, end); if (p < end && *p++ != ',') return; fj_space(&p, end);
+    }
+}
+
 // Inbound values for ids this FL doesn't have yet (still loading, plugin not
 // scanned yet) wait here and are retried after each rescan.
-#define MAX_PEND 8192
-typedef struct { uint32_t id, v; LONG sessionGen; } Pend;
-static Pend g_pend[MAX_PEND];
-static int  g_npend = 0;
-
 static void pend_put(uint32_t id, uint32_t v) {
-    int i;
+    int i, overflow = 0;
     LONG gen = session_generation();
     if (!session_current()) return;
     EnterCriticalSection(&g_qLock);
     for (i = 0; i < g_npend && g_pend[i].id != id; i++) {}
     if (i < g_npend) { g_pend[i].v = v; g_pend[i].sessionGen = gen; }
     else if (g_npend < MAX_PEND) { g_pend[g_npend].id = id; g_pend[g_npend].v = v; g_pend[g_npend].sessionGen = gen; g_npend++; }
+    else overflow = 1;
     LeaveCriticalSection(&g_qLock);
+    if (overflow) sharing_fail("Plugin controls: sharing paused", "Too many controls are waiting for unavailable plugins. Your local project was kept. Reconnect and resync before continuing.");
 }
 
 // Apply an inbound value (queued for the main thread). onlyIfDiff skips values
 // we already have (join state). Returns 1 if an apply was queued.
 static int route_inbound(uint32_t id, uint32_t v, int onlyIfDiff) {
+    if (!param_id_in_range(id)) return 0;
+    if (plug_param_blocked(id)) { enqueue_apply(id, v); return 1; }
     if (!add_slot(id)) { pend_put(id, v); return 0; }
     Slot *s = slot_by_id(id);
     if (onlyIfDiff && s && s->last == v) return 0;
@@ -5338,6 +6578,8 @@ static void retry_pending(void) {
     for (i = 0; i < g_npend; i++) {
         Pend p = g_pend[i];
         if (p.sessionGen != g_netGen) continue;
+        if (!param_id_in_range(p.id)) continue;
+        if (plug_param_blocked(p.id)) { g_pend[kept++] = p; continue; }
         if (add_slot(p.id)) {
             Slot *s = slot_by_id(p.id);
             if (!s || s->last != p.v) { enqueue_apply(p.id, p.v); applied++; }
@@ -5350,21 +6592,50 @@ static void retry_pending(void) {
 }
 
 // Member: apply a state.full payload ("vals":[[id,v],...]).
+typedef struct { uint32_t id, value; } IncomingParam;
+static int incoming_param_cmp(const void *a, const void *b) {
+    uint32_t x = ((const IncomingParam *)a)->id, y = ((const IncomingParam *)b)->id;
+    return x < y ? -1 : x > y;
+}
 static void apply_full_state(const char *m) {
-    const char *p = strstr(m, "\"vals\":[");
-    int n = 0, diff = 0;
-    if (!p) return;
-    p += strlen("\"vals\":[");
-    while ((p = strchr(p, '[')) != NULL) {
-        char *e;
-        uint32_t id = (uint32_t)strtoul(p + 1, &e, 10);
-        if (*e != ',') break;
-        uint32_t v = (uint32_t)strtoul(e + 1, &e, 10);
-        if (route_inbound(id, v, 1)) diff++;
-        n++;
-        p = e;
+    FlJson root = {m, strlen(m)}, op, vals, pair, fields[2];
+    const char *p, *end, *start;
+    IncomingParam *parsed = NULL;
+    unsigned count = 0, i; int diff = 0, capacity = 0;
+    if (!fj_get(root, "op", &op) || !fj_get(op, "vals", &vals) || vals.n < 2 || vals.p[0] != '[') goto invalid;
+    p = vals.p + 1; end = vals.p + vals.n - 1; fj_space(&p, end);
+    while (p < end) {
+        IncomingParam item;
+        start = p;
+        if (count == MAX_SLOTS + MAX_PEND || !fj_value(&p, end, 0)) goto invalid;
+        pair.p = start; pair.n = (size_t)(p - start);
+        if (!shared_array_fields(pair, fields, 2) || !fj_u32(fields[0], &item.id) ||
+            !fj_u32(fields[1], &item.value) || !param_id_with_limit(item.id, MAX_MIX)) goto invalid;
+        if (count == (unsigned)capacity) {
+            IncomingParam *next; int cap = capacity ? capacity * 2 : 256;
+            if (cap > MAX_SLOTS + MAX_PEND) cap = MAX_SLOTS + MAX_PEND;
+            next = (IncomingParam *)realloc(parsed, (size_t)cap * sizeof(*next));
+            if (!next) goto invalid;
+            parsed = next; capacity = cap;
+        }
+        parsed[count++] = item;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); if (p == end) goto invalid; }
     }
-    logmsg("STATE received %d values, %d differ (applying)", n, diff);
+    if (count) qsort(parsed, count, sizeof(*parsed), incoming_param_cmp);
+    for (i = 1; i < count; i++) if (parsed[i-1].id == parsed[i].id) goto invalid;
+    /* Hold the queue until the complete snapshot has been reserved and routed. */
+    EnterCriticalSection(&g_qLock);
+    if (count > (unsigned)(QCAP - 1 - (g_qt - g_qh + QCAP) % QCAP)) {
+        LeaveCriticalSection(&g_qLock); goto invalid;
+    }
+    for (i = 0; i < count && !g_compatFault; i++) diff += route_inbound(parsed[i].id, parsed[i].value, !g_portableLocal);
+    LeaveCriticalSection(&g_qLock);
+    free(parsed);
+    logmsg("STATE received %u values, %d differ (applying)", count, diff); return;
+invalid:
+    free(parsed);
+    sharing_fail("Shared controls: sharing paused", "The complete control snapshot is invalid or could not be queued. Your local controls were kept. Reconnect and resync before continuing.");
 }
 
 // ---- inbound plugin state ----
@@ -5379,20 +6650,25 @@ static int b64val(char c) {
 
 // Decode base64 [s, s+n) into a new temp .fst; returns its path (malloc'd) or NULL.
 static char *b64_to_tmpfile(const char *s, size_t n) {
-    unsigned char *out = (unsigned char *)malloc(n / 4 * 3 + 3);
-    size_t o = 0, i;
-    int acc = 0, bits = 0;
-    for (i = 0; i < n; i++) {
-        int v = b64val(s[i]);
-        if (v < 0) continue;
-        acc = (acc << 6) | v; bits += 6;
-        if (bits >= 8) { bits -= 8; out[o++] = (unsigned char)((acc >> bits) & 0xff); }
-    }
+    size_t o;
+    unsigned char *out = b64dec(s, n, &o);
+    if (!out) return NULL;
     samples_rewrite(&out, &o);
+    if (g_compatFault) { free(out); return NULL; }
     char *path = tmp_path("in");
     FILE *f = NULL;
-    if (fopen_s(&f, path, "wb") != 0 || !f) { free(out); free(path); return NULL; }
-    fwrite(out, 1, o, f); fclose(f); free(out);
+    int written = 0;
+    if (!path) { free(out); return NULL; }
+    if (fopen_s(&f, path, "wb") == 0 && f) {
+        written = fwrite(out, 1, o, f) == o;
+        if (fclose(f)) written = 0;
+    }
+    free(out);
+    if (!written) {
+        DeleteFileA(path); free(path);
+        sharing_fail("Shared plugin: session stopped", "The received plugin file could not be written completely. Check free disk space before reconnecting.");
+        return NULL;
+    }
     return path;
 }
 
@@ -5403,47 +6679,119 @@ static int int_after(const char *p, const char *end, const char *key, int *out) 
     return 1;
 }
 
-// Parse one unit object starting at p ("unit":..., ids..., "data":"..."). Returns
-// pointer past it, or NULL. Fields are always written in this order by unit_json_fields.
-static const char *parse_unit(const char *p, int *unit, int *a, int *b, char **path) {
-    const char *u = strstr(p, "\"unit\":\"");
-    const char *d = u ? strstr(u, "\"data\":\"") : NULL;
-    if (!u || !d) return NULL;
-    *unit = strncmp(u + 8, "fx", 2) == 0 ? U_FX : U_CH;
-    *a = *b = 0;
-    if (*unit == U_CH) int_after(u, d, "\"ch\":", a);
-    else { int_after(u, d, "\"trk\":", a); int_after(u, d, "\"slot\":", b); }
-    d += 8;
-    const char *e = strchr(d, '"');
-    if (!e) return NULL;
-    *path = b64_to_tmpfile(d, (size_t)(e - d));
-    return e + 1;
+typedef struct { int unit, a, b; FlJson data; char *path; char presetFl[32]; } IncomingUnit;
+#define INCOMING_UNIT_MAX (MAX_CH + MAX_MIX * MAX_FX_SLOTS)
+
+static int unit_fields(FlJson item, IncomingUnit *out) {
+    FlJson value; uint64_t a, b = 0; size_t bytes;
+    if (fj_get(item, "preset_fl", &value) && (!fj_text(value, out->presetFl, sizeof(out->presetFl)) || !flim_version_family(out->presetFl))) return 0;
+    if (!fj_get(item, "unit", &value)) return 0;
+    if (fj_is(value, "\"ch\"")) {
+        out->unit = U_CH;
+        if (!fj_get(item, "ch", &value) || !fc_uint(value, &a) || a >= MAX_CH) return 0;
+    } else if (fj_is(value, "\"fx\"")) {
+        out->unit = U_FX;
+        if (!fj_get(item, "trk", &value) || !fc_uint(value, &a) || a >= MAX_MIX ||
+            !fj_get(item, "slot", &value) || !fc_uint(value, &b) || b >= MAX_FX_SLOTS) return 0;
+    } else return 0;
+    if (!fj_get(item, "data", &value) || !shared_b64(value, &out->data, 48 * 1024 * 1024, &bytes) || !bytes) return 0;
+    out->a = (int)a; out->b = (int)b;
+    return 1;
 }
 
-// Member: converge channels and plugin states to the leader's.
+static const char *parse_unit(const char *m, int *unit, int *a, int *b, char **path) {
+    FlJson root = {m, strlen(m)}, op, kind;
+    IncomingUnit parsed = {0};
+    *path = NULL;
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!unit_fields(op, &parsed) ||
+        (fj_get(op, "kind", &kind) && fj_is(kind, "\"chan.add\"") && parsed.unit != U_CH)) {
+        sharing_fail("Shared plugin: session stopped", "The shared plugin data or target is incomplete or invalid. Your local plugin was kept.");
+        return NULL;
+    }
+    *unit = parsed.unit; *a = parsed.a; *b = parsed.b;
+    *path = b64_to_tmpfile(parsed.data.p, parsed.data.n);
+    return *path ? m + strlen(m) : NULL;
+}
+
+// Prepare the entire replacement before any channel deletion or empty-slot cleanup is queued.
 static void apply_plug_full(const char *m) {
-    int nch = 0, unit, a, b, items = 0, k;
-    char *path;
+    FlJson root = {m, strlen(m)}, op, value, items;
+    IncomingUnit *units = NULL;
+    QItem *tasks = NULL;
+    unsigned char *keep = NULL;
+    uint64_t nch;
+    const char *p, *end, *start;
     void **list;
-    int local = chan_list(&list);
-    int_after(m, NULL, "\"nch\":", &nch);
-    for (k = local - 1; k >= nch; k--) enqueue_unit(T_DELCH, U_CH, k, 0, 0, NULL);  // extra channels
-    if (local > nch) local = nch;
-    const char *p = strstr(m, "\"items\":[");
-    unsigned char *keep = (unsigned char *)calloc(MAX_MIX * MAX_FX_SLOTS, 1);
-    while (p && (p = parse_unit(p, &unit, &a, &b, &path)) != NULL) {
-        if (!path) continue;
-        if (unit == U_FX && a >= 0 && a < MAX_MIX && b >= 0 && b < MAX_FX_SLOTS) keep[a * MAX_FX_SLOTS + b] = 1;
-        if (unit == U_CH && a >= local) { enqueue_unit(T_ADDCH, U_CH, a, 0, 0, path); local++; }
-        else enqueue_unit(T_LOAD, unit, a, b, 1, path);
-        items++;
+    int k, count = 0, local, ntask = 0, failed = 0;
+    LONG generation = session_generation();
+    if (!fj_get(root, "op", &op)) op = root;
+    if (!fj_get(op, "nch", &value) || !fc_uint(value, &nch) || nch > MAX_CH ||
+        !fj_get(op, "items", &items) || items.n < 2 || items.p[0] != '[') goto invalid;
+    units = (IncomingUnit *)calloc(INCOMING_UNIT_MAX, sizeof(*units));
+    keep = (unsigned char *)calloc(MAX_MIX * MAX_FX_SLOTS, 1);
+    if (!units || !keep) goto memory;
+    p = items.p + 1; end = items.p + items.n - 1; fj_space(&p, end);
+    while (p < end) {
+        IncomingUnit parsed = {0}; FlJson item; int index;
+        start = p;
+        if (!fj_value(&p, end, 0)) goto invalid;
+        item.p = start; item.n = (size_t)(p - start);
+        if (!unit_fields(item, &parsed) || (parsed.unit == U_CH && parsed.a >= (int)nch)) goto invalid;
+        index = parsed.unit == U_CH ? parsed.a : MAX_CH + parsed.a * MAX_FX_SLOTS + parsed.b;
+        if (units[index].data.p) goto invalid;
+        units[index] = parsed; count++;
+        if (parsed.unit == U_FX) keep[index - MAX_CH] = 1;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); }
     }
-    {
-        QItem q; memset(&q, 0, sizeof(q));
-        q.type = T_FXSYNC; q.order = (int *)keep;
-        enqueue(&q);
+    for (k = 0; k < (int)nch; k++) if (!units[k].data.p) goto invalid;
+    local = chan_list(&list);
+    tasks = (QItem *)calloc((size_t)count + (local > (int)nch ? local - (int)nch : 0) + 1, sizeof(*tasks));
+    if (!tasks) goto memory;
+    for (k = 0; k < INCOMING_UNIT_MAX; k++) if (units[k].data.p) {
+        units[k].path = b64_to_tmpfile(units[k].data.p, units[k].data.n);
+        if (!units[k].path) goto cleanup;
     }
-    logmsg("PLUG full state received: leader has %d channels, %d units queued", nch, items);
+    for (k = local - 1; k >= (int)nch; k--) {
+        tasks[ntask].type = T_DELCH; tasks[ntask].unit = U_CH; tasks[ntask++].a = k;
+    }
+    for (k = 0; k < INCOMING_UNIT_MAX; k++) if (units[k].data.p) {
+        QItem *task = &tasks[ntask++]; IncomingUnit *u = &units[k];
+        task->type = u->unit == U_CH && u->a >= local ? T_ADDCH : T_LOAD;
+        task->unit = u->unit; task->a = u->a; task->b = u->b;
+        task->mode = task->type == T_LOAD; task->path = u->path;
+        strcpy_s(task->presetFl, sizeof(task->presetFl), u->presetFl);
+        if (u->presetFl[0]) { char mine[32];
+            if (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, sizeof(mine), NULL, NULL) || flim_version_cmp(u->presetFl, mine) > 0) task->mode = 3;
+        }
+    }
+    tasks[ntask].type = T_FXSYNC; tasks[ntask++].order = (int *)keep;
+    EnterCriticalSection(&g_qLock);
+    if (generation != g_netGen || g_compatFault) failed = 1;
+    else if (ntask > (g_qh + QCAP - g_qt - 1) % QCAP) failed = 2;
+    else for (k = 0; k < ntask; k++) {
+        tasks[k].sessionGen = generation;
+        g_q[g_qt] = tasks[k]; g_qt = (g_qt + 1) % QCAP;
+    }
+    LeaveCriticalSection(&g_qLock);
+    if (failed) {
+        if (failed == 2) sharing_fail("Edit backlog: session stopped", "There is not enough room to apply the complete plugin snapshot. Your local channels and plugins were kept.");
+        goto cleanup;
+    }
+    for (k = 0; k < INCOMING_UNIT_MAX; k++) units[k].path = NULL;
+    keep = NULL;
+    if (g_mainWnd) PostMessageW(g_mainWnd, WM_NULL, 0, 0);
+    logmsg("PLUG full state received: leader has %u channels, %d units queued", (unsigned)nch, count);
+    goto cleanup;
+invalid:
+    sharing_fail("Shared plugins: session stopped", "The complete plugin snapshot is incomplete or invalid. Your local channels and plugins were kept.");
+    goto cleanup;
+memory:
+    sharing_fail("Shared plugins: session stopped", "There is not enough memory to receive the complete plugin snapshot. Your local channels and plugins were kept.");
+cleanup:
+    if (units) for (k = 0; k < INCOMING_UNIT_MAX; k++) if (units[k].path) { DeleteFileA(units[k].path); free(units[k].path); }
+    free(units); free(tasks); free(keep);
 }
 
 // Errors that end the connection: status text + message box.
@@ -5469,23 +6817,34 @@ static const struct { const char *code, *status, *alert; } k_netErrors[] = {
 static void compat_fail(const char *why);
 
 static void net_server_error(const char *m) {
-    char pat[48];
-    int i;
-    if (strstr(m, "\"code\":\"compatibility\"")) {
+    FlJson envelope = {m, strlen(m)};
+    char error_code[64] = ""; int i;
+    fc_text(envelope, "code", error_code, sizeof(error_code));
+    if (!strcmp(error_code, "compatibility")) {
         FlJson root = {m, strlen(m)}, value; char why[512];
-        if (!fj_get(root, "msg", &value) || !fj_text(value, why, sizeof(why)))
-            strcpy_s(why, sizeof(why), "The server refused an incompatible FL build or edit. Use the oldest build as host and update flim on all computers.");
+        if (!fj_get(root, "msg", &value) || !fj_decode(value, why, sizeof(why)))
+            strcpy_s(why, sizeof(why), "The relay refused an incompatible FL build or edit. Update flim on all computers and reconnect.");
         compat_fail(why); return;
+    }
+    if (g_compatReady) {
+        FlJson root = {m, strlen(m)}, value;
+        char why[512], code[48] = "";
+        if (fj_get(root, "code", &value)) fj_text(value, code, sizeof(code));
+        if (!fj_get(root, "msg", &value) || !fj_decode(value, why, sizeof(why)))
+            strcpy_s(why, sizeof(why), "The relay rejected a request. Reconnect and resync before continuing to share.");
+        sharing_fail(!strcmp(code, "storage_limit") || !strcmp(code, "r2_storage_limit") || !strcmp(code, "r2_monthly_limit") ?
+            "File allowance reached: sharing stopped" : "Relay rejected an edit: sharing stopped", why);
+        return;
     }
     uint32_t ms = 0;
     if ((jget_u32(m, "cooldown", &ms) || jget_u32(m, "retry_in", &ms)) && ms) g_coolUntil = GetTickCount64() + ms;
-    if (strstr(m, "\"code\":\"time_up\"")) {
+    if (!strcmp(error_code, "time_up")) {
         strcpy_s(g_netErr, sizeof(g_netErr), "Time's up: session ended");
         net_info("Time's up: this session's 15 minutes are over.\n\n"
                  "Everything you made stays in your FL. You can host or join a session again in 5 minutes.");
         return;
     }
-    if (strstr(m, "\"code\":\"cooldown\"")) {
+    if (!strcmp(error_code, "cooldown")) {
         unsigned cs = cooldown_secs();
         strcpy_s(g_netErr, sizeof(g_netErr), "Cooldown");
         net_info("COOLDOWN: you can host or join a session again in %u:%02u.\n\n"
@@ -5493,8 +6852,7 @@ static void net_server_error(const char *m) {
         return;
     }
     for (i = 0; i < (int)(sizeof(k_netErrors) / sizeof(k_netErrors[0])); i++) {
-        sprintf_s(pat, sizeof(pat), "\"code\":\"%s\"", k_netErrors[i].code);
-        if (strstr(m, pat)) {
+        if (!strcmp(error_code, k_netErrors[i].code)) {
             strcpy_s(g_netErr, sizeof(g_netErr), k_netErrors[i].status);
             net_alert("%s", k_netErrors[i].alert);
             return;
@@ -5502,8 +6860,7 @@ static void net_server_error(const char *m) {
     }
 }
 
-// Hosting and welcomed: remember session + link + password (clicking the status shows them
-// again) and show them.
+// Hosting and welcomed: retain the invite for the user-initiated status action.
 static void hosted_ready(void) {
     char link[400];
     session_link(&g_netUrl, g_session, link, sizeof(link));
@@ -5511,36 +6868,58 @@ static void hosted_ready(void) {
     sprintf_s(g_hostedText, sizeof(g_hostedText), "Session: %s\r\nLink: %s\r\nPassword: %s", g_session, link, g_hostPw);
     LeaveCriticalSection(&g_netTextLock);
     SecureZeroMemory(g_hostPw, sizeof(g_hostPw));
-    logmsg("hosting session %s: %s", g_session, link);
-    if (g_netBar) PostMessageW(g_netBar, WM_FLIM_HOSTED, 0, 0);
+    logmsg("HOST room ready");
 }
 
 // Shut down the socket here; the receive thread owns queue/connection cleanup. Avoid
 // clearing queues while the outbox holds its lock or the FL main thread is applying an op.
-static void compat_fail(const char *why) {
+static void sharing_fail(const char *status, const char *why) {
     EnterCriticalSection(&g_sendLock);
     if (!session_current() || InterlockedCompareExchange(&g_compatFault, 1, 0)) { LeaveCriticalSection(&g_sendLock); return; }
     InterlockedExchange(&g_compatReady, 0);
-    logmsg("COMPAT stopped session: %s", why);
-    strcpy_s(g_netErr, sizeof(g_netErr), "FL build compatibility: session stopped");
-    net_alert("%.280s\n\nflim stopped sharing. Your local changes remain in your FL project.", why);
+    logmsg("SHARING stopped session: %s", why);
+    strcpy_s(g_netErr, sizeof(g_netErr), status);
+    net_alert("%.280s\n\nflim stopped sharing. Check your local project before reconnecting.", why);
     if (g_ws) WinHttpWebSocketShutdown(g_ws, WINHTTP_WEB_SOCKET_POLICY_VIOLATION_CLOSE_STATUS, NULL, 0);
     LeaveCriticalSection(&g_sendLock);
+}
+static void compat_fail(const char *why) { sharing_fail("FL build compatibility: session stopped", why); }
+static void cloud_fail(const char *why) { sharing_fail("Cloudflare transfer: session stopped", why); }
+
+static void blob_limit_error(DWORD status, const char *body) {
+    FlJson root = {body, strlen(body)}, value;
+    char code[48] = "";
+    if (fj_get(root, "code", &value)) fj_text(value, code, sizeof(code));
+    if (!strcmp(code, "r2_monthly_limit"))
+        cloud_fail("The relay reached its monthly R2 operation allowance. File sharing is blocked until the next monthly reset.");
+    else if (status == 507)
+        cloud_fail("The relay reached its file storage allowance. The host must free space before file sharing can resume.");
+    else cloud_fail("The relay reached its request allowance. Reconnect and resync after the allowance resets.");
 }
 
 static int compat_accept(const char *m) {
     FlJson root = {m, strlen(m)}, c, value;
-    char host[32], wire[64], mine[32]; int mixed;
+    char host[32], wire[64], mine[32]; int mixed, notes = 0, portable = 0;
+    if (fj_get(root, "portable_sync", &value)) {
+        if (!fj_is(value, "1")) { compat_fail("The relay selected an unsupported portable sync protocol."); return 0; }
+        portable = 1;
+    }
+    if (g_compatReady && portable != g_portableSync) { compat_fail("The room changed its project compatibility protocol. Reconnect before continuing."); return 0; }
+    if (fj_get(root, "notes_crdt", &value)) {
+        if (!fj_is(value, "1")) { compat_fail("The relay selected an unsupported note merge protocol."); return 0; }
+        notes = 1;
+    }
+    if (g_compatReady && notes != g_notesCrdt) { compat_fail("The room changed its note merge protocol. Reconnect before continuing."); return 0; }
     if (!fj_get(root, "compatibility", &c) || !fj_get(c, "protocol", &value) || !fj_is(value, "1") ||
         !fj_get(c, "host_fl", &value) || !fj_text(value, host, sizeof(host)) || !flim_version_family(host) ||
         !fj_get(c, "wire", &value) || !fj_text(value, wire, sizeof(wire)) || strcmp(wire, FLIM_WIRE) ||
         !fj_get(c, "mixed", &value) || (!fj_is(value, "true") && !fj_is(value, "false")) ||
         !WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || !flim_version_family(mine)) {
-        compat_fail("This server cannot verify FL 25/26 compatibility. Update the relay and every participant's flim client.");
+        compat_fail("This server cannot verify FL 24/25/26 compatibility. Update the relay and every participant's flim client.");
         return 0;
     }
     mixed = fj_is(value, "true");
-    if (flim_version_cmp(host, mine) > 0 || (g_compatReady && strcmp(host, g_hostFlBuild)) ||
+    if ((!portable && flim_version_cmp(host, mine) > 0) || (g_compatReady && strcmp(host, g_hostFlBuild)) ||
         (!mixed && strcmp(host, mine))) {
         compat_fail("The host must use the oldest FL build in the session. A newer host project cannot be loaded into an older FL.");
         return 0;
@@ -5548,9 +6927,17 @@ static int compat_accept(const char *m) {
     if (!session_current()) return 0;
     if (!g_compatReady) strcpy_s(g_hostFlBuild, sizeof(g_hostFlBuild), host);
     InterlockedExchange(&g_compatMixed, mixed);
+    InterlockedExchange(&g_notesCrdt, notes);
+    InterlockedExchange(&g_portableSync, portable);
+    InterlockedExchange(&g_portableLocal, portable && flim_version_cmp(host, mine) > 0);
     InterlockedExchange(&g_compatReady, 1);
-    logmsg("COMPAT protocol=1 host=%s local=%s mixed=%d wire=%s", host, mine, mixed, wire);
+    logmsg("COMPAT protocol=1 host=%s local=%s mixed=%d wire=%s notes=%s", host, mine, mixed, wire, notes ? "CRDT-1" : "locked snapshots");
     return 1;
+}
+
+static int compat_plugin_send(void) {
+    char mine[32];
+    return g_portableSync || !g_compatMixed || (g_fl.build && WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, sizeof(mine), NULL, NULL) && !strcmp(mine, g_hostFlBuild));
 }
 
 static int compat_outgoing(const char *msg) {
@@ -5559,9 +6946,14 @@ static int compat_outgoing(const char *msg) {
     if (strcmp(type, "op")) return 1;
     if (!g_compatReady || g_compatFault) return 0;
     if (!fj_get(root, "op", &op) || !fj_get(op, "kind", &value) || !fj_text(value, kind, sizeof(kind))) return 0;
+    if (g_portableLocal && !strcmp(kind, "clips.set")) return 0;
     if (!g_compatMixed) return 1;
     if (!flim_wire_known(kind)) { compat_fail("This edit has no agreed format for mixed FL builds."); return 0; }
-    if (flim_wire_opaque(kind)) {
+    if (!strcmp(kind, "plug.state") && !compat_plugin_send()) {
+        logmsg("COMPAT withheld newer plugin preset; host must make this edit, room stays connected");
+        return 0;
+    }
+    if (!g_portableSync && flim_wire_opaque(kind)) {
         if (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || strcmp(mine, g_hostFlBuild)) {
             compat_fail("Plugin replacement, preset changes and adding channels from a newer FL cannot be shared with an older FL. Ask the oldest-build host to make that edit.");
             return 0;
@@ -5580,14 +6972,43 @@ static int compat_incoming(const char *msg) {
         !fj_text(value, kind, sizeof(kind))) {
         compat_fail("The relay sent an edit without a verified sender build."); return 0;
     }
-    if (g_compatMixed && (!flim_wire_known(kind) || (flim_wire_opaque(kind) && strcmp(source, g_hostFlBuild)))) {
+    if (g_compatMixed && (!flim_wire_known(kind) || (!g_portableSync && flim_wire_opaque(kind) && strcmp(source, g_hostFlBuild)))) {
         compat_fail("The relay sent an edit that is incompatible with this mixed-build session."); return 0;
     }
-    if (flim_wire_opaque(kind) &&
+    if (!g_portableSync && flim_wire_opaque(kind) &&
         (!WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, 32, NULL, NULL) || flim_version_cmp(source, mine) > 0)) {
         compat_fail("A newer FL project or plugin state cannot be loaded by this FL build."); return 0;
     }
     return 1;
+}
+
+static void on_chan_order(const char *m) {
+    FlJson root = {m, strlen(m)}, op, value, from;
+    uint64_t n, index;
+    int order[MAX_CH + 1], count = 0;
+    unsigned char seen[MAX_CH] = {0};
+    const char *p, *end, *start;
+    if (!fj_get(root, "op", &op) || !fj_get(op, "n", &value) || !fc_uint(value, &n) || !n || n > MAX_CH ||
+        !fj_get(op, "from", &from) || from.n < 2 || from.p[0] != '[') goto invalid;
+    p = from.p + 1; end = from.p + from.n - 1;
+    fj_space(&p, end);
+    while (p < end) {
+        start = p;
+        if (count >= (int)n || !fj_value(&p, end, 0)) goto invalid;
+        value.p = start; value.n = (size_t)(p - start);
+        if (!fc_uint(value, &index) || index >= n || seen[index]) goto invalid;
+        seen[index] = 1; order[++count] = (int)index;
+        fj_space(&p, end);
+        if (p < end) { if (*p++ != ',') goto invalid; fj_space(&p, end); }
+    }
+    if (count != (int)n) goto invalid;
+    { QItem q = {0}; size_t bytes = sizeof(int) * ((size_t)n + 1);
+      order[0] = (int)n; q.type = T_ORDER; q.order = (int *)malloc(bytes);
+      if (q.order) memcpy(q.order, order, bytes);
+      enqueue(&q); }
+    return;
+invalid:
+    sharing_fail("Shared channels: session stopped", "The shared channel order is incomplete or invalid. Reconnect and resync before continuing to share.");
 }
 
 static void handle_msg_inner(const char *m);
@@ -5602,75 +7023,97 @@ static void handle_msg_inner(const char *m) {
     if (!compat_incoming(m)) return;
     int unit, a, b;
     char *path;
-    if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"project.load\"")) {
+    FlJson root = {m, strlen(m)}, op = {0}, value;
+    char target[65], source[32] = "", mine[32], type[24], kind[65] = "";
+    int newer = 0;
+    if (!fc_text(root, "t", type, sizeof(type))) return;
+    if (!strcmp(type, "op") && (!fj_get(root, "op", &op) || !fc_text(op, "kind", kind, sizeof(kind)))) return;
+    if (fj_get(root, "op", &op)) {
+        if (fj_get(op, "for", &value) && (!fj_text(value, target, sizeof(target)) || strcmp(target, g_myId))) return;
+        if (g_portableSync && fj_get(root, "source_fl", &value) && fj_text(value, source, sizeof(source)) &&
+            WideCharToMultiByte(CP_UTF8, 0, g_fl.build, -1, mine, sizeof(mine), NULL, NULL)) {
+            char original[32];
+            if (fj_get(op, "preset_fl", &value)) {
+                if (!fj_text(value, original, sizeof(original)) || !flim_version_family(original)) { sharing_fail("Shared plugin: sharing paused", "The retained preset's original FL build is invalid."); return; }
+                if (flim_version_cmp(original, source) > 0) strcpy_s(source, sizeof(source), original);
+            }
+            newer = flim_version_cmp(source, mine) > 0;
+        }
+    }
+    if (!strcmp(kind, "project.load")) {
         if (!g_isLeader) on_project_load(m);
         return;
     }
     if (hold_if_loading(m)) return;
-    if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"state.req\"")) {
+    if (!strcmp(kind, "portable.start")) {
+        uint64_t count;
+        if (g_portableLocal && fj_get(op, "nch", &value) && fc_uint(value, &count) && count <= MAX_CH)
+            enqueue_unit(T_PORTABLESTART, 0, (int)count, 0, 0, NULL);
+        else if (g_portableLocal) sharing_fail("Portable sync: sharing paused", "The shared channel count is invalid. Your local project was kept.");
+    } else if (!strcmp(kind, "state.req")) {
         // join / member re-sync: send the project (mid-load, the load's own broadcast covers it)
-        if (g_isLeader && !g_projBusy) enqueue_unit(T_PROJSNAP, 0, 0, 0, 0, NULL);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"plug.full\"")) {
-        if (!g_isLeader) apply_plug_full(m);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"plug.state\"")) {
-        if (parse_unit(m, &unit, &a, &b, &path) && path) enqueue_unit(T_LOAD, unit, a, b, 0, path);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"chan.add\"")) {
-        if (parse_unit(m, &unit, &a, &b, &path) && path) enqueue_unit(T_ADDCH, U_CH, a, 0, 0, path);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"chan.del\"")) {
-        if (int_after(m, NULL, "\"ch\":", &a)) enqueue_unit(T_DELCH, U_CH, a, 0, 0, NULL);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"notes.set\"")) {
-        parse_notes_item(strstr(m, "\"kind\":\"notes.set\""), NULL);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"clips.set\"")) {
-        on_clips_set(m);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"meta.set\"")) {
+        if (g_isLeader && !g_projBusy) {
+            if (g_portableSync && fj_get(op, "portable", &value) && fj_is(value, "1") &&
+                fj_get(root, "from", &value) && fj_text(value, target, sizeof(target)) && peer_id_valid(target))
+                enqueue_unit(T_PORTABLESEND, 0, 0, 0, 0, _strdup(target));
+            else enqueue_unit(T_PROJSNAP, 0, 0, 0, 0, NULL);
+        }
+    } else if (!strcmp(kind, "plug.full")) {
+        if (!g_isLeader && !newer) apply_plug_full(m);
+    } else if (!strcmp(kind, "plug.state")) {
+        if (parse_unit(m, &unit, &a, &b, &path) && path) { QItem load = {0}; load.type = T_LOAD; load.unit = unit; load.a = a; load.b = b; load.mode = newer ? 3 : 0; load.path = path; strcpy_s(load.presetFl, sizeof(load.presetFl), source); enqueue(&load); }
+    } else if (!strcmp(kind, "chan.add")) {
+        if (parse_unit(m, &unit, &a, &b, &path) && path) { QItem load = {0}; load.type = T_ADDCH; load.unit = U_CH; load.a = a; load.mode = newer ? 3 : 0; load.path = path; strcpy_s(load.presetFl, sizeof(load.presetFl), source); enqueue(&load); }
+    } else if (!strcmp(kind, "chan.del")) {
+        if (fj_get(op, "ch", &value) && fj_u32(value, &id) && id < MAX_CH) enqueue_unit(T_DELCH, U_CH, (int)id, 0, 0, NULL);
+        else sharing_fail("Shared channel: sharing paused", "The channel deletion target is invalid. Your channels were kept.");
+    } else if (!strcmp(kind, "notes.set")) {
+        on_notes(m, 0);
+    } else if (!strcmp(kind, "clips.set")) {
+        if (!g_portableLocal) on_clips_set(m);
+    } else if (!strcmp(kind, "meta.set")) {
         on_meta_set(m);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"pat.op\"")) {
+    } else if (!strcmp(kind, "pat.op")) {
         on_pat_op(m);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"focus\"")) {
+    } else if (!strcmp(kind, "focus")) {
         on_focus(m);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"cur\"")) {
+    } else if (!strcmp(kind, "cur")) {
         on_cursor(m);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"notes.full\"")) {
-        if (!g_isLeader) {
-            unsigned char *keep = (unsigned char *)calloc(MAX_PAT, 1);
-            const char *q = strstr(m, "\"items\":[");
-            int cnt = 0;
-            while (q && (q = parse_notes_item(q, keep)) != NULL) cnt++;
-            QItem it; memset(&it, 0, sizeof(it));
-            it.type = T_NOTESYNC; it.order = (int *)keep;
-            enqueue(&it);
-            logmsg("NOTES full state received: %d patterns", cnt);
-        }
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"fx.clear\"")) {
-        if (int_after(m, NULL, "\"trk\":", &a) && int_after(m, NULL, "\"slot\":", &b))
-            enqueue_unit(T_FXCLEAR, U_FX, a, b, 0, NULL);
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"chan.order\"")) {
-        int n = 0;
-        const char *f = strstr(m, "\"from\":[");
-        if (int_after(m, NULL, "\"n\":", &n) && f && n > 0 && n <= MAX_CH) {
-            QItem q; memset(&q, 0, sizeof(q));
-            q.type = T_ORDER;
-            q.order = (int *)malloc(sizeof(int) * (size_t)(n + 1));
-            q.order[0] = n;
-            f += 8;
-            for (a = 0; a < n; a++) { q.order[a + 1] = (int)strtol(f, (char **)&f, 10); if (*f == ',') f++; }
-            enqueue(&q);
-        }
-    } else if (strstr(m, "\"t\":\"op\"") && strstr(m, "\"kind\":\"state.full\"")) {
+    } else if (!strcmp(kind, "notes.full")) {
+        if (!g_isLeader) on_notes(m, 1);
+    } else if (!strcmp(kind, "fx.clear")) {
+        if (fj_get(op, "trk", &value) && fj_u32(value, &id) && id < MAX_MIX &&
+            fj_get(op, "slot", &value) && fj_u32(value, &v) && v < MAX_FX_SLOTS)
+            enqueue_unit(T_FXCLEAR, U_FX, (int)id, (int)v, 0, NULL);
+        else sharing_fail("Shared effect: sharing paused", "The effect deletion target is invalid. Your effects were kept.");
+    } else if (!strcmp(kind, "chan.order")) {
+        on_chan_order(m);
+    } else if (!strcmp(kind, "state.full")) {
         if (!g_isLeader) apply_full_state(m);
-    } else if (strstr(m, "\"t\":\"welcome\"")) {
+    } else if (!strcmp(type, "welcome")) {
+        char acceptedSession[FLIM_SESSION_CAP];
+        if (!welcome_session(m, &g_netUrl, acceptedSession)) {
+            cloud_fail("The relay returned an invalid room. Reconnect using the room link from the desktop app.");
+            return;
+        }
+        { FlJson root = { m, strlen(m) }, value;
+          InterlockedExchange(&g_cloudTransport, fj_get(root, "transport", &value) && fj_is(value, "2")); }
+        if (g_cloudTransport) logmsg("CLOUD file transport negotiated");
         strncpy_s(g_peersJson, sizeof(g_peersJson), m, _TRUNCATE);
-        logmsg("server: %.300s", m);
-        // our own role is the first "role" field; later ones belong to the peers list
-        const char *r = strstr(m, "\"role\":\"");
-        g_isLeader = r && strncmp(r + 8, "leader", 6) == 0;
-        {   // our slot, and the session's key for the sample store
-            const char *q = strstr(m, "\"session\":\""), *b = strstr(m, "\"blob\":\"");
-            if (q && isdigit((unsigned char)q[11]) && isdigit((unsigned char)q[12]) && q[13] == '"') {
-                g_session[0] = q[11]; g_session[1] = q[12]; g_session[2] = 0;
-            }
-            sprintf_s(g_netShown, sizeof(g_netShown), "%s/%s", g_netRoot, g_session);
-            if (b) samples_key(b + 8);
+        logmsg("NET welcome accepted (transport=%ld)", g_cloudTransport);
+        if (!fj_get(root, "role", &value) || (!fj_is(value, "\"leader\"") && !fj_is(value, "\"member\""))) {
+            sharing_fail("Room role: sharing paused", "The relay did not provide a valid room role. Reconnect before sharing."); return;
+        }
+        g_isLeader = fj_is(value, "\"leader\"");
+        if (g_notesCrdt) enqueue_unit(T_NOTEBASE, 0, 0, 0, 0, NULL);
+        {   // the room identity and its private sample-store key
+            FlJson root = { m, strlen(m) }, value;
+            char blob[65];
+            strcpy_s(g_session, sizeof(g_session), acceptedSession);
+            sprintf_s(g_netShown, sizeof(g_netShown), "%s/%s%s", g_netRoot,
+                      strlen(g_session) == 8 ? "room/" : "", g_session);
+            if (fj_get(root, "blob", &value) && fj_text(value, blob, sizeof(blob)) && strlen(blob) == 64) samples_key(blob);
+            SecureZeroMemory(blob, sizeof(blob));
         }
         {   // time limit: counted down in the bar; members get the note now, the host in the hosted dialog
             uint32_t ms = 0;
@@ -5680,35 +7123,43 @@ static void handle_msg_inner(const char *m) {
         }
         if (g_hosting && g_isLeader) hosted_ready();
         net_show_connected(m);
-        if (!g_isLeader) ws_send("{\"t\":\"op\",\"op\":{\"kind\":\"state.req\"}}");
-    } else if (strstr(m, "\"t\":\"op\"")) {
-        if (strstr(m, "\"kind\":\"param.set\"") && jget_u32(m, "id", &id) && jget_u32(m, "v", &v)) {
-            route_inbound(id, v, 0);
-        }
-    } else if ((strstr(m, "\"t\":\"lock\"") || strstr(m, "\"t\":\"lock_released\"")) && on_unit_lock(m)) {
+        if (!g_isLeader) request_state();
+    } else if (!strcmp(type, "op")) {
+        if ((!strcmp(kind, "param.set")) && fj_get(op, "id", &value) && fj_u32(value, &id) && fj_get(op, "v", &value) && fj_u32(value, &v)) {
+            if (!param_id_with_limit(id, MAX_MIX)) sharing_fail("Shared control: sharing paused", "The incoming control target is invalid. Your local controls were kept.");
+            else route_inbound(id, v, 0);
+        } else if (!strcmp(kind, "param.set")) sharing_fail("Shared control: sharing paused", "The incoming control value is invalid. Your local controls were kept.");
+    } else if ((!strcmp(type, "lock") || !strcmp(type, "lock_released")) && on_unit_lock(m)) {
         // pattern / playlist lock (mutexing)
-    } else if (strstr(m, "\"t\":\"lock\"") && jget_paramkey(m, &id)) {
+    } else if (!strcmp(type, "lock") && jget_paramkey(m, &id)) {
         Slot *s = slot_by_id(id);
-        int granted = strstr(m, "\"granted\":true") != NULL;
-        char ownerPat[96]; sprintf_s(ownerPat, sizeof(ownerPat), "\"owner\":\"%s\"", g_myId);
-        int mine = strstr(m, ownerPat) != NULL;
+        char owner[64]; int granted, mine;
+        if (!fj_get(root, "granted", &value) || (!fj_is(value, "true") && !fj_is(value, "false")) ||
+            !fc_text(root, "owner", owner, sizeof(owner)) || !peer_id_valid(owner)) return;
+        granted = fj_is(value, "true"); mine = !strcmp(owner, g_myId);
         if (s) {
             if (granted && !mine) s->lockedByPeer = 1;
             if (!granted && !mine) { s->lockedByMe = 0; s->lockedByPeer = 1; logmsg("lock denied id=0x%08x", id); }
         }
-    } else if (strstr(m, "\"t\":\"lock_released\"") && jget_paramkey(m, &id)) {
+    } else if (!strcmp(type, "lock_released") && jget_paramkey(m, &id)) {
         Slot *s = slot_by_id(id);
         if (s) s->lockedByPeer = 0;
-    } else if (strstr(m, "\"t\":\"presence\"")) {
+    } else if (!strcmp(type, "presence")) {
         strncpy_s(g_peersJson, sizeof(g_peersJson), m, _TRUNCATE);
         InterlockedExchange(&g_focusResend, 1);           // a newcomer: tell them where we are
-        logmsg("server: %.300s", m);
+        logmsg("NET room presence updated");
         net_show_connected(m);
-    } else if (strstr(m, "\"t\":\"error\"")) {
-        logmsg("server: %.300s", m);
+    } else if (!strcmp(type, "error")) {
+        {
+            FlJson root = {m, strlen(m)}, value;
+            char code[64] = "unknown"; size_t k;
+            if (fj_get(root, "code", &value) && fj_text(value, code, sizeof(code)))
+                for (k = 0; code[k]; k++) if (!isalnum((unsigned char)code[k]) && code[k] != '_') { strcpy_s(code, sizeof(code), "invalid"); break; }
+            logmsg("NET relay error code=%s", code);
+        }
         net_server_error(m);
-    } else if (strstr(m, "\"t\":\"leader_left\"")) {
-        logmsg("server: %.300s", m);
+    } else if (!strcmp(type, "leader_left")) {
+        logmsg("NET host left the room");
         strcpy_s(g_netErr, sizeof(g_netErr), "The host left: session ended");
         net_alert("The host left: the session ended.");
     }
@@ -5744,10 +7195,14 @@ static void handle_msg_inner(const char *m) {
 
 typedef struct { wchar_t *path; uint64_t size; FILETIME mt; char hex[65]; } HashEnt;
 typedef struct { wchar_t *from, *to; } PathMap;
-typedef struct OutItem { LONG gen; char *msg; unsigned char *blob; size_t blobn; struct OutItem *next; } OutItem;
-typedef struct InItem { LONG gen; char *msg; struct InItem *next; } InItem;
+typedef struct OutItem { LONG gen; char *msg; unsigned char *blob; size_t blobn, bytes; struct OutItem *next; } OutItem;
+typedef struct InItem { LONG gen; char *msg; size_t bytes; struct InItem *next; } InItem;
+#define TRANSFER_QUEUE_MAX_COUNT 4096
+#define TRANSFER_QUEUE_MAX_BYTES (128u * 1024u * 1024u)
 
 static HashEnt *g_hashes;  static int g_nhash, g_caphash;    // content hash per local file (path+size+mtime)
+#define HASH_CACHE_MAX 8192
+static unsigned g_hashEvict;
 static PathMap *g_pmap;    static int g_npmap, g_cappmap;    // receiver: path in peer data -> local file
 static char (*g_declined)[65]; static int g_ndeclined, g_capdeclined;   // "No" in the upload dialog
 static CRITICAL_SECTION g_sampleLock, g_outLock, g_inLock;                        // all of the above + the blob server address
@@ -5757,8 +7212,10 @@ static volatile LONG g_blobOn = 0;
 static int     g_noLocal = 0;                                // FLIM_SAMPLE_NOLOCAL=1 (tests): ignore local copies
 static OutItem *g_outHead, *g_outTail;
 static int     g_outBusy;
+static size_t  g_outBytes, g_outCount;
 static InItem  *g_inHead, *g_inTail;
 static int     g_inBusy;
+static size_t  g_inBytes, g_inCount;
 static HANDLE  g_outEvt, g_inEvt;
 static volatile uint64_t g_xferDone, g_xferTotal;
 static const char *g_xferWhat = "";
@@ -5780,12 +7237,15 @@ static void sha_end(Sha *s, char hex[65]) {
     BCryptCloseAlgorithmProvider(s->alg, 0);
     for (i = 0; i < 32; i++) sprintf_s(hex + i * 2, 3, "%02x", d[i]);
 }
-static void sha_hex(const void *p, size_t n, char hex[65]) {
-    Sha s;
+static int sha_hex(const void *p, size_t n, char hex[65]) {
+    Sha s; UCHAR d[32]; int i, ok;
     hex[0] = 0;
-    if (!sha_begin(&s)) return;
-    sha_add(&s, p, n);
-    sha_end(&s, hex);
+    if (!sha_begin(&s)) return 0;
+    ok = BCRYPT_SUCCESS(BCryptHashData(s.h, (PUCHAR)p, (ULONG)n, 0)) && BCRYPT_SUCCESS(BCryptFinishHash(s.h, d, 32, 0));
+    BCryptDestroyHash(s.h); BCryptCloseAlgorithmProvider(s.alg, 0);
+    if (!ok) return 0;
+    for (i = 0; i < 32; i++) sprintf_s(hex + i * 2, 3, "%02x", d[i]);
+    return 1;
 }
 static int is_hex64(const char *h) {
     int i;
@@ -5823,6 +7283,7 @@ static int hash_file(const wchar_t *p, char hex[65]) {
     if (f == INVALID_HANDLE_VALUE) return 0;
     if (!sha_begin(&s)) { CloseHandle(f); return 0; }
     buf = (unsigned char *)malloc(BLOB_CHUNK * 4);
+    if (!buf) { sha_end(&s, hex); CloseHandle(f); return 0; }
     for (;;) {
         if (!ReadFile(f, buf, BLOB_CHUNK * 4, &got, NULL)) { ok = 0; break; }
         if (!got) break;
@@ -5839,9 +7300,20 @@ static void hash_put(const wchar_t *p, uint64_t size, FILETIME mt, const char *h
     EnterCriticalSection(&g_sampleLock);
     for (i = 0; i < g_nhash && _wcsicmp(g_hashes[i].path, p) != 0; i++) {}
     if (i == g_nhash) {
-        if (g_nhash == g_caphash) { g_caphash = g_caphash ? g_caphash * 2 : 256; g_hashes = (HashEnt *)realloc(g_hashes, sizeof(HashEnt) * g_caphash); }
-        g_hashes[g_nhash].path = _wcsdup(p);
-        g_nhash++;
+        wchar_t *copy = _wcsdup(p);
+        if (!copy) { LeaveCriticalSection(&g_sampleLock); return; }
+        if (g_nhash == HASH_CACHE_MAX) {
+            i = (int)(g_hashEvict++ % HASH_CACHE_MAX);
+            free(g_hashes[i].path); g_hashes[i].path = copy;
+        } else {
+            if (g_nhash == g_caphash) {
+                int cap = g_caphash ? g_caphash * 2 : 256;
+                HashEnt *entries = (HashEnt *)realloc(g_hashes, sizeof(HashEnt) * cap);
+                if (!entries) { free(copy); LeaveCriticalSection(&g_sampleLock); return; }
+                g_hashes = entries; g_caphash = cap;
+            }
+            g_hashes[g_nhash++].path = copy;
+        }
     }
     g_hashes[i].size = size; g_hashes[i].mt = mt;
     strcpy_s(g_hashes[i].hex, sizeof(g_hashes[i].hex), hex);
@@ -5861,7 +7333,9 @@ static int sample_hash(const wchar_t *p, char hex[65], uint64_t *size) {
         }
     LeaveCriticalSection(&g_sampleLock);
     if (!hit) {
+        FILETIME after; uint64_t afterSize;
         if (!hash_file(p, hex)) return 0;
+        if (!file_info(p, &afterSize, &after) || afterSize != sz || CompareFileTime(&after, &mt)) return 0;
         hash_put(p, sz, mt, hex);
     }
     *size = sz;
@@ -5885,23 +7359,29 @@ static int find_by_hash(const char *hex, wchar_t *out, int cap) {
 }
 
 static void map_set(const wchar_t *from, const wchar_t *to) {
-    int i;
+    int i, failed = 0;
     EnterCriticalSection(&g_sampleLock);
     if (!session_current()) { LeaveCriticalSection(&g_sampleLock); return; }
     for (i = 0; i < g_npmap && wcscmp(g_pmap[i].from, from) != 0; i++) {}
     if (!to) {
         if (i < g_npmap) { free(g_pmap[i].from); free(g_pmap[i].to); g_pmap[i] = g_pmap[--g_npmap]; }
     } else {
-        if (i == g_npmap) {
-            if (g_npmap == g_cappmap) { g_cappmap = g_cappmap ? g_cappmap * 2 : 64; g_pmap = (PathMap *)realloc(g_pmap, sizeof(PathMap) * g_cappmap); }
-            g_pmap[g_npmap].from = _wcsdup(from);
-            g_pmap[g_npmap].to = NULL;
-            g_npmap++;
+        wchar_t *target = _wcsdup(to), *source = i == g_npmap ? _wcsdup(from) : NULL;
+        if (!target || (i == g_npmap && !source)) failed = 1;
+        if (!failed && i == g_npmap && g_npmap == g_cappmap) {
+            int cap = g_cappmap ? g_cappmap * 2 : 64;
+            PathMap *entries = (PathMap *)realloc(g_pmap, sizeof(PathMap) * cap);
+            if (!entries) failed = 1;
+            else { g_pmap = entries; g_cappmap = cap; }
         }
-        free(g_pmap[i].to);
-        g_pmap[i].to = _wcsdup(to);
+        if (failed) { free(target); free(source); }
+        else {
+            if (i == g_npmap) { g_pmap[g_npmap].from = source; g_pmap[g_npmap++].to = NULL; }
+            free(g_pmap[i].to); g_pmap[i].to = target;
+        }
     }
     LeaveCriticalSection(&g_sampleLock);
+    if (failed) sharing_fail("Sample paths: session stopped", "There is not enough memory to map the shared samples to local files. Existing sample paths were kept.");
 }
 
 static int declined(const char *hex) {
@@ -5912,10 +7392,22 @@ static int declined(const char *hex) {
     return r;
 }
 static void decline(const char *hex) {
+    int i, failed = 0;
     EnterCriticalSection(&g_sampleLock);
-    if (g_ndeclined == g_capdeclined) { g_capdeclined = g_capdeclined ? g_capdeclined * 2 : 64; g_declined = (char (*)[65])realloc(g_declined, 65 * (size_t)g_capdeclined); }
-    strcpy_s(g_declined[g_ndeclined++], 65, hex);
+    if (!session_current()) { LeaveCriticalSection(&g_sampleLock); return; }
+    for (i = 0; i < g_ndeclined && strcmp(g_declined[i], hex); i++) {}
+    if (i == g_ndeclined) {
+        if (g_ndeclined >= TRANSFER_QUEUE_MAX_COUNT) failed = 1;
+        else if (g_ndeclined == g_capdeclined) {
+            int cap = g_capdeclined ? g_capdeclined * 2 : 64;
+            char (*next)[65] = (char (*)[65])realloc(g_declined, 65 * (size_t)cap);
+            if (!next) failed = 1;
+            else { g_declined = next; g_capdeclined = cap; }
+        }
+        if (!failed) strcpy_s(g_declined[g_ndeclined++], 65, hex);
+    }
     LeaveCriticalSection(&g_sampleLock);
+    if (failed) sharing_fail("Sample list: session stopped", "The declined-sample list exceeded its limit or available memory. Reconnect before continuing to share.");
 }
 
 static int sample_path_join(wchar_t *out, int cap, const wchar_t *tail) {
@@ -5951,6 +7443,212 @@ static int fl_shared_data(wchar_t *out, int cap) {
 static int fl_user_data(wchar_t *out, int cap) {
     return fl_shared_data(out, cap) && sample_path_join(out, cap, L"FL Studio");
 }
+
+typedef struct { unsigned char id[16]; int format, unit; char *path; } PluginEntry;
+static PluginEntry *g_pluginCatalog;
+static size_t g_pluginCatalogN, g_pluginCatalogCap;
+static int g_pluginCatalogRead;
+static unsigned g_pluginCatalogFormats[2][2];
+static uint64_t g_pluginCatalogStamp;
+
+static uint64_t plugin_catalog_stamp(void) {
+    static const wchar_t *const folders[] = {L"Generators\\VST", L"Generators\\VST3", L"Effects\\VST", L"Effects\\VST3"};
+    wchar_t root[4096], query[4096];
+    uint64_t stamp = 1; int folder;
+    if (!fl_user_data(root, 4096) || !sample_path_join(root, 4096, L"Presets\\Plugin database\\Installed")) return stamp;
+    for (folder = 0; folder < 4; folder++) {
+        WIN32_FIND_DATAW fd; HANDLE found; unsigned count = 0;
+        _snwprintf_s(query, 4096, _TRUNCATE, L"%s\\%s\\*.fst", root, folders[folder]);
+        found = FindFirstFileW(query, &fd);
+        if (found == INVALID_HANDLE_VALUE) continue;
+        do {
+            uint64_t entry;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+            entry = state_hash((unsigned char *)fd.cFileName, wcslen(fd.cFileName) * sizeof(wchar_t));
+            entry ^= ((uint64_t)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime;
+            entry ^= ((uint64_t)fd.nFileSizeHigh << 32) | fd.nFileSizeLow;
+            stamp += entry ^ ((uint64_t)folder << 60);
+        } while (++count < 8192 && FindNextFileW(found, &fd));
+        FindClose(found);
+    }
+    return stamp;
+}
+
+static void plugin_catalog_clear(void) {
+    size_t i;
+    for (i = 0; i < g_pluginCatalogN; i++) free(g_pluginCatalog[i].path);
+    free(g_pluginCatalog); g_pluginCatalog = NULL; g_pluginCatalogN = g_pluginCatalogCap = 0;
+    memset(g_pluginCatalogFormats, 0, sizeof(g_pluginCatalogFormats));
+    g_pluginCatalogRead = 0;
+}
+
+/* Main thread only; the Installed database is FL's scan result, not a guessed VST folder. */
+static void plugin_catalog_read(void) {
+    static const wchar_t *const folders[] = {L"Generators\\VST", L"Generators\\VST3", L"Effects\\VST", L"Effects\\VST3"};
+    wchar_t root[4096];
+    int folder, reliable = 1;
+    if (g_pluginCatalogRead) return;
+    g_pluginCatalogRead = 1;
+    g_pluginCatalogStamp = plugin_catalog_stamp();
+    if (!fl_user_data(root, 4096) || !sample_path_join(root, 4096, L"Presets\\Plugin database\\Installed")) return;
+    for (folder = 0; folder < 4; folder++) {
+        wchar_t query[4096], file[4096];
+        WIN32_FIND_DATAW fd;
+        HANDLE found;
+        _snwprintf_s(query, 4096, _TRUNCATE, L"%s\\%s\\*.fst", root, folders[folder]);
+        found = FindFirstFileW(query, &fd);
+        if (found == INVALID_HANDLE_VALUE) continue;
+        do {
+            FILE *f = NULL;
+            unsigned char *d;
+            size_t size, got;
+            FlimPlugin s;
+            PluginEntry *next;
+            if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || fd.nFileSizeHigh || !fd.nFileSizeLow || fd.nFileSizeLow > 256 * 1024) continue;
+            size = fd.nFileSizeLow;
+            _snwprintf_s(file, 4096, _TRUNCATE, L"%s\\%s\\%s", root, folders[folder], fd.cFileName);
+            if (_wfopen_s(&f, file, L"rb") || !f) { reliable = 0; continue; }
+            d = (unsigned char *)malloc(size);
+            got = d ? fread(d, 1, size, f) : 0; fclose(f);
+            if (!d || got != size) { reliable = 0; free(d); continue; }
+            if (!flim_plugin_read(d, size, &s)) { free(d); continue; }
+            free(d);
+            if (g_pluginCatalogN >= 8192) { reliable = 0; break; }
+            if (g_pluginCatalogN == g_pluginCatalogCap) {
+                size_t cap = g_pluginCatalogCap + 256;
+                next = (PluginEntry *)realloc(g_pluginCatalog, cap * sizeof(*next));
+                if (!next) { reliable = 0; continue; }
+                g_pluginCatalog = next; g_pluginCatalogCap = cap;
+            }
+            next = g_pluginCatalog + g_pluginCatalogN;
+            next->path = _strdup(s.path);
+            if (!next->path) { reliable = 0; continue; }
+            memcpy(next->id, s.id, sizeof(s.id)); next->format = s.format; next->unit = folder / 2;
+            g_pluginCatalogN++;
+            g_pluginCatalogFormats[folder / 2][s.format - 2]++;
+        } while (FindNextFileW(found, &fd));
+        FindClose(found);
+    }
+    if (!reliable) memset(g_pluginCatalogFormats, 0, sizeof(g_pluginCatalogFormats));
+    logmsg("PLUGIN catalog cached %zu scanned installations", g_pluginCatalogN);
+}
+
+static int plugin_local_file(const char *path) {
+    DWORD attr;
+    /* Only scanned absolute drive paths are eligible. UNC paths never trigger a network probe. */
+    if (!path[0] || !isalpha((unsigned char)path[0]) || path[1] != ':' || (path[2] != '\\' && path[2] != '/')) return 0;
+    attr = GetFileAttributesA(path);
+    return attr != INVALID_FILE_ATTRIBUTES && !(attr & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static int plugin_path_same(const char *a, const char *b) {
+    char first[4096], second[4096]; DWORD x, y; size_t i;
+    if (!a[0] || !b[0]) return !strcmp(a, b);
+    x = GetFullPathNameA(a, sizeof(first), first, NULL);
+    y = GetFullPathNameA(b, sizeof(second), second, NULL);
+    if (!x || x >= sizeof(first) || !y || y >= sizeof(second)) return !_stricmp(a, b);
+    for (i = 0; first[i]; i++) if (first[i] == '/') first[i] = '\\';
+    for (i = 0; second[i]; i++) if (second[i] == '/') second[i] = '\\';
+    return !_stricmp(first, second);
+}
+
+static uint64_t plugin_retry_stamp(const unsigned char *d, size_t n, int unit) {
+    FlimPlugin s; size_t i; uint64_t stamp = 1;
+    if (!flim_plugin_read(d, n, &s)) return 0;
+    for (i = 0; i < g_pluginCatalogN; i++) {
+        const PluginEntry *e = &g_pluginCatalog[i]; WIN32_FILE_ATTRIBUTE_DATA attr; uint64_t entry;
+        if (e->unit != unit || e->format != s.format || memcmp(e->id, s.id, s.format == 2 ? 4 : 16)) continue;
+        entry = state_hash((const unsigned char *)e->path, strlen(e->path));
+        if (plugin_local_file(e->path) && GetFileAttributesExA(e->path, GetFileExInfoStandard, &attr)) {
+            entry ^= ((uint64_t)attr.ftLastWriteTime.dwHighDateTime << 32) | attr.ftLastWriteTime.dwLowDateTime;
+            entry ^= ((uint64_t)attr.nFileSizeHigh << 32) | attr.nFileSizeLow;
+        }
+        stamp += entry;
+    }
+    return stamp;
+}
+
+static int plugin_prepare(const unsigned char *d, size_t n, int unit, unsigned char **local, size_t *localn, char *reason, size_t cap) {
+    FlimPlugin s;
+    const char *candidate = NULL, *exact = NULL;
+    size_t i;
+    int ambiguous = 0, unresolved = 0;
+    *local = NULL; *localn = 0;
+    if (!flim_plugin_read(d, n, &s)) {
+        if ((n >= 4 && !memcmp(d, "FLhd", 4) && !flp_walk(d, n, NULL, NULL)) ||
+            (s.wrappers == 1 && s.states == 1 && s.invalid)) {
+            strcpy_s(reason, cap, "Malformed or unsupported wrapper preset; it was not passed to FL's loader");
+            return 0;
+        }
+        return 1;
+    }
+    sprintf_s(reason, cap, "%.180s (VST%d)", s.name[0] ? s.name : "Unnamed plugin", s.format);
+    plugin_catalog_read();
+    for (i = 0; i < g_pluginCatalogN; i++) {
+        const PluginEntry *e = &g_pluginCatalog[i];
+        if (e->unit != unit || e->format != s.format || memcmp(e->id, s.id, s.format == 2 ? 4 : 16)) continue;
+        if (!e->path[0]) { unresolved = 1; continue; } // Some FL scan records carry an ID without a path.
+        if (!plugin_local_file(e->path)) continue;
+        if (plugin_path_same(e->path, s.path)) exact = e->path;
+        if (candidate && !plugin_path_same(candidate, e->path)) ambiguous = 1;
+        if (!candidate) candidate = e->path;
+    }
+    if (exact) candidate = exact;
+    else if (ambiguous) { strcat_s(reason, cap, ": several local binaries share this ID; scan only the intended installation"); return 0; }
+    if (!candidate) {
+        if (unresolved || !g_pluginCatalogFormats[unit][s.format - 2]) return 1; // Unknown catalog: let FL resolve by ID.
+        strcat_s(reason, cap, ": matching ID not present in the scanned local database");
+        return 0;
+    }
+    if (plugin_path_same(candidate, s.path)) return 1;
+    *local = flim_plugin_path(d, n, candidate, FLIM_CLOUD_MAX, localn);
+    if (!*local) return -1;
+    logmsg("PLUGIN local VST%d path selected by stable ID: %.180s", s.format, s.name);
+    return 1;
+}
+
+static void plugins_retry(void) {
+    int i, attempted = 0;
+    uint64_t stamp = plugin_catalog_stamp();
+    if (stamp != g_pluginCatalogStamp) plugin_catalog_clear();
+    plugin_catalog_read();
+    for (i = 0; i < MAX_CH + MAX_MIX * MAX_FX_SLOTS; i++) {
+        int unit = i < MAX_CH ? U_CH : U_FX;
+        int a = i < MAX_CH ? i : (i - MAX_CH) / MAX_FX_SLOTS, b = i < MAX_CH ? 0 : (i - MAX_CH) % MAX_FX_SLOTS;
+        Unit *u = unit_ptr(unit, a, b);
+        if (u && u->unavailable == 1) {
+            size_t n;
+            unsigned char *d = plug_agreed_copy(unit, a, b, &n);
+            uint64_t current = d ? plugin_retry_stamp(d, n, unit) : 0;
+            char *path;
+            if (!current || current == u->retryStamp || attempted) { free(d); continue; }
+            path = tmp_path("pr");
+            FILE *f = NULL;
+            int ok = 0;
+            if (path && !fopen_s(&f, path, "wb") && f) {
+                ok = fwrite(d, 1, n, f) == n;
+                if (fclose(f)) ok = 0;
+            }
+            free(d);
+            if (!ok) {
+                if (path) { DeleteFileA(path); free(path); }
+                logmsg("PLUGIN retry deferred: retained state could not be written for %d %d/%d", unit, a, b);
+                continue;
+            }
+            { QItem load = {0}; load.unit = unit; load.a = a; load.b = b; load.mode = 2; load.path = path;
+              logmsg("PLUGIN automatic recovery: local installation changed for %d %d/%d", unit, a, b);
+              do_load(&load); DeleteFileA(path); free(path); attempted = 1; }
+        }
+    }
+}
+
+static void plugins_auto_tick(DWORD now) {
+    static DWORD last;
+    if (!g_pluginRetryable || !g_compatReady || g_compatFault || g_projBusy || closing_now()) return;
+    if (last && now - last < 5000) return;
+    last = now;
+    enqueue_unit(T_PLUGRETRY, 0, 0, 0, 0, NULL);
+}
 // A sample path as FL writes it -> a local file path. 0 = not a transferable file
 // (factory data and other FL placeholders: every install has those).
 static int expand_path(const wchar_t *p, wchar_t *out, int cap) {
@@ -5979,13 +7677,23 @@ static void ev_wstr(const unsigned char *p, size_t n, wchar_t *out, int cap) {
     out[k] = 0;
 }
 
-typedef struct { wchar_t **paths; int n, cap; } PathList;
+typedef struct { wchar_t **paths; int n, cap, failed; } PathList;
+#define SAMPLE_REFERENCE_MAX 4096
 static void pathlist_add(PathList *L, const wchar_t *w) {
     int i;
-    if (!w[0]) return;
+    wchar_t *copy;
+    if (!w[0] || L->failed) return;
     for (i = 0; i < L->n; i++) if (wcscmp(L->paths[i], w) == 0) return;
-    if (L->n == L->cap) { L->cap = L->cap ? L->cap * 2 : 16; L->paths = (wchar_t **)realloc(L->paths, sizeof(wchar_t *) * L->cap); }
-    L->paths[L->n++] = _wcsdup(w);
+    if (L->n >= SAMPLE_REFERENCE_MAX) { L->failed = 1; return; }
+    if (L->n == L->cap) {
+        int cap = L->cap ? L->cap * 2 : 16;
+        wchar_t **paths = (wchar_t **)realloc(L->paths, sizeof(wchar_t *) * cap);
+        if (!paths) { L->failed = 1; return; }
+        L->paths = paths; L->cap = cap;
+    }
+    copy = _wcsdup(w);
+    if (!copy) { L->failed = 1; return; }
+    L->paths[L->n++] = copy;
 }
 
 // ---- paths inside plugin data ----
@@ -6103,9 +7811,20 @@ static void pathlist_free(PathList *L) {
     memset(L, 0, sizeof(*L));
 }
 
-typedef struct { unsigned char *o; size_t n, cap; int changed; const unsigned char *d; } RewriteCtx;
+#define SAMPLE_REWRITE_MAX (128u * 1024u * 1024u)
+typedef struct { unsigned char *o; size_t n, cap; int changed, failed; const unsigned char *d; } RewriteCtx;
 static void rw_put(RewriteCtx *c, const void *p, size_t n) {
-    if (c->n + n > c->cap) { c->cap = (c->n + n) * 2 + 1024; c->o = (unsigned char *)realloc(c->o, c->cap); }
+    size_t need, cap;
+    unsigned char *next;
+    if (c->failed || !n) return;
+    if (!p || c->n > SAMPLE_REWRITE_MAX || n > SAMPLE_REWRITE_MAX - c->n) { c->failed = 1; return; }
+    need = c->n + n;
+    if (need > c->cap) {
+        cap = need > (SAMPLE_REWRITE_MAX - 1024) / 2 ? SAMPLE_REWRITE_MAX : need * 2 + 1024;
+        next = (unsigned char *)realloc(c->o, cap);
+        if (!next) { c->failed = 1; return; }
+        c->o = next; c->cap = cap;
+    }
     memcpy(c->o + c->n, p, n);
     c->n += n;
 }
@@ -6124,7 +7843,7 @@ static const wchar_t *map_find(const wchar_t *from) {   // caller holds g_sample
 // TLV records of v[a, b) into c, mapped path leaves replaced (lengths follow). Caller holds g_sampleLock.
 static void tlv_rewrite(const unsigned char *v, size_t a, size_t b, int depth, RewriteCtx *c) {
     wchar_t w[SAMPLE_PATH_MAX];
-    while (a < b) {
+    while (a < b && !c->failed) {
         size_t s = a + 12, e = s + (size_t)*(const uint64_t *)(v + a + 4);
         const wchar_t *to = tlv_path(v + s, e - s, w, SAMPLE_PATH_MAX) ? map_find(w) : NULL;
         RewriteCtx sub;
@@ -6140,6 +7859,7 @@ static void tlv_rewrite(const unsigned char *v, size_t a, size_t b, int depth, R
             tlv_rewrite(v, s, e, depth + 1, &sub);
             if (sub.changed) c->changed = 1;
         } else rw_put(&sub, v + s, e - s);
+        if (sub.failed) { free(sub.o); c->failed = 1; return; }
         ln = sub.n;
         rw_put(c, v + a, 4);
         rw_put(c, &ln, 8);
@@ -6148,7 +7868,35 @@ static void tlv_rewrite(const unsigned char *v, size_t a, size_t b, int depth, R
         a = e;
     }
 }
-static void samples_dir(wchar_t *out, int cap);
+static int samples_dir(wchar_t *out, int cap);
+// Hard links need only an identity check; copies must match byte for byte.
+static int same_sample_file(const wchar_t *a, const wchar_t *b) {
+    HANDLE fa = INVALID_HANDLE_VALUE, fb = INVALID_HANDLE_VALUE;
+    BY_HANDLE_FILE_INFORMATION ia, ib;
+    unsigned char *buf = NULL;
+    DWORD na, nb;
+    int equal = 0;
+    fa = CreateFileW(a, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+    fb = CreateFileW(b, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+    if (fa == INVALID_HANDLE_VALUE || fb == INVALID_HANDLE_VALUE ||
+        !GetFileInformationByHandle(fa, &ia) || !GetFileInformationByHandle(fb, &ib) ||
+        ia.nFileSizeHigh != ib.nFileSizeHigh || ia.nFileSizeLow != ib.nFileSizeLow ||
+        (ia.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (ib.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) goto done;
+    if ((ia.nFileIndexHigh || ia.nFileIndexLow) && ia.dwVolumeSerialNumber == ib.dwVolumeSerialNumber &&
+        ia.nFileIndexHigh == ib.nFileIndexHigh && ia.nFileIndexLow == ib.nFileIndexLow) { equal = 1; goto done; }
+    buf = (unsigned char *)malloc(128 * 1024);
+    if (!buf) goto done;
+    for (;;) {
+        if (!ReadFile(fa, buf, 64 * 1024, &na, NULL) || !ReadFile(fb, buf + 64 * 1024, 64 * 1024, &nb, NULL) ||
+            na != nb || memcmp(buf, buf + 64 * 1024, na)) break;
+        if (!na) { equal = 1; break; }
+    }
+done:
+    free(buf);
+    if (fa != INVALID_HANDLE_VALUE) CloseHandle(fa);
+    if (fb != INVALID_HANDLE_VALUE) CloseHandle(fb);
+    return equal;
+}
 // A local name for `to` that is exactly `len` characters long (plain paths in plugin data
 // keep their length): <samples>\<folder>\<name>, a hard link (or copy) of the file.
 static int alias_path(const wchar_t *to, size_t len, wchar_t *out, int cap) {
@@ -6156,9 +7904,9 @@ static int alias_path(const wchar_t *to, size_t len, wchar_t *out, int cap) {
     const wchar_t *b = to + wcslen(to), *ext;
     size_t fixed, k, i;
     uint64_t fh = 1469598103934665603ull;
-    while (b > to && b[-1] != L'\\') b--;
+    while (b > to && b[-1] != L'\\' && b[-1] != L'/') b--;
     ext = wcsrchr(b, L'.');
-    samples_dir(dir, MAX_PATH);
+    if (cap <= 0 || !samples_dir(dir, MAX_PATH) || wcslen(b) >= MAX_PATH) return 0;
     wcscpy_s(name, MAX_PATH, b);
     fixed = wcslen(dir) + 2;                                // two backslashes
     if (fixed + wcslen(name) + 1 > len) {                   // too long: a short name keeps the extension
@@ -6166,7 +7914,7 @@ static int alias_path(const wchar_t *to, size_t len, wchar_t *out, int cap) {
         if (fixed + wcslen(name) + 1 > len) return 0;
     }
     k = len - fixed - wcslen(name);
-    if (k >= MAX_PATH || len >= (size_t)cap) return 0;
+    if (k >= MAX_PATH || len >= (size_t)cap || len >= MAX_PATH) return 0;
     for (i = 0; to[i]; i++) { fh ^= to[i]; fh *= 1099511628211ull; }
     swprintf_s(h, 17, L"%016llx", (unsigned long long)fh);
     for (i = 0; i < k; i++) folder[i] = i < 16 ? h[i] : L'_';
@@ -6174,8 +7922,7 @@ static int alias_path(const wchar_t *to, size_t len, wchar_t *out, int cap) {
     swprintf_s(out, cap, L"%s\\%s\\%s", dir, folder, name);
     if (wcslen(out) != len) return 0;
     if (file_exists_w(out)) {                               // made earlier: must be this file (short names can collide)
-        uint64_t sa, sb;
-        if (!file_info(out, &sa, NULL) || !file_info(to, &sb, NULL) || sa != sb) return 0;
+        if (!same_sample_file(out, to)) return 0;
     } else {
         wchar_t d2[MAX_PATH * 2];
         swprintf_s(d2, MAX_PATH * 2, L"%s\\%s", dir, folder);
@@ -6199,10 +7946,10 @@ static int raw_rewrite(unsigned char *v, size_t n) {
                 for (j = 0; j < k; j++) ascii &= al[j] < 128;
                 if (wide) memcpy(v + i, al, k * 2);
                 else if (ascii) for (j = 0; j < k; j++) v[i + j] = (unsigned char)al[j];
-                else { logmsg("SAMPLES %S: no same-length local name, it will be missing", w); i += k - 1; continue; }
+                else return -1;
                 changed = 1;
                 logmsg("SAMPLES plugin data: %S -> %S", w, al);
-            } else if (to) logmsg("SAMPLES %S: no same-length local name, it will be missing", w);
+            } else if (to) return -1;
             i += k * (wide ? 2 : 1) - 1;
         }
     return changed;
@@ -6213,9 +7960,10 @@ static int rewrite_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, 
     RewriteCtx *c = (RewriteCtx *)ctx;
     wchar_t w[SAMPLE_PATH_MAX];
     int i;
+    if (c->failed) return 0;
     if (id == EV_PLUGIN_DATA && n >= 12) {
         RewriteCtx t;
-        int st = tlv_start(p, n), ch = 0;
+        int st = tlv_start(p, n), ch = 0, raw;
         memset(&t, 0, sizeof(t));
         if (st >= 0) {
             t.d = p;
@@ -6223,11 +7971,14 @@ static int rewrite_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, 
             tlv_rewrite(p, (size_t)st, n, 0, &t);
             ch = t.changed;
         } else rw_put(&t, p, n);
-        if (raw_rewrite(t.o, t.n)) ch = 1;
+        if (t.failed) { free(t.o); c->failed = 1; return 0; }
+        raw = raw_rewrite(t.o, t.n);
+        if (raw < 0) { free(t.o); c->failed = 2; return 0; }
+        if (raw) ch = 1;
         if (ch) { rw_event(c, id, t.o, t.n); c->changed = 1; }
         else rw_put(c, c->d + at, end - at);
         free(t.o);
-        return 1;
+        return !c->failed;
     }
     if (id == EV_SAMPLE_PATH && n >= 4) {
         ev_wstr(p, n, w, SAMPLE_PATH_MAX);
@@ -6239,7 +7990,7 @@ static int rewrite_cb(void *ctx, uint32_t id, const unsigned char *p, size_t n, 
         }
     }
     rw_put(c, c->d + at, end - at);
-    return 1;
+    return !c->failed;
 }
 
 // Receiver: point the sample paths in an inbound .flp / .fst image at the local files.
@@ -6247,21 +7998,30 @@ static void samples_rewrite(unsigned char **d, size_t *n) {
     RewriteCtx c;
     size_t start, end;
     int ok;
-    if (!g_npmap || !flp_data_bounds(*d, *n, &start, &end)) return;
+    if (!d || !n || !*d || !flp_data_bounds(*d, *n, &start, &end)) return;
     memset(&c, 0, sizeof(c));
     c.d = *d;
-    rw_put(&c, *d, start);
     EnterCriticalSection(&g_sampleLock);
+    if (!g_npmap) { LeaveCriticalSection(&g_sampleLock); return; }
+    rw_put(&c, *d, start);
     ok = flp_walk(*d, *n, rewrite_cb, &c);
     LeaveCriticalSection(&g_sampleLock);
+    if (c.failed) goto failed;
     if (!ok || !c.changed) { free(c.o); return; }
     if (c.n - start > UINT32_MAX) { free(c.o); return; }
     *(uint32_t *)(c.o + start - 4) = (uint32_t)(c.n - start);        // FLdt chunk length
     rw_put(&c, *d + end, *n - end);
+    if (c.failed) goto failed;
     logmsg("SAMPLES paths rewritten to local files (%zu -> %zu bytes)", *n, c.n);
     free(*d);
     *d = c.o;
     *n = c.n;
+    return;
+failed:
+    free(c.o);
+    sharing_fail("Sample paths: session stopped", c.failed == 2 ?
+        "A plugin's sample path could not be safely mapped to the correct local file. The original data was kept." :
+        "The shared file could not fit in memory while updating sample paths. The original data was kept.");
 }
 
 // FL's older loader can crash on newer projects. A negotiated session may load a verified
@@ -6306,6 +8066,43 @@ static FlpBuildCheck flp_check_build(const unsigned char *d, size_t n, char *the
 }
 
 // ---- blob store (HTTP) ----
+static __declspec(thread) int g_sampleHttp;
+static __declspec(thread) int g_sampleRetry;
+static __declspec(thread) int g_sampleLocalError;
+static volatile LONG64 g_sampleBlockedUntil;
+
+static int sample_retryable(DWORD status, int download) {
+    return !status || status == 408 || status == 425 || status == 429 || status == 500 ||
+        status == 502 || status == 503 || status == 504 || status == 507 || (download && status == 404);
+}
+
+static DWORD sample_retry_delay(unsigned attempt, ULONGLONG now, ULONGLONG blocked) {
+    DWORD delay = attempt < 5 ? (1000u << attempt) : 30000u;
+    if (blocked > now && blocked - now > delay) delay = (DWORD)(blocked - now > 60000 ? 60000 : blocked - now);
+    return delay;
+}
+
+static int sample_retry_wait(unsigned attempt) {
+    DWORD remaining = sample_retry_delay(attempt, GetTickCount64(), (ULONGLONG)InterlockedCompareExchange64(&g_sampleBlockedUntil, 0, 0));
+    logmsg("SAMPLES pending edit: automatic retry in %lu ms (round %u)", remaining, attempt + 1);
+    while (remaining && session_current() && !g_compatFault) {
+        DWORD slice = remaining > 100 ? 100 : remaining;
+        Sleep(slice); remaining -= slice;
+    }
+    return session_current() && !g_compatFault;
+}
+
+static void sample_failed(DWORD status, int verification) {
+    int blocked = status == 429 || status == 507;
+    if (verification) g_sampleRetry = 1;
+    ff_finish(blocked ? "blocked" : g_sampleRetry ? "waiting" : "failed",
+        blocked ? "allowance" : verification ? "verification" : g_sampleRetry ? "retrying" : "network");
+}
+static void sample_local_failed(void) {
+    g_sampleRetry = 1;
+    ff_finish("waiting", "local_cache");
+    logmsg("SAMPLES local destination unavailable: edit retained; room stays connected");
+}
 // One request to the server's blob store. Returns the HTTP status (0 = failed).
 //   up/upSize: PUT body streamed from this file; body/bodyN: small in-memory body;
 //   down: response body written to this file (downHex = its sha256); resp: small text response.
@@ -6333,24 +8130,33 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
     ses = WinHttpOpen(L"flim/1.0", WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) ses = WinHttpOpen(L"flim/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!ses) goto out;
-    WinHttpSetTimeouts(ses, 0, 15000, 120000, 120000);
+    WinHttpSetTimeouts(ses, 15000, 15000, !strcmp(what, "/blobs/missing") ? 10000 : 120000,
+                       !strcmp(what, "/blobs/missing") ? 10000 : 120000);
     con = WinHttpConnect(ses, u.host, u.port, 0);
     if (!con) goto out;
     req = WinHttpOpenRequest(con, verb, path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, u.secure ? WINHTTP_FLAG_SECURE : 0);
     if (!req) goto out;
     buf = (unsigned char *)malloc(BLOB_CHUNK);
+    if (!buf) { err = ERROR_NOT_ENOUGH_MEMORY; goto out; }
     if (up) {
         uint64_t left = upSize;
         f = CreateFileW(up, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
         if (f == INVALID_HANDLE_VALUE) goto out;
         if (!WinHttpSendRequest(req, hdr, (DWORD)-1L, WINHTTP_NO_REQUEST_DATA, 0, (DWORD)upSize, 0)) goto out;
         while (left) {
-            DWORD want = left > BLOB_CHUNK ? BLOB_CHUNK : (DWORD)left, got = 0, wr = 0;
+            DWORD want = left > BLOB_CHUNK ? BLOB_CHUNK : (DWORD)left, got = 0, sent = 0;
+            if (!session_current()) { err = ERROR_OPERATION_ABORTED; goto out; }
             if (!ReadFile(f, buf, want, &got, NULL) || !got) goto out;
-            if (!WinHttpWriteData(req, buf, got, &wr)) goto out;
+            while (sent < got) {
+                DWORD wr = 0;
+                if (!session_current()) { err = ERROR_OPERATION_ABORTED; goto out; }
+                if (!WinHttpWriteData(req, buf + sent, got - sent, &wr) || !wr || wr > got - sent) goto out;
+                sent += wr;
+                g_xferDone += wr;
+                ff_progress(wr);
+                xfer_show(0);
+            }
             left -= got;
-            g_xferDone += got;
-            xfer_show(0);
         }
         CloseHandle(f);
         f = INVALID_HANDLE_VALUE;
@@ -6358,25 +8164,51 @@ static DWORD blob_http(const wchar_t *verb, const char *what, const wchar_t *up,
     if (!WinHttpReceiveResponse(req, NULL)) goto out;
     WinHttpQueryHeaders(req, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX,
                         &status, &sl, WINHTTP_NO_HEADER_INDEX);
+    if (status == 429 || status == 507) {
+        char reason[1024];
+        DWORD used = 0, got = 0;
+        while (used < sizeof(reason) - 1 && WinHttpReadData(req, reason + used, (DWORD)sizeof(reason) - 1 - used, &got) && got)
+            used += got;
+        reason[used] = 0;
+        if (g_sampleHttp) {
+            InterlockedExchange64(&g_sampleBlockedUntil, (LONG64)(GetTickCount64() + 60000));
+            logmsg("SAMPLES file allowance reached (HTTP %lu): file transfers paused; room stays connected", status);
+        } else blob_limit_error(status, reason);
+        goto out;
+    }
     if (status == 200 && down) {
         Sha s;
+        uint64_t received = 0, limit = g_cloudTransport ? FLIM_CLOUD_FILE_MAX : SAMPLE_MAX_BYTES;
         f = CreateFileW(down, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-        if (f == INVALID_HANDLE_VALUE || !sha_begin(&s)) { err = GetLastError(); status = 0; goto out; }
+        if (f == INVALID_HANDLE_VALUE) { g_sampleLocalError = 1; err = GetLastError(); status = 0; goto out; }
+        if (!sha_begin(&s)) { err = GetLastError(); status = 0; goto out; }
         for (;;) {
             DWORD got = 0, wr = 0;
+            if (!session_current()) { err = ERROR_OPERATION_ABORTED; status = 0; break; }
             if (!WinHttpReadData(req, buf, BLOB_CHUNK, &got)) { err = GetLastError(); status = 0; break; }
             if (!got) break;
+            if (!session_current()) { err = ERROR_OPERATION_ABORTED; status = 0; break; }
+            if (got > limit - received) { err = ERROR_FILE_TOO_LARGE; status = 0; break; }
+            received += got;
             sha_add(&s, buf, got);
-            if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { err = GetLastError(); status = 0; break; }
+            if (!WriteFile(f, buf, got, &wr, NULL) || wr != got) { g_sampleLocalError = 1; err = GetLastError(); status = 0; break; }
             g_xferDone += got;
+            ff_progress(got);
             xfer_show(0);
         }
         sha_end(&s, downHex);
+        if (status == 200 && !FlushFileBuffers(f)) { g_sampleLocalError = 1; err = GetLastError(); status = 0; }
     } else if (resp && respCap > 0) {
         int o = 0;
         for (;;) {
             DWORD got = 0;
-            if (o >= respCap - 1 || !WinHttpReadData(req, resp + o, (DWORD)(respCap - 1 - o), &got) || !got) break;
+            if (o >= respCap - 1) {
+                char extra;
+                if (!WinHttpReadData(req, &extra, 1, &got) || got) status = 0;
+                break;
+            }
+            if (!WinHttpReadData(req, resp + o, (DWORD)(respCap - 1 - o), &got)) { status = 0; break; }
+            if (!got) break;
             o += (int)got;
         }
         resp[o] = 0;
@@ -6391,8 +8223,58 @@ out:
     return status;
 }
 
+static DWORD sample_http(const wchar_t *verb, const char *what, const wchar_t *up, uint64_t upSize,
+                         const char *body, DWORD bodyN, const wchar_t *down, char *downHex, char *resp, int respCap) {
+    DWORD status = 0; int attempt;
+    g_sampleLocalError = 0;
+    if (GetTickCount64() < (ULONGLONG)InterlockedCompareExchange64(&g_sampleBlockedUntil, 0, 0)) { g_sampleRetry = 1; return 507; }
+    for (attempt = 0; attempt < 2 && session_current() && !g_compatFault; attempt++) {
+        if (attempt) {
+            if (ff_active) { ff_current.done = 0; strcpy_s(ff_current.reason, sizeof(ff_current.reason), "retrying"); ff_save(); }
+            Sleep(150);
+        }
+        g_sampleHttp = 1;
+        status = blob_http(verb, what, up, upSize, body, bodyN, down, downHex, resp, respCap);
+        g_sampleHttp = 0;
+        if (g_sampleLocalError) break;
+        if (status && status != 502 && status != 503 && status != 504) break;
+    }
+    if (sample_retryable(status, down != NULL)) g_sampleRetry = 1;
+    return status;
+}
+
 // ---- sender ----
 typedef struct { const wchar_t *p; wchar_t *full; char hex[65]; uint64_t size; int upload, skip; } SEnt;
+
+static int sample_sendable(uint64_t bytes) {
+    return bytes > 0 && bytes <= (g_cloudTransport ? FLIM_CLOUD_FILE_MAX : SAMPLE_MAX_BYTES);
+}
+
+static int samples_missing(SEnt *entries, int count) {
+    enum { BATCH = 512, BODY_CAP = BATCH * 65 + 1, RESPONSE_CAP = BATCH * 65 + 16 };
+    char *body = (char *)malloc(BODY_CAP), *response = (char *)malloc(RESPONSE_CAP);
+    int start, ok = 0;
+    if (!body || !response) goto done;
+    for (start = 0; start < count; start += BATCH) {
+        int i, end = count - start > BATCH ? start + BATCH : count, n = 0;
+        char *line, *context = NULL;
+        DWORD status;
+        if (!session_current()) goto done;
+        for (i = start; i < end; i++) n += sprintf_s(body + n, BODY_CAP - n, "%s\n", entries[i].hex);
+        status = sample_http(L"POST", "/blobs/missing", NULL, 0, body, (DWORD)n, NULL, NULL, response, RESPONSE_CAP);
+        if (status != 200) { logmsg("SAMPLES sample lookup failed (HTTP %lu)", status); goto done; }
+        for (line = strtok_s(response, "\r\n", &context); line; line = strtok_s(NULL, "\r\n", &context)) {
+            if (strlen(line) != 64 || !is_hex64(line)) goto done;
+            for (i = start; i < end; i++) if (!strcmp(entries[i].hex, line)) { entries[i].upload = 1; break; }
+            if (i == end) goto done;
+        }
+    }
+    ok = 1;
+done:
+    if (!ok) { int i; for (i = 0; i < count; i++) entries[i].upload = 0; }
+    free(body); free(response);
+    return ok;
+}
 
 static void group_digits(uint64_t v, wchar_t *out, int cap) {
     wchar_t t[32];
@@ -6416,27 +8298,37 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
     char *out = NULL;
     memset(&L, 0, sizeof(L));
     flp_walk(blob, n, collect_cb, &L);
+    if (L.failed) goto memory_failed;
     if (!L.n || !g_blobOn) goto done;
     E = (SEnt *)calloc((size_t)L.n, sizeof(SEnt));
+    if (!E) goto memory_failed;
     for (i = 0; i < L.n; i++) {
         wchar_t full[SAMPLE_PATH_MAX];
+        uint64_t bytes;
         if (!expand_path(L.paths[i], full, SAMPLE_PATH_MAX)) continue;
-        if (!sample_hash(full, E[ne].hex, &E[ne].size)) { logmsg("SAMPLES %S: no such file here (or too big), not sent", full); continue; }
+        if (!file_info(full, &bytes, NULL)) { ff_begin(full, NULL, "upload", 0, "missing"); ff_finish("missing", "source_missing"); continue; }
+        if (!sample_sendable(bytes)) { ff_begin(full, NULL, "upload", bytes, "failed"); ff_finish("failed", bytes ? "too_large" : "empty"); continue; }
+        ff_begin(full, NULL, "upload", bytes, "checking");
+        if (!sample_hash(full, E[ne].hex, &E[ne].size)) { ff_finish("failed", "source_changed"); continue; }
+        ff_identify(E[ne].hex);
+        ff_finish("checking", "");
         E[ne].p = L.paths[i];
         E[ne].full = _wcsdup(full);
+        if (!E[ne].full) goto memory_failed;
         ne++;
     }
     if (!ne) goto done;
-    {   // which ones does the server lack?
-        char *body = (char *)malloc((size_t)ne * 65 + 1), *resp = (char *)malloc((size_t)ne * 65 + 16), *line, *ctx = NULL;
-        int o = 0;
-        DWORD st;
-        for (i = 0; i < ne; i++) o += sprintf_s(body + o, (size_t)ne * 65 + 1 - o, "%s\n", E[i].hex);
-        st = blob_http(L"POST", "/blobs/missing", NULL, 0, body, (DWORD)o, NULL, NULL, resp, ne * 65 + 16);
-        if (st != 200) { logmsg("SAMPLES the server's sample store doesn't answer (HTTP %lu): sent without samples", st); free(body); free(resp); goto done; }
-        for (line = strtok_s(resp, "\r\n", &ctx); line; line = strtok_s(NULL, "\r\n", &ctx))
-            for (i = 0; i < ne; i++) if (strcmp(E[i].hex, line) == 0) E[i].upload = 1;
-        free(body); free(resp);
+    if (!samples_missing(E, ne)) {
+        if (!session_current() || g_compatFault) goto done;
+        logmsg("SAMPLES lookup unavailable: sample-dependent edit pending while recoverable requests retry");
+        for (i = 0; i < ne; i++) {
+            int blocked = GetTickCount64() < (ULONGLONG)InterlockedCompareExchange64(&g_sampleBlockedUntil, 0, 0);
+            E[i].skip = 1; ff_begin(E[i].full, E[i].hex, "upload", E[i].size, blocked ? "blocked" : g_sampleRetry ? "waiting" : "failed");
+            sample_failed(blocked ? 507 : 0, 0);
+        }
+    }
+    for (i = 0; i < ne; i++) if (!E[i].skip && !E[i].upload) {
+        ff_begin(E[i].full, E[i].hex, "upload", E[i].size, "ready"); ff_finish("ready", "relay_cache");
     }
     for (i = 0; i < ne; i++) {
         if (!E[i].upload) continue;
@@ -6446,34 +8338,7 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
         upBytes += E[i].size;
         nup++;
     }
-    if (upBytes > SAMPLE_ASK_BYTES) {
-        wchar_t q[900], grouped[40];
-        group_digits(upBytes, grouped, 40);
-        swprintf_s(q, 900,
-            L"The other people in this session don't have %d of the samples used here.\n\n"
-            L"Sending them uploads %.1f MB (%s bytes).\n\n"
-            L"Send them now?\n\n"
-            L"Yes: upload them (flim sends your other changes after the upload).\n"
-            L"No: don't send these samples. They will be missing for the others.",
-            nup, upBytes / 1048576.0, grouped);
-        logmsg("SAMPLES asking before uploading %llu bytes (%d files)", (unsigned long long)upBytes, nup);
-        // Owned by FL's main window: an ownerless box from this background thread can't come to
-        // the front and may open behind other windows. Flash FL's taskbar button in case FL isn't in front.
-        if (g_mainForm) {
-            FLASHWINFO fw = { sizeof(fw), g_mainForm, FLASHW_TRAY | FLASHW_TIMERNOFG, 0, 0 };
-            FlashWindowEx(&fw);
-        }
-        if (MessageBoxW(g_mainForm, q, L"flim: send samples?", MB_YESNO | MB_ICONQUESTION | MB_TOPMOST | MB_SETFOREGROUND) != IDYES) {
-            for (i = 0; i < ne; i++) {
-                if (!E[i].upload) continue;
-                decline(E[i].hex);
-                for (j = 0; j < ne; j++) if (strcmp(E[j].hex, E[i].hex) == 0) E[j].skip = 1;
-                E[i].upload = 0;
-            }
-            logmsg("SAMPLES upload declined: %d files left out", nup);
-            upBytes = 0; nup = 0;
-        }
-    }
+    if (nup) logmsg("SAMPLES automatic upload: %llu bytes (%d files), relay limits still apply", (unsigned long long)upBytes, nup);
     if (nup) {
         char what[80];
         g_xferWhat = "Uploading"; g_xferDone = 0; g_xferTotal = upBytes;
@@ -6482,9 +8347,11 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
             DWORD st;
             if (!E[i].upload) continue;
             sprintf_s(what, sizeof(what), "/blob/%s", E[i].hex);
-            st = blob_http(L"PUT", what, E[i].full, E[i].size, NULL, 0, NULL, NULL, NULL, 0);
-            if (st == 200 || st == 201) logmsg("SAMPLES uploaded %S (%llu bytes)", E[i].full, (unsigned long long)E[i].size);
+            ff_begin(E[i].full, E[i].hex, "upload", E[i].size, "uploading");
+            st = sample_http(L"PUT", what, E[i].full, E[i].size, NULL, 0, NULL, NULL, NULL, 0);
+            if (st == 200 || st == 201) { ff_finish("ready", "uploaded"); logmsg("SAMPLES uploaded %S (%llu bytes)", E[i].full, (unsigned long long)E[i].size); }
             else {
+                sample_failed(st, 0);
                 logmsg("SAMPLES upload of %S failed (HTTP %lu): left out", E[i].full, st);
                 for (j = 0; j < ne; j++) if (strcmp(E[j].hex, E[i].hex) == 0) E[j].skip = 1;
             }
@@ -6498,6 +8365,7 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
         if (!op) goto done;
         for (i = 0; i < ne; i++) cap += wcslen(E[i].p) * 3 + 120;
         out = (char *)malloc(cap);
+        if (!out) goto memory_failed;
         len = (size_t)(op + 6 - msg);
         memcpy(out, msg, len);
         len += sprintf_s(out + len, cap - len, "\"samples\":[");
@@ -6512,41 +8380,79 @@ static char *samples_attach(const char *msg, const unsigned char *blob, size_t n
         strcpy_s(out + len, cap - len, op + 6);
         logmsg("SAMPLES op lists %d samples (%d uploaded)", k, nup);
     }
+    goto done;
+memory_failed:
+    sharing_fail("Sample transfer: session stopped", "The sample list exceeded its limit or available memory. Reconnect and resync before continuing to share.");
 done:
     if (E) { for (i = 0; i < ne; i++) free(E[i].full); free(E); }
     pathlist_free(&L);
     return out;
 }
 
-static void out_push(char *msg, unsigned char *blob, size_t n, LONG generation) {   // caller holds g_outLock
-    OutItem *it = (OutItem *)calloc(1, sizeof(OutItem));
-    it->gen = generation; it->msg = msg; it->blob = blob; it->blobn = n;
+// Keep the original state until its recoverable file dependencies are ready. Repeating a
+// whole edit after it was applied could undo newer notes, moves, or channel deletions.
+static char *samples_prepare_send(const char *msg, const unsigned char *blob, size_t n) {
+    char *prepared = NULL;
+    unsigned attempt = 0;
+    if (!session_current() || g_compatFault) return NULL;
+    do {
+        free(prepared); g_sampleRetry = 0;
+        prepared = samples_attach(msg, blob, n);
+        if (!g_sampleRetry || !session_current() || g_compatFault) break;
+        if (!sample_retry_wait(attempt)) break;
+        if (attempt < 30) attempt++;
+    } while (session_current());
+    return prepared;
+}
+
+static int out_push(char *msg, unsigned char *blob, size_t n, LONG generation) {   // caller holds g_outLock; takes ownership on either result
+    OutItem *it;
+    size_t bytes = msg ? strlen(msg) + 1 : 0;
+    if (!msg || generation != g_netGen || g_compatFault || g_outCount >= TRANSFER_QUEUE_MAX_COUNT ||
+        n > TRANSFER_QUEUE_MAX_BYTES || bytes > TRANSFER_QUEUE_MAX_BYTES - n ||
+        bytes + n > TRANSFER_QUEUE_MAX_BYTES - g_outBytes) { free(msg); free(blob); return 0; }
+    it = (OutItem *)calloc(1, sizeof(OutItem));
+    if (!it) { free(msg); free(blob); return 0; }
+    it->gen = generation; it->msg = msg; it->blob = blob; it->blobn = n; it->bytes = bytes + n;
     if (g_outTail) g_outTail->next = it; else g_outHead = it;
     g_outTail = it;
+    g_outBytes += it->bytes; g_outCount++;
+    return 1;
 }
 
 // Every op goes through here: straight out, unless something is queued in the outbox
 // (an op waiting for its samples) -- then behind it, to keep the order.
 static void ws_send(const char *msg) {
+    int failed = 0;
     LONG generation = session_generation();
     if (generation != g_netGen || !compat_outgoing(msg)) return;
     EnterCriticalSection(&g_outLock);
-    if (g_outBusy || g_outHead) out_push(_strdup(msg), NULL, 0, generation);
+    if (g_outBusy || g_outHead || (g_cloudTransport && strlen(msg) > FLIM_CLOUD_INLINE)) {
+        if (out_push(_strdup(msg), NULL, 0, generation)) SetEvent(g_outEvt);
+        else failed = 1;
+    }
     else ws_send_now(msg, generation);
     LeaveCriticalSection(&g_outLock);
+    if (failed && generation == g_netGen) sharing_fail("Upload backlog: session stopped", "Shared edits exceeded the upload backlog or available memory. Reconnect and resync before continuing to share.");
 }
 
 // An op whose data (an .flp / .fst image) may reference samples. Takes ownership of msg.
 static void ws_send_samples(char *msg, const unsigned char *blob, size_t n) {
     unsigned char *copy;
+    int queued;
     LONG generation = session_generation();
-    if (generation != g_netGen || !g_ws || !compat_outgoing(msg)) { free(msg); return; }
+    if (generation != g_netGen || !g_ws || !msg || !compat_outgoing(msg)) { free(msg); return; }
+    if (n > TRANSFER_QUEUE_MAX_BYTES || (n && !blob)) {
+        free(msg); sharing_fail("Upload backlog: session stopped", "The shared project or preset is too large for the transfer backlog."); return;
+    }
     copy = (unsigned char *)malloc(n ? n : 1);
+    if (!copy) { free(msg); sharing_fail("Upload backlog: session stopped", "There is not enough memory to queue the shared project or preset."); return; }
     if (n) memcpy(copy, blob, n);
     EnterCriticalSection(&g_outLock);
-    out_push(msg, copy, n, generation);
+    queued = out_push(msg, copy, n, generation);
     LeaveCriticalSection(&g_outLock);
-    SetEvent(g_outEvt);
+    if (queued) SetEvent(g_outEvt);
+    else if (generation == g_netGen) sharing_fail("Upload backlog: session stopped", "Shared edits exceeded the upload backlog or available memory. Reconnect and resync before continuing to share.");
 }
 
 static DWORD WINAPI outThread(LPVOID p) {
@@ -6559,13 +8465,32 @@ static DWORD WINAPI outThread(LPVOID p) {
             it = g_outHead;
             if (!it) { g_outBusy = 0; LeaveCriticalSection(&g_outLock); break; }
             g_outHead = it->next;
+            g_outBytes -= it->bytes; g_outCount--;
             if (!g_outHead) g_outTail = NULL;
             g_outBusy = 1;
             LeaveCriticalSection(&g_outLock);
             g_workBound = 1; g_workGen = it->gen;
             if (session_current() && it->blob) {
-                char *m2 = samples_attach(it->msg, it->blob, it->blobn);
+                char *m2 = samples_prepare_send(it->msg, it->blob, it->blobn);
                 if (m2) { free(it->msg); it->msg = m2; }
+            }
+            if (session_current() && !g_compatFault && g_cloudTransport && strlen(it->msg) > FLIM_CLOUD_INLINE) {
+                char hx[65], what[80], header[1024]; DWORD status;
+                size_t size = strlen(it->msg);
+                if (size > FLIM_CLOUD_MAX || !sha_hex(it->msg, size, hx) || !fc_header(it->msg, hx, header, sizeof(header))) {
+                    cloud_fail("This edit is too large or cannot be safely sent through the Cloudflare relay.");
+                } else {
+                    sprintf_s(what, sizeof(what), "/blob/%s", hx);
+                    status = blob_http(L"PUT", what, NULL, 0, it->msg, (DWORD)size, NULL, NULL, NULL, 0);
+                    if (session_current()) {
+                        if ((status == 200 || status == 201) && compat_outgoing(it->msg)) {
+                            logmsg("CLOUD uploaded serialized edit (%llu bytes)", (unsigned long long)size);
+                            char *reference = _strdup(header);
+                            if (reference) { free(it->msg); it->msg = reference; }
+                            else cloud_fail("There is not enough memory to send the shared edit reference. Reconnect and resync before continuing to share.");
+                        } else cloud_fail("The relay could not store this edit. Its file allowance may be full, or the connection failed. Reconnect and resync before continuing to share.");
+                    }
+                }
             }
             EnterCriticalSection(&g_outLock);        // direct senders wait: nothing overtakes this one
             ws_send_now(it->msg, it->gen);
@@ -6577,22 +8502,68 @@ static DWORD WINAPI outThread(LPVOID p) {
 }
 
 // ---- receiver ----
-static void samples_dir(wchar_t *out, int cap) {
-    DWORD k = GetEnvironmentVariableW(L"USERPROFILE", out, cap);
-    if (!k || k >= (DWORD)cap) wcscpy_s(out, cap, L"C:");
-    wcscat_s(out, cap, L"\\Documents\\flim\\samples");
+static int samples_dir(wchar_t *out, int cap) {
+    DWORD k;
+    wchar_t documents[MAX_PATH];
+    if (cap <= 0) return 0;
+    out[0] = 0;
+    SetLastError(ERROR_SUCCESS);
+    k = GetEnvironmentVariableW(L"FLIM_SAMPLE_DIR", out, cap);
+    if (k || GetLastError() != ERROR_ENVVAR_NOT_FOUND) {
+        size_t i;
+        if (!k || k >= (DWORD)cap || k > 180 || !is_abs_path(out) ||
+            (out[0] == L'\\' && out[1] == L'\\' && (out[2] == L'?' || out[2] == L'.'))) { out[0] = 0; return 0; }
+        for (i = 0; i < k; i++) if (out[i] < 32 || wcschr(L"<>\"|?*", out[i]) || (out[i] == L':' && i != 1)) { out[0] = 0; return 0; }
+        while (k > 3 && (out[k - 1] == L'\\' || out[k - 1] == L'/')) out[--k] = 0;
+        return 1;
+    }
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, documents)) || !*documents ||
+        !is_abs_path(documents) || wcslen(documents) >= (size_t)cap) return 0;
+    wcscpy_s(out, cap, documents);
+    if (!sample_path_join(out, cap, L"flim\\samples") || wcslen(out) > 180) {out[0] = 0; return 0;}
+    return 1;
 }
 
 // Where a downloaded sample is kept: samples\<first 16 hex>\<its file name>.
-static void cache_path(const char *hex, const wchar_t *p, wchar_t *out, int cap) {
-    wchar_t dir[MAX_PATH], name[MAX_PATH];
+static int cache_path(const char *hex, const wchar_t *p, wchar_t *out, int cap) {
+    wchar_t dir[MAX_PATH], name[MAX_PATH], extension[18] = L"", stem[8];
     const wchar_t *b = p + wcslen(p);
-    int i;
+    const wchar_t *ext;
+    size_t i, n, room, root, base;
+    if (cap <= 0) return 0;
+    out[0] = 0;
+    if (!hex || strlen(hex) != 64 || !is_hex64(hex) || !samples_dir(dir, MAX_PATH)) return 0;
     while (b > p && b[-1] != L'\\' && b[-1] != L'/') b--;
+    ext = wcsrchr(b, L'.');
+    if (ext && wcslen(ext) > 1 && wcslen(ext) <= 16) wcscpy_s(extension, 18, ext);
+    for (i = 0; extension[i]; i++) if (wcschr(L"\\/:*?\"<>|", extension[i]) || extension[i] < 32) extension[i] = L'_';
+    i = wcslen(extension);
+    while (i && (extension[i - 1] == L'.' || extension[i - 1] == L' ')) extension[--i] = 0;
     wcsncpy_s(name, MAX_PATH, *b ? b : L"sample.wav", _TRUNCATE);
     for (i = 0; name[i]; i++) if (wcschr(L"\\/:*?\"<>|", name[i]) || name[i] < 32) name[i] = L'_';
-    samples_dir(dir, MAX_PATH);
-    swprintf_s(out, cap, L"%s\\%.16S\\%s", dir, hex, name);
+    n = wcslen(name);
+    while (n && (name[n - 1] == L'.' || name[n - 1] == L' ')) name[--n] = 0;
+    if (!n) {wcscpy_s(name, MAX_PATH, L"sample.wav"); n = wcslen(name);}
+    base = wcscspn(name, L". ");
+    if (base < 8) {
+        memcpy(stem, name, base * sizeof(wchar_t)); stem[base] = 0;
+        if (!_wcsicmp(stem, L"CON") || !_wcsicmp(stem, L"PRN") || !_wcsicmp(stem, L"AUX") || !_wcsicmp(stem, L"NUL") ||
+            (base == 4 && (!_wcsnicmp(stem, L"COM", 3) || !_wcsnicmp(stem, L"LPT", 3)) && stem[3] >= L'1' && stem[3] <= L'9')) {
+            if (n + 1 < MAX_PATH) {memmove(name + 1, name, (n + 1) * sizeof(wchar_t)); n++;}
+            name[0] = L'_';
+        }
+    }
+    root = wcslen(dir) + 18;
+    room = (cap < MAX_PATH ? (size_t)cap : MAX_PATH) - 1;
+    if (room <= root + 17) return 0;
+    room -= root;
+    if (n > room) {
+        size_t keep = room - wcslen(extension);
+        if (keep && name[keep - 1] >= 0xd800 && name[keep - 1] <= 0xdbff) keep--;
+        name[keep] = 0;
+        wcscat_s(name, MAX_PATH, extension);
+    }
+    return swprintf_s(out, cap, L"%s\\%.16S\\%s", dir, hex, name) > 0;
 }
 
 typedef struct { wchar_t *p; char hex[65]; uint64_t size; wchar_t cache[MAX_PATH * 2]; int need; } REnt;
@@ -6600,45 +8571,73 @@ typedef struct { wchar_t *p; char hex[65]; uint64_t size; wchar_t cache[MAX_PATH
 // Inbox thread: make the samples an inbound op lists available here and record the path
 // rewrites for its data.
 static void samples_resolve(const char *m) {
-    const char *q = strstr(m, "\"samples\":[");
+    FlJson root = {m, strlen(m)}, op, samples;
+    const char *q, *end;
     REnt *R = NULL;
-    int nr = 0, cap = 0, i, nneed = 0, nfail = 0;
+    int nr = 0, cap = 0, i, nneed = 0, nfail = 0, downloaded = 0;
     uint64_t total = 0;
-    if (!q) return;
-    q += 11;
-    while (*q == '{') {
-        const char *e = strchr(q, '}'), *pp = strstr(q, "\"p\":\""), *hh = strstr(q, "\"h\":\""), *ss = strstr(q, "\"s\":");
-        if (!e) break;
-        if (pp && pp < e && hh && hh < e && ss && ss < e) {
-            const char *pe = strchr(pp + 5, '"');
-            size_t bn;
-            unsigned char *b;
-            if (pe && pe < e && is_hex64(hh + 5)) {
-                if (nr == cap) { cap = cap ? cap * 2 : 16; R = (REnt *)realloc(R, sizeof(REnt) * cap); }
-                memset(&R[nr], 0, sizeof(REnt));
-                b = b64dec(pp + 5, (size_t)(pe - pp - 5), &bn);
-                R[nr].p = (wchar_t *)calloc(bn / 2 + 1, 2);
-                memcpy(R[nr].p, b, bn / 2 * 2);
-                free(b);
-                memcpy(R[nr].hex, hh + 5, 64);
-                R[nr].size = _strtoui64(ss + 4, NULL, 10);
-                if (R[nr].p[0]) nr++; else free(R[nr].p);
-            }
+    if (!fj_get(root, "op", &op) || !fj_get(op, "samples", &samples)) return;
+    if (samples.n < 2 || samples.p[0] != '[') goto invalid;
+    q = samples.p + 1; end = samples.p + samples.n;
+    fj_space(&q, end);
+    while (q < end && *q != ']') {
+        FlJson item, path, value;
+        const char *start = q;
+        char hex[65]; uint64_t bytes;
+        size_t bn, k, encoded, padding = 0;
+        unsigned char *b;
+        wchar_t *decoded;
+        if (nr >= SAMPLE_REFERENCE_MAX || !fj_value(&q, end, 0)) goto invalid;
+        item.p = start; item.n = (size_t)(q - start);
+        if (!fj_get(item, "p", &path) || path.n < 6 || path.p[0] != '"' || path.n > 4 * ((SAMPLE_PATH_MAX * 2 + 2) / 3) + 2 ||
+            !fj_get(item, "h", &value) || !fj_text(value, hex, sizeof(hex)) || strlen(hex) != 64 || !is_hex64(hex) ||
+            !fj_get(item, "s", &value) || !fc_uint(value, &bytes) || !sample_sendable(bytes)) goto invalid;
+        encoded = path.n - 2;
+        if (encoded % 4) goto invalid;
+        if (path.p[path.n - 2] == '=') padding++;
+        if (path.p[path.n - 3] == '=') padding++;
+        for (k = 1; k <= encoded; k++) {
+            if (k <= encoded - padding ? b64val(path.p[k]) < 0 : path.p[k] != '=') goto invalid;
         }
-        q = e + 1;
-        if (*q == ',') q++;
+        b = b64dec(path.p + 1, encoded, &bn);
+        if (!b) goto invalid;
+        if (!bn || bn % 2 || bn >= SAMPLE_PATH_MAX * 2) { free(b); goto invalid; }
+        decoded = (wchar_t *)calloc(bn / 2 + 1, 2);
+        if (!decoded) { free(b); goto invalid; }
+        memcpy(decoded, b, bn); free(b);
+        for (k = 0; k < bn / 2; k++) if (decoded[k] < 32) break;
+        if (k != bn / 2) { free(decoded); goto invalid; }
+        if (nr == cap) {
+            int next = cap ? cap * 2 : 16;
+            REnt *items = (REnt *)realloc(R, sizeof(REnt) * next);
+            if (!items) { free(decoded); goto invalid; }
+            R = items; cap = next;
+        }
+        memset(&R[nr], 0, sizeof(REnt)); R[nr].p = decoded;
+        strcpy_s(R[nr].hex, sizeof(R[nr].hex), hex); R[nr++].size = bytes;
+        fj_space(&q, end);
+        if (q < end && *q == ',') { q++; fj_space(&q, end); }
     }
     for (i = 0; i < nr; i++) {
         wchar_t full[SAMPLE_PATH_MAX], found[SAMPLE_PATH_MAX];
         char hx[65];
         uint64_t sz;
-        if (!g_noLocal && expand_path(R[i].p, full, SAMPLE_PATH_MAX) && sample_hash(full, hx, &sz) && strcmp(hx, R[i].hex) == 0) {
+        if (!g_noLocal && expand_path(R[i].p, full, SAMPLE_PATH_MAX) && sample_hash(full, hx, &sz) && sz == R[i].size && strcmp(hx, R[i].hex) == 0) {
             map_set(R[i].p, NULL);                      // the same file is right where the peer has it
+            ff_begin(R[i].p, R[i].hex, "download", R[i].size, "ready"); ff_finish("ready", "local_cache");
             continue;
         }
-        if (!g_noLocal && find_by_hash(R[i].hex, found, SAMPLE_PATH_MAX)) { map_set(R[i].p, found); continue; }
-        cache_path(R[i].hex, R[i].p, R[i].cache, MAX_PATH * 2);
-        if (sample_hash(R[i].cache, hx, &sz) && strcmp(hx, R[i].hex) == 0) { map_set(R[i].p, R[i].cache); continue; }
+        if (!g_noLocal && find_by_hash(R[i].hex, found, SAMPLE_PATH_MAX) && file_info(found, &sz, NULL) && sz == R[i].size) {
+            map_set(R[i].p, found); ff_begin(R[i].p, R[i].hex, "download", R[i].size, "ready"); ff_finish("ready", "local_cache"); continue;
+        }
+        if (!cache_path(R[i].hex, R[i].p, R[i].cache, MAX_PATH * 2)) {
+            map_set(R[i].p, NULL); ff_begin(R[i].p, R[i].hex, "download", R[i].size, "waiting"); sample_local_failed(); goto done;
+        }
+        if (sample_hash(R[i].cache, hx, &sz) && sz == R[i].size && strcmp(hx, R[i].hex) == 0) {
+            map_set(R[i].p, R[i].cache); ff_begin(R[i].p, R[i].hex, "download", R[i].size, "ready"); ff_finish("ready", "local_cache"); continue;
+        }
+        /* A replacement must never reuse the previous contents at this peer path. */
+        map_set(R[i].p, NULL);
         R[i].need = 1;
         total += R[i].size;
         nneed++;
@@ -6647,51 +8646,97 @@ static void samples_resolve(const char *m) {
         g_xferWhat = "Downloading"; g_xferDone = 0; g_xferTotal = total;
         xfer_show(1);
         for (i = 0; i < nr; i++) {
-            wchar_t part[MAX_PATH * 2 + 8], dir[MAX_PATH * 2];
+            wchar_t part[MAX_PATH * 2 + 24], dir[MAX_PATH * 2];
             char what[80], got[65] = "", hx[65];
             uint64_t sz;
-            DWORD st;
+            DWORD st, made;
             wchar_t *slash;
             if (!R[i].need) continue;
-            if (sample_hash(R[i].cache, hx, &sz) && strcmp(hx, R[i].hex) == 0) { map_set(R[i].p, R[i].cache); continue; }   // same content twice
+            { int prior;
+              for (prior = 0; prior < i; prior++) if (!strcmp(R[prior].hex, R[i].hex) &&
+                  sample_hash(R[prior].cache, hx, &sz) && sz == R[i].size && !strcmp(hx, R[i].hex)) break;
+              if (prior < i) { map_set(R[i].p, R[prior].cache); ff_begin(R[i].p, R[i].hex, "download", R[i].size, "ready"); ff_finish("ready", "local_cache"); continue; }
+            }
+            if (sample_hash(R[i].cache, hx, &sz) && sz == R[i].size && strcmp(hx, R[i].hex) == 0) {
+                map_set(R[i].p, R[i].cache); ff_begin(R[i].p, R[i].hex, "download", R[i].size, "ready"); ff_finish("ready", "local_cache"); continue;
+            }
             wcscpy_s(dir, MAX_PATH * 2, R[i].cache);
             slash = wcsrchr(dir, L'\\');
-            if (slash) { *slash = 0; SHCreateDirectoryExW(NULL, dir, NULL); }
-            swprintf_s(part, MAX_PATH * 2 + 8, L"%s.part", R[i].cache);
+            ff_begin(R[i].p, R[i].hex, "download", R[i].size, "downloading");
+            if (!slash) {sample_local_failed(); break;}
+            *slash = 0; made = SHCreateDirectoryExW(NULL, dir, NULL);
+            if ((made != ERROR_SUCCESS && made != ERROR_ALREADY_EXISTS && made != ERROR_FILE_EXISTS) ||
+                !GetTempFileNameW(dir, L"flm", 0, part)) {sample_local_failed(); break;}
             sprintf_s(what, sizeof(what), "/blob/%s", R[i].hex);
-            st = blob_http(L"GET", what, NULL, 0, NULL, 0, part, got, NULL, 0);
-            if (st == 200 && strcmp(got, R[i].hex) == 0 && MoveFileExW(part, R[i].cache, MOVEFILE_REPLACE_EXISTING)) {
+            st = sample_http(L"GET", what, NULL, 0, NULL, 0, part, got, NULL, 0);
+            if (st == 200 && session_current() && file_info(part, &sz, NULL) && sz == R[i].size && strcmp(got, R[i].hex) == 0) {
+                if (!MoveFileExW(part, R[i].cache, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                    DeleteFileW(part); sample_local_failed(); break;
+                }
                 FILETIME mt;
                 if (file_info(R[i].cache, &sz, &mt)) hash_put(R[i].cache, sz, mt, R[i].hex);
                 map_set(R[i].p, R[i].cache);
+                ff_finish("ready", "downloaded");
+                downloaded++;
                 logmsg("SAMPLES downloaded %S (%llu bytes)", R[i].cache, (unsigned long long)R[i].size);
             } else {
                 DeleteFileW(part);
+                if (g_sampleLocalError) sample_local_failed(); else sample_failed(st, st == 200);
                 nfail++;
                 logmsg("SAMPLES could not get %S (HTTP %lu%s): it will be missing", R[i].p, st, st == 200 ? ", content mismatch" : "");
+                if (g_sampleRetry) break;
             }
         }
         xfer_end();
     }
-    logmsg("SAMPLES op lists %d samples: %d downloaded, %d missing", nr, nneed - nfail, nfail);
+    logmsg("SAMPLES op lists %d samples: %d downloaded, %d failed attempts%s", nr, downloaded, nfail, g_sampleRetry ? ", edit pending" : "");
+    goto done;
+invalid:
+    sharing_fail("Sample metadata: session stopped", "The shared sample list is invalid, exceeds its limit, or could not fit in memory. Reconnect and resync before continuing to share.");
+done:
     for (i = 0; i < nr; i++) free(R[i].p);
     free(R);
 }
 
+static int samples_prepare_receive(const char *msg) {
+    unsigned attempt = 0;
+    if (!session_current() || g_compatFault) return 0;
+    do {
+        g_sampleRetry = 0;
+        samples_resolve(msg);
+        if (!g_sampleRetry || !session_current() || g_compatFault) break;
+        if (!sample_retry_wait(attempt)) break;
+        if (attempt < 30) attempt++;
+    } while (session_current());
+    return session_current() && !g_compatFault;
+}
+
+static int message_has_samples(const char *m) {
+    FlJson root = {m, strlen(m)}, op, value;
+    return fj_member_is(root, "t", "\"op\"") && fj_get(root, "op", &op) && fj_get(op, "samples", &value);
+}
+
 // Every inbound message comes through here (receive thread).
 static void inbox_msg(const char *m, LONG generation) {
-    int queue;
-    if (generation != g_netGen) return;
+    int queue, failed = 0;
+    if (generation != g_netGen || g_compatFault) return;
     EnterCriticalSection(&g_inLock);
-    queue = g_inBusy || g_inHead || strstr(m, "\"samples\":[") != NULL;
+    queue = g_inBusy || g_inHead || message_has_samples(m) || fj_member_is((FlJson){m, strlen(m)}, "t", "\"stored\"");
     if (queue) {
-        InItem *it = (InItem *)calloc(1, sizeof(InItem));
-        it->gen = generation; it->msg = _strdup(m);
-        if (g_inTail) g_inTail->next = it; else g_inHead = it;
-        g_inTail = it;
+        size_t bytes = strlen(m) + 1;
+        InItem *it = NULL;
+        if (g_inCount >= TRANSFER_QUEUE_MAX_COUNT || bytes > TRANSFER_QUEUE_MAX_BYTES - g_inBytes ||
+            !(it = (InItem *)calloc(1, sizeof(InItem)))) failed = 1;
+        else if (!(it->msg = _strdup(m))) { free(it); failed = 1; }
+        else {
+            it->gen = generation; it->bytes = bytes;
+            if (g_inTail) g_inTail->next = it; else g_inHead = it;
+            g_inTail = it; g_inBytes += bytes; g_inCount++;
+        }
     }
     LeaveCriticalSection(&g_inLock);
-    if (queue) SetEvent(g_inEvt);
+    if (failed) sharing_fail("Download backlog: session stopped", "Shared edits exceeded the download backlog or available memory. Reconnect and resync before continuing to share.");
+    else if (queue) SetEvent(g_inEvt);
     else handle_msg(m);
 }
 
@@ -6705,11 +8750,25 @@ static DWORD WINAPI inThread(LPVOID p) {
             it = g_inHead;
             if (!it) { g_inBusy = 0; LeaveCriticalSection(&g_inLock); break; }
             g_inHead = it->next;
+            g_inBytes -= it->bytes; g_inCount--;
             if (!g_inHead) g_inTail = NULL;
             g_inBusy = 1;
             LeaveCriticalSection(&g_inLock);
             g_workBound = 1; g_workGen = it->gen;
-            if (session_current() && strstr(it->msg, "\"samples\":[")) samples_resolve(it->msg);
+            if (session_current() && fj_member_is((FlJson){it->msg, strlen(it->msg)}, "t", "\"stored\"")) {
+                FlCloud ref; char *original = NULL, *merged = NULL, hx[65], what[80];
+                if (g_cloudTransport && fc_reference(it->msg, &ref)) {
+                    original = (char *)malloc(ref.size + 1);
+                    sprintf_s(what, sizeof(what), "/blob/%s", ref.hash);
+                    if (original && blob_http(L"GET", what, NULL, 0, NULL, 0, NULL, NULL, original, (int)ref.size + 1) == 200 &&
+                        session_current() && strlen(original) == ref.size && sha_hex(original, ref.size, hx) && !strcmp(hx, ref.hash))
+                        merged = fc_merge(it->msg, original);
+                }
+                free(original);
+                if (merged) { logmsg("CLOUD downloaded verified edit (%llu bytes)", (unsigned long long)ref.size); free(it->msg); it->msg = merged; }
+                else if (session_current()) cloud_fail("A shared edit could not be downloaded or verified. Reconnect and resync before continuing to share.");
+            }
+            if (session_current() && !g_compatFault && message_has_samples(it->msg)) samples_prepare_receive(it->msg);
             if (session_current()) handle_msg(it->msg);
             free(it->msg); free(it);
             g_workBound = 0;
@@ -6719,8 +8778,10 @@ static DWORD WINAPI inThread(LPVOID p) {
 
 // Connected: where the blob store is (same server). Usable once the welcome brings the key.
 static void samples_connected(const NetUrl *u) {
+    InterlockedExchange64(&g_sampleBlockedUntil, 0);
     EnterCriticalSection(&g_sampleLock);
     g_blobUrl = *u;
+    url_root(&g_blobUrl); // The private store routes by its generation-specific x-flim-key.
     g_blobKey[0] = 0;
     InterlockedExchange(&g_blobOn, 0);
     LeaveCriticalSection(&g_sampleLock);
@@ -6738,16 +8799,23 @@ static void samples_key(const char *hex) {
 }
 // Disconnected: drop what was waiting to go out or to be applied.
 static void samples_disconnected(void) {
+    int i;
     EnterCriticalSection(&g_sampleLock);
     InterlockedExchange(&g_blobOn, 0);
+    SecureZeroMemory(g_blobKey, sizeof(g_blobKey));
+    for (i = 0; i < g_npmap; i++) { free(g_pmap[i].from); free(g_pmap[i].to); }
+    free(g_pmap); g_pmap = NULL; g_npmap = g_cappmap = 0;
+    free(g_declined); g_declined = NULL; g_ndeclined = g_capdeclined = 0;
     LeaveCriticalSection(&g_sampleLock);
     EnterCriticalSection(&g_outLock);
     while (g_outHead) { OutItem *n = g_outHead->next; free(g_outHead->msg); free(g_outHead->blob); free(g_outHead); g_outHead = n; }
     g_outTail = NULL;
+    g_outBytes = g_outCount = 0;
     LeaveCriticalSection(&g_outLock);
     EnterCriticalSection(&g_inLock);
     while (g_inHead) { InItem *n = g_inHead->next; free(g_inHead->msg); free(g_inHead); g_inHead = n; }
     g_inTail = NULL;
+    g_inBytes = g_inCount = 0;
     LeaveCriticalSection(&g_inLock);
 }
 
@@ -6777,11 +8845,14 @@ static void net_reset(void) {
     LeaveCriticalSection(&g_qLock);
     EnterCriticalSection(&g_heldLock);
     for (heldIndex = 0; heldIndex < g_nheld; heldIndex++) free(g_held[heldIndex].msg);
-    g_nheld = 0;
+    g_nheld = 0; g_heldBytes = 0;
     LeaveCriticalSection(&g_heldLock);
     proj_end();
     InterlockedExchange(&g_compatReady, 0);
     InterlockedExchange(&g_compatMixed, 0);
+    InterlockedExchange(&g_portableSync, 0);
+    InterlockedExchange(&g_portableLocal, 0);
+    InterlockedExchange(&g_cloudTransport, 0);
     EnterCriticalSection(&g_netTextLock);
     g_nfocus = 0;                                         // where the others were: belongs to the session
     g_session[0] = 0;
@@ -6798,6 +8869,9 @@ static void net_reset(void) {
     }
     LeaveCriticalSection(&g_slotLock);
     EnterCriticalSection(&g_ulockLock);
+    InterlockedExchange(&g_notesCrdt, 0);
+    for (i = 0; i < MAX_PAT; i++) fnc_free(&g_noteSets[i]);
+    g_noteSetCount = 0;
     for (i = 0; i < g_nulocks; i++) { g_ulocks[i].mine = g_ulocks[i].granted = g_ulocks[i].peer = 0; g_ulocks[i].owner[0] = 0; }
     g_peersJson[0] = 0;
     LeaveCriticalSection(&g_ulockLock);
@@ -6807,19 +8881,18 @@ static DWORD WINAPI netThread(LPVOID p) {
     NetReq *r = (NetReq *)p;
     NetUrl u;
     NetConn c;
-    char err[200], name[2 * sizeof(g_myName)], pw[600], own[600], hello[2048], sess[4] = "", localFl[32];
+    char err[200], name[2 * sizeof(g_myName)], pw[600], own[600], hello[2048], sess[FLIM_SESSION_CAP] = "", localFl[32];
     unsigned char *buf = NULL;
     size_t cap = 0, len = 0;
     g_workBound = 1; g_workGen = r->gen;
 
-    if (r->host ? !parse_url(r->url, &u) : !parse_link(r->url, &u, sess)) {
+    if (r->host ? !parse_host(r->url, &u) : !parse_link(r->url, &u, sess)) {
         net_status(NET_ERR, r->host ? "Bad server address" : "Bad session link");
         goto done;
     }
-    url_root(&u);
-    logmsg("NET connecting to %s (%s, port %u)", r->url, u.secure ? "wss" : "ws", u.port);
+    logmsg("NET connecting to %S (%s, port %u)", u.host, u.secure ? "wss" : "ws", u.port);
     if (!ws_open(&u, &c, err, sizeof(err))) {
-        logmsg("NET connect to %s failed: %s", r->url, err);
+        logmsg("NET connection failed: %s", err);
         if (r->gen == g_netGen) net_status(NET_ERR, "Can't connect: %s", err);
         goto done;
     }
@@ -6855,15 +8928,15 @@ static DWORD WINAPI netThread(LPVOID p) {
     if (r->host) {
         json_esc(r->owner, own, sizeof(own));
         sprintf_s(hello, sizeof(hello),
-            "{\"t\":\"host\",\"password\":\"%s\"%s%s%s,\"user\":{\"id\":\"%s\",\"name\":\"%s\"},\"compat\":{\"protocol\":1,\"fl\":\"%s\",\"wire\":\"" FLIM_WIRE "\"}}",
+            "{\"t\":\"host\",\"password\":\"%s\"%s%s%s,\"user\":{\"id\":\"%s\",\"name\":\"%s\"},\"transport\":2,\"notes_crdt\":1,\"portable_sync\":1,\"compat\":{\"protocol\":1,\"fl\":\"%s\",\"wire\":\"" FLIM_WIRE "\"}}",
             pw, own[0] ? ",\"owner\":\"" : "", own, own[0] ? "\"" : "", g_myId, name, localFl);
         SecureZeroMemory(own, sizeof(own));
-        logmsg("hosting on %s%s as %s (%s)", u.shown, r->owner[0] ? " (owner: session 00)" : "", g_myName, g_myId);
+        logmsg("NET hosting (reserved slot=%d)", r->owner[0] != 0);
     } else {
         sprintf_s(hello, sizeof(hello),
-            "{\"t\":\"join\",\"session\":\"%s\",\"password\":\"%s\",\"user\":{\"id\":\"%s\",\"name\":\"%s\"},\"compat\":{\"protocol\":1,\"fl\":\"%s\",\"wire\":\"" FLIM_WIRE "\"}}",
+            "{\"t\":\"join\",\"session\":\"%s\",\"password\":\"%s\",\"user\":{\"id\":\"%s\",\"name\":\"%s\"},\"transport\":2,\"notes_crdt\":1,\"portable_sync\":1,\"compat\":{\"protocol\":1,\"fl\":\"%s\",\"wire\":\"" FLIM_WIRE "\"}}",
             sess, pw, g_myId, name, localFl);
-        logmsg("joining session %s on %s as %s (%s)", sess, u.shown, g_myName, g_myId);
+        logmsg("NET joining as a member");
     }
     ws_send(hello);
     SecureZeroMemory(hello, sizeof(hello)); SecureZeroMemory(pw, sizeof(pw));
@@ -6882,7 +8955,7 @@ static DWORD WINAPI netThread(LPVOID p) {
         if (type == WINHTTP_WEB_SOCKET_CLOSE_BUFFER_TYPE) {
             USHORT code = 0; char reason[124] = { 0 }; DWORD rl = 0;
             WinHttpWebSocketQueryCloseStatus(c.ws, &code, reason, sizeof(reason) - 1, &rl);
-            logmsg("NET server closed the connection (%u %.*s)", code, (int)rl, reason);
+            logmsg("NET server closed the connection (code=%u)", code);
             break;
         }
         if (r->gen != g_netGen) break;
@@ -7035,7 +9108,7 @@ static void splash_hook_install(void) {
 static DWORD WINAPI engineMain(LPVOID p) {
     (void)p;
     srand(GetTickCount() ^ GetCurrentProcessId());
-    logmsg("=== flim v." FLIM_VERSION " - engine v4.6 (connect button + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples + markers/time signature + pattern markers/time signatures + pattern ops + plugin samples + focus) loaded ===");
+    logmsg("=== flim v." FLIM_VERSION " - engine v4.6 (desktop rooms + status + wss; params + plugin state + channels + native move + fx clear + notes + project files + playlist clips + unit locks + names/colors/routing + plugin locks + samples + markers/time signature + pattern markers/time signatures + pattern ops + plugin samples + focus) loaded ===");
 
     HMODULE fl = NULL;
     int tries;
@@ -7110,6 +9183,10 @@ static DWORD WINAPI engineMain(LPVOID p) {
         const DWORD SETTLE_MS = 3000, SETTLE_MAX_MS = 60000;
         DWORD start = GetTickCount(), quietSince;
         while (!fl_ready() && GetTickCount() - start < SETTLE_MAX_MS) Sleep(100);
+        if (!fl_ready()) {
+            logmsg("FL startup readiness timed out; native discovery and sharing remain disabled");
+            return 0;
+        }
         logmsg("FL ready after %lu ms", GetTickCount() - start);
         Sleep(500);
         quietSince = GetTickCount();
@@ -7135,26 +9212,33 @@ static DWORD WINAPI engineMain(LPVOID p) {
 
     {   // who we are: flim.ini name (flim.exe's setup), FLIM_NAME overrides (dev: two FLs on one PC)
         wchar_t w[128], clean[FLIM_NAME_MAX + 1];
-        char env[600], pw[256] = "";
-        if (GetEnvironmentVariableW(L"FLIM_NAME", w, 128) == 0) flimcfg_get(L"name", w, 128);
+        char env[600] = "", pw[256] = "";
+        DWORD nameSize = GetEnvironmentVariableW(L"FLIM_NAME", w, 128);
+        if (!nameSize) flimcfg_get(L"name", w, 128);
+        else if (nameSize >= 128) w[0] = 0;
         if (flim_sanitize_name(w, clean, FLIM_NAME_MAX + 1))
             WideCharToMultiByte(CP_UTF8, 0, clean, -1, g_myName, sizeof(g_myName), NULL, NULL);
         else sprintf_s(g_myName, sizeof(g_myName), "FL-%lu", GetCurrentProcessId());
         sprintf_s(g_myId, sizeof(g_myId), "fl-%lu-%u", GetCurrentProcessId(), (unsigned)rand());
-        logmsg("I am %s (%s); not connected until Connect is clicked", g_myName, g_myId);
+        logmsg("I am %s (%s); waiting for the desktop room connection", g_myName, g_myId);
 
-        // dev / tests: connect right away
-        if (GetEnvironmentVariableA("FLIM_AUTOCONNECT", env, sizeof(env)) == 0) {
+        // The desktop app passes connection details only to this FL process.
+        DWORD urlSize = GetEnvironmentVariableA("FLIM_AUTOCONNECT", env, sizeof(env));
+        if (urlSize >= sizeof(env)) env[0] = 0;
+        else if (!urlSize) {
             char srv[256];
-            if (GetEnvironmentVariableA("FLIM_SERVER", srv, sizeof(srv)) > 0) sprintf_s(env, sizeof(env), "ws://%s", srv);
+            DWORD serverSize = GetEnvironmentVariableA("FLIM_SERVER", srv, sizeof(srv));
+            if (serverSize && serverSize < sizeof(srv)) sprintf_s(env, sizeof(env), "ws://%s", srv);
             else env[0] = 0;
         }
         if (env[0]) {
             char own[256] = "", hv[8] = "";
-            int host = GetEnvironmentVariableA("FLIM_HOST", hv, sizeof(hv)) > 0 && hv[0] == '1';
-            GetEnvironmentVariableA("FLIM_PASSWORD", pw, sizeof(pw));
-            if (host) GetEnvironmentVariableA("FLIM_OWNER_KEY", own, sizeof(own));
-            net_connect(env, pw, host, own);
+            DWORD hostSize = GetEnvironmentVariableA("FLIM_HOST", hv, sizeof(hv));
+            DWORD passwordSize = GetEnvironmentVariableA("FLIM_PASSWORD", pw, sizeof(pw)), ownerSize = 0;
+            int host = hostSize == 1 && hv[0] == '1';
+            if (host) ownerSize = GetEnvironmentVariableA("FLIM_OWNER_KEY", own, sizeof(own));
+            if (hostSize < sizeof(hv) && passwordSize < sizeof(pw) && ownerSize < sizeof(own)) net_connect(env, pw, host, own);
+            else net_status(NET_ERR, "Desktop connection details are too long");
             SecureZeroMemory(pw, sizeof(pw)); SecureZeroMemory(own, sizeof(own));
         }
     }

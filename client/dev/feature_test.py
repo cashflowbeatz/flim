@@ -3,7 +3,7 @@
 # Works with every FL build in the engine's table (flbuild.py). No mouse / keyboard input is used.
 #   python feature_test.py            (after restart_test.ps1; injects the probe into A and B)
 #   python feature_test.py params mixer   (only those steps)
-import fl, mk, flbuild, struct, sys, time, threading
+import fl, mk, flbuild, os, struct, sys, time, threading
 
 A, B = mk.A, mk.B
 results = []
@@ -68,8 +68,8 @@ def t_params(a, b, v):
     a.call(REC, 0, 6400, 1 | 16)                                   # channel 1 volume
     check('channel volume (REC)', lambda: b.call(vb.REC, 0, 0, 2), 6400)
     mid = 0x70000000 + (1 << 22) + 0x1fc0                          # mixer insert 1 volume
-    a.call(REC, mid, 7000, 1 | 16)
-    check('mixer volume (REC)', lambda: b.call(vb.REC, mid, 0, 2), 7000)
+    a.call(REC, flbuild.local_mix_id(a, mid), 7000, 1 | 16)
+    check('mixer volume (REC)', lambda: b.call(vb.REC, flbuild.local_mix_id(b, mid), 0, 2), 7000)
 
 
 def t_mixer(a, b, v):
@@ -140,7 +140,8 @@ def t_patmarks(a, b, v):
 def t_notedel(a, b, v):
     arr = a.call(v.NOTEARR, 3, 1)                                  # pattern 3 has one note (patterns step)
     a.call(v.NOTEDEL, arr, 0, 0)
-    a.call(v.GRIDREFRESH, a.q(a.q(a.q(a.g(v.CHANLIST)) + 8)) + v.CH_GRID)
+    channel = a.q(a.q(a.q(a.g(v.CHANLIST)) + 8))
+    a.call(v.GRIDREFRESH, a.q(channel + v.CH_GRID))
     check('note delete', lambda: mk.pats(b, 3)[2][2], 0, 12)
 
 
@@ -168,6 +169,15 @@ FL_DIRS = {'25.2.3.5171': r'C:\Program Files (x86)\Image-Line\FL Studio 2025',
            '26.1.6.5639': r'C:\Program Files\Image-Line\FL Studio 2026',
            '26.1.7.5654': r'C:\Program Files\Image-Line\FL Studio 2026'}
 MASK_FX = 48
+
+
+def fl_dir(v):
+    override = os.environ.get('FL_DIR')
+    if override:
+        return override
+    if v.build not in FL_DIRS:
+        raise ValueError('Set FL_DIR to the FL installation supplying this build\'s test presets')
+    return FL_DIRS[v.build]
 
 
 def plugin_state(p, v, obj, tag):
@@ -205,7 +215,7 @@ def t_fx(a, b, v):
     """a mixer effect: replacing the plugin in a slot sends its whole state (plug.state)"""
     vb = mk.V(b)
     slot = lambda p, vv: p.q(mixrec(p, 1) + vv.MIX_SLOTS_OFF)     # insert 1, slot 1
-    preset = FL_DIRS[v.build] + r'\Data\Patches\Plugin presets\Effects\Fruity Delay 3\Chorus.fst'
+    preset = fl_dir(v) + r'\Data\Patches\Plugin presets\Effects\Fruity Delay 3\Chorus.fst'
     a.call(v.LOADPRESET, a.mkstr(preset), MASK_FX, slot(a, v), 0)
     check('effect added in A', lambda: a.call(v.HASPLUGIN, slot(a, v)) & 0xff, 1, 3)
     check('effect plugin in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 1, 15)
@@ -214,7 +224,7 @@ def t_fx(a, b, v):
     check('effect identity/wrapper/sound' if mixed else 'effect state (local visibility excluded)',
           lambda: shared_effect_state(plugin_state(b, vb, slot(b, vb), 'b'), mixed),
           shared_effect_state(sa, mixed), 10)
-    a.call(v.LOADPRESET, a.mkstr(FL_DIRS[v.build] + r'\Data\System\(delete) effect.fst'), MASK_FX, slot(a, v), 0)
+    a.call(v.LOADPRESET, a.mkstr(fl_dir(v) + r'\Data\System\(delete) effect.fst'), MASK_FX, slot(a, v), 0)
     check('effect removed in B', lambda: b.call(vb.HASPLUGIN, slot(b, vb)) & 0xff, 0, 15)
 
 
@@ -242,19 +252,22 @@ def t_reorder(a, b, v):
 def clip_list(p):
     ca = p.q(arrangement(p) + 0x14)
     n, data = p.d(ca + 0x14), p.q(ca + 8)
-    return [p.r(data + i * 0x50, 0x50) for i in range(n)]
+    stride = flbuild.clip_stride(p)
+    return [p.r(data + i * stride, stride) for i in range(n)]
 
 
 def t_clips(a, b, v):
     """a pattern clip added to the playlist (clips.set)"""
-    rec = bytearray(0x50)
+    rec = bytearray(flbuild.clip_stride(a))
     # FLP playlist item: position, pattern base 0x5000, item = base + pattern, length, track (499 - index),
     # group, -, flags, -, start / end offset (-1 = whole pattern)
     struct.pack_into('<IHHIHHHHIff', rec, 0, 192, 0x5000, 0x5000 + 1, 384, 499, 0, 0, 0x40, 0, -1.0, -1.0)
-    buf = a.alloc(0x50); a.w(buf, bytes(rec))
+    if v.build == '24.2.2.4597':
+        struct.pack_into('<f', rec, 0x34, 1.0)
+    buf = a.alloc(len(rec)); a.w(buf, bytes(rec))
     ca = a.q(arrangement(a) + 0x14)
     a.cmd('call %x %d %d' % (a.q(a.q(ca) + 8), ca, buf))
-    a.call(v.PLREFRESH, a.q(a.g(v.PLFORM)))
+    flbuild.playlist_refresh(a)
     check('clip added in A', lambda: len(clip_list(a)), 1, 3)
     check('clip in B (position, pattern, length, track)', lambda: [c[:14].hex() for c in clip_list(b)], [c[:14].hex() for c in clip_list(a)], 15)
 
@@ -263,7 +276,7 @@ def make_sample_fixture(v):
     """Use FL's installed sampler template and a fresh, tiny generated WAV."""
     import os, random, tempfile, uuid, wave
     from flp import events, data_bounds
-    template = FL_DIRS[v.build] + r'\Data\Patches\Channel presets\Sampler\Default.fst'
+    template = fl_dir(v) + r'\Data\Patches\Channel presets\Sampler\Default.fst'
     data = open(template, 'rb').read()
     version = next(value.rstrip(b'\0').decode('ascii') for event, value in events(data) if event == 199)
     stem = os.path.join(tempfile.gettempdir(), 'flim_sample_test_' + uuid.uuid4().hex)
@@ -315,7 +328,8 @@ def t_sample(a, b, v, fst=None):
         import winreg
         source = os.path.splitext(fst)[0] + '.wav'
         expected = hashlib.sha256(open(source, 'rb').read()).digest()
-        cache = os.path.join(os.environ['USERPROFILE'], 'Documents', 'flim', 'samples')
+        cache = os.path.join(os.environ.get('FLIM_TEST_PROFILE_B', os.environ['USERPROFILE']),
+                             'Documents', 'flim', 'samples')
         for event, value in events(data):
             if event != 196: continue
             saved = value.decode('utf-16-le').rstrip('\0')

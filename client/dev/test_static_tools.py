@@ -2,16 +2,20 @@
 import contextlib
 import hashlib
 import io
+import importlib.util
 import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
+import struct
+import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 import flre
+import flbuild
 import sigscan
 
 
@@ -99,10 +103,42 @@ class StaticToolsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'has no k_flBuilds row'):
             sigscan.parse_table(self.source, '25.2.5.5319')
 
+    def test_current_fl24_candidate_is_experimental_with_complete_schema(self):
+        source = Path(__file__).resolve().parents[1] / 'engine' / 'flim_engine.c'
+        trusted = sigscan.BuildTable(source)
+        self.assertEqual(set(trusted.builds), {'25.1.6.4997', '25.2.3.5171', '25.2.5.5319'})
+        candidates = sigscan.BuildTable(source, include_experimental=True)
+        self.assertEqual(set(candidates.builds), set(trusted.builds) |
+                         {'24.2.2.4597', '26.1.6.5639', '26.1.7.5654'})
+        row = candidates.select('24.2.2.4597')
+        self.assertEqual(len(candidates.address_fields), 62)
+        self.assertEqual(len(candidates.offset_fields), 21)
+        self.assertEqual(len(row), 85)
+        self.assertEqual(row['MIXCNT'], 0)
+        self.assertEqual(row['msgbox'], 2)
+        self.assertEqual(row['MSGBOX_CORE'], 0)
+        self.assertEqual(row['PLREFRESH'], 0xd30840)
+        self.assertEqual(row['PR_GRID'], 0xc00)
+        self.assertEqual(row['PL_GRID'], 0xcb8)
+
     def test_explicit_row_selection_including_optional_zero(self):
         self.assertEqual(sigscan.parse_table(self.source, '25.1.6.4997')[0][1], 0x402000)
         self.assertEqual(sigscan.parse_table(self.source, '25.1.6.4997')[1][1], 0)
         self.assertEqual(sigscan.parse_offsets(self.source, '25.1.6.4997')[0][1], 0x20)
+
+    def test_zero_mixer_count_is_only_optional_for_exact_fl24(self):
+        source = SOURCE.replace('REC, MSGBOX_CORE;', 'REC, MSGBOX_CORE, MIXCNT;')
+        source = source.replace('.CH_SELECTED =', '.MIXCNT = 0x404000, .CH_SELECTED =')
+        source = source.replace('25.2.3.5171', '24.2.2.4597').replace('.MIXCNT = 0x404000', '.MIXCNT = 0', 1)
+        self.source.write_text(source, encoding='utf-8')
+        self.assertEqual(sigscan.BuildTable(self.source).select('24.2.2.4597')['MIXCNT'], 0)
+        for version in ('24.2.2.4598', '25.2.3.5171', '26.1.7.5654'):
+            self.source.write_text(source.replace('24.2.2.4597', version), encoding='utf-8')
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'invalid address MIXCNT'):
+                sigscan.BuildTable(self.source)
+        self.source.write_text(source.replace('.REC = 0x401000', '.REC = 0'), encoding='utf-8')
+        with self.assertRaisesRegex(ValueError, 'invalid address REC'):
+            sigscan.BuildTable(self.source)
 
     def test_incomplete_duplicate_empty_and_expression_tables_fail(self):
         invalid = [SOURCE.replace('.CH_SELECTED = 0x18', ''),
@@ -253,6 +289,105 @@ class StaticToolsTests(unittest.TestCase):
             for cache in ('_pd', '_stubs', '_names', '_tx'):
                 self.assertIsNone(getattr(flre, cache))
             self.assertEqual(flre.TEXT[4], b'.text')
+
+
+class BuildAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.row = flbuild.Build(build='24.2.2.4597', PLFORM=0x143dd60, PLREFRESH=0xd30840,
+                                 PR_GRID=0xc00, PL_GRID=0xcb8)
+        self.probe = Mock(pid=101)
+        self.probe.g.return_value = 0x1000
+        self.memory = {0x1000: 0x2000, 0x2c00: 0x3000, 0x2cb8: 0x4000}
+        self.probe.q.side_effect = self.memory.get
+        patcher = patch('flbuild.build', return_value=self.row)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def feature_module(self):
+        spec = importlib.util.spec_from_file_location('offline_feature_test', Path(__file__).with_name('feature_test.py'))
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {'fl': SimpleNamespace(), 'mk': SimpleNamespace(A=None, B=None)}):
+            spec.loader.exec_module(module)
+        return module
+
+    def test_mixer_id_translation_preserves_pseudo_ids_and_other_builds(self):
+        for canonical, native in ((0x70000000, 0x20000000), (0x70401fc0, 0x20401fc0),
+                                  (0x8fffffff, 0x3fffffff), (0x90000000, 0x90000000),
+                                  (0xf0000002, 0xf0000002), (0xffffffff, 0xffffffff), (7, 7)):
+            self.assertEqual(flbuild.local_mix_id(self.probe, canonical), native)
+        self.row['build'] = '26.1.7.5654'
+        self.assertEqual(flbuild.local_mix_id(self.probe, 0x70401fc0), 0x70401fc0)
+
+    def test_fl24_refresh_uses_grid_arguments_and_conditional_note_refresh(self):
+        flbuild.playlist_refresh(self.probe)
+        self.assertEqual(self.probe.call.call_args_list,
+                         [call(0xd30840, 0x3000), call(0x118a8c0), call(0xd30840, 0x4000)])
+        self.probe.call.reset_mock()
+        self.memory[0x2c00] = 0
+        flbuild.playlist_refresh(self.probe)
+        self.assertEqual(self.probe.call.call_args_list, [call(0xd30840, 0x4000)])
+        self.probe.call.reset_mock()
+        self.memory[0x2cb8] = 0
+        flbuild.playlist_refresh(self.probe)
+        self.probe.call.assert_not_called()
+        self.memory[0x1000] = 0
+        with self.assertRaisesRegex(ValueError, 'not ready'):
+            flbuild.playlist_refresh(self.probe)
+
+    def test_other_build_refresh_keeps_form_abi(self):
+        self.row['build'] = '25.2.5.5319'
+        self.row['PLREFRESH'] = 0xd45d90
+        flbuild.playlist_refresh(self.probe)
+        self.probe.call.assert_called_once_with(0xd45d90, 0x2000)
+
+    def test_native_clip_records_use_each_process_stride(self):
+        ft = self.feature_module()
+        self.assertEqual(flbuild.clip_stride(self.probe), 60)
+        self.probe.q.side_effect = None
+        self.probe.q.side_effect = lambda address: {0x5014: 0x6000, 0x6008: 0x7000}[address]
+        self.probe.d.return_value = 2
+        self.probe.r.side_effect = lambda address, length: bytes(length)
+        with patch.object(ft, 'arrangement', return_value=0x5000):
+            self.assertEqual([len(x) for x in ft.clip_list(self.probe)], [60, 60])
+            self.assertEqual(self.probe.r.call_args_list, [call(0x7000, 60), call(0x703c, 60)])
+            self.row['build'] = '26.1.7.5654'
+            self.probe.r.reset_mock()
+            self.assertEqual([len(x) for x in ft.clip_list(self.probe)], [0x50, 0x50])
+            self.assertEqual(self.probe.r.call_args_list, [call(0x7000, 0x50), call(0x7050, 0x50)])
+
+    def test_fl24_clip_fixture_initializes_native_default(self):
+        ft = self.feature_module()
+        self.probe.q.side_effect = None
+        self.probe.q.return_value = 0x8000
+        self.probe.d.return_value = 0
+        self.probe.alloc.return_value = 0x9000
+        with patch.object(ft, 'arrangement', return_value=0x5000), patch.object(ft, 'check'), \
+                patch('flbuild.playlist_refresh') as refresh:
+            ft.t_clips(self.probe, Mock(), self.row)
+        self.probe.alloc.assert_called_once_with(60)
+        record = self.probe.w.call_args.args[1]
+        self.assertEqual(len(record), 60)
+        self.assertEqual(struct.unpack_from('<f', record, 0x34)[0], 1.0)
+        self.assertEqual(struct.unpack_from('<IHHI', record), (192, 0x5000, 0x5001, 384))
+        refresh.assert_called_once_with(self.probe)
+
+    def test_note_delete_refresh_dereferences_channel_grid(self):
+        ft = self.feature_module()
+        self.row.update(NOTEARR=0x118be50, NOTEDEL=0xea35d0, GRIDREFRESH=0x118ed70,
+                        CHANLIST=0x143cb08, CH_GRID=0x748)
+        self.memory.update({0x2008: 0x5000, 0x5000: 0x6000, 0x6748: 0x7000})
+        self.probe.call.return_value = 0x8000
+        with patch.object(ft, 'check'):
+            ft.t_notedel(self.probe, Mock(), self.row)
+        self.probe.call.assert_has_calls([call(0x118be50, 3, 1), call(0xea35d0, 0x8000, 0, 0),
+                                         call(0x118ed70, 0x7000)])
+
+    def test_isolated_fl24_fixtures_require_explicit_install_path(self):
+        ft = self.feature_module()
+        with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, 'FL_DIR'):
+            ft.fl_dir(self.row)
+        with patch.dict(os.environ, {'FL_DIR': r'D:\flim-test\FL24'}):
+            self.assertEqual(ft.fl_dir(self.row), r'D:\flim-test\FL24')
 
 
 if __name__ == '__main__':

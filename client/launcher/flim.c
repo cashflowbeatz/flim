@@ -15,10 +15,42 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' " \
                         "version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
+static int g_machineOutput;
+static int g_allowExperimental;
+static DWORD g_launchedPid;
+
+static void stdout_text(const char *text) {
+    HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    size_t left = strlen(text);
+    if (!output || output == INVALID_HANDLE_VALUE) return;
+    while (left) {
+        DWORD written = 0;
+        if (!WriteFile(output, text, (DWORD)left, &written, NULL) || !written) return;
+        text += written; left -= written;
+    }
+}
+
+static void stdout_json_string(const wchar_t *text) {
+    char utf8[4096], escaped[8192];
+    size_t i, o = 0;
+    if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, -1, utf8, sizeof(utf8), NULL, NULL))
+        strcpy_s(utf8, sizeof(utf8), "Unable to encode native status");
+    for (i = 0; utf8[i] && o + 7 < sizeof(escaped); i++) {
+        unsigned char c = (unsigned char)utf8[i];
+        if (c == '\\' || c == '"') { escaped[o++] = '\\'; escaped[o++] = (char)c; }
+        else if (c < 32) o += sprintf_s(escaped + o, sizeof(escaped) - o, "\\u%04x", c);
+        else escaped[o++] = (char)c;
+    }
+    escaped[o] = 0;
+    stdout_text("\""); stdout_text(escaped); stdout_text("\"");
+}
+
 static void fail_box(HWND owner, const wchar_t *fmt, ...) {
     wchar_t msg[1024];
     va_list ap; va_start(ap, fmt); vswprintf_s(msg, 1024, fmt, ap); va_end(ap);
-    MessageBoxW(owner, msg, L"flim", MB_OK | MB_ICONERROR);
+    if (g_machineOutput) {
+        stdout_text("{\"error\":"); stdout_json_string(msg); stdout_text("}\n");
+    } else MessageBoxW(owner, msg, L"flim", MB_OK | MB_ICONERROR);
 }
 
 // File version a.b.c.d of an exe/dll; 0 if it has none.
@@ -79,16 +111,63 @@ static int known_build(const wchar_t *ver) {
     return 0;
 }
 
+static int desktop_known_build(const wchar_t *ver) {
+    return known_build(ver);
+}
+
 static int supported_install(const wchar_t *dir, const wchar_t *ver, wchar_t *why, int cap) {
     wchar_t engine[MAX_PATH * 2], build[32]; FlBuild row;
     int result;
     swprintf_s(engine, MAX_PATH * 2, L"%s\\FLEngine_x64.dll", dir);
     result = flim_profile_load(NULL, engine, ver, &row, build, why, cap);
-    return result ? result : known_build(ver);
+    if (result) return result;
+    if (!wcscmp(ver, L"24.2.2.4597")) {
+#ifdef FLIM_EXPERIMENTAL_FL26
+        char hash[65] = {0};
+        HANDLE file = CreateFileW(engine, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        int matched = file != INVALID_HANDLE_VALUE && flim_profile_sha256(file, hash) &&
+            !strcmp(hash, "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32");
+        if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+        if (matched) {
+            why[0] = 0;
+            return 1;
+        }
+        swprintf_s(why, cap, L"FL 24.2.2.4597 does not match the supported engine file. It was not enabled.");
+#else
+        swprintf_s(why, cap, L"FL 24.2.2.4597 requires the FL 24/25/26 client build or a verified compatibility profile.");
+#endif
+        return -1;
+    }
+    return g_machineOutput ? desktop_known_build(ver) : known_build(ver);
+}
+
+static int local_absolute_dir(const wchar_t *dir) {
+    return dir && ((dir[0] >= L'A' && dir[0] <= L'Z') || (dir[0] >= L'a' && dir[0] <= L'z')) &&
+           dir[1] == L':' && (dir[2] == L'\\' || dir[2] == L'/');
+}
+
+static int inspect_install(const wchar_t *input) {
+    wchar_t dir[MAX_PATH * 2], why[256], version[64];
+    int supported = 0;
+    if (!local_absolute_dir(input) || wcslen(input) >= MAX_PATH * 2) {
+        fail_box(NULL, L"Select an absolute local FL Studio installation folder."); return 1;
+    }
+    wcscpy_s(dir, MAX_PATH * 2, input);
+    if (check_fl_dir(dir, why, 256, version, 64)) {
+        supported = supported_install(dir, version, why, 256);
+        if (!supported) wcscpy_s(why, 256, L"This FL build needs a verified compatibility profile.");
+    }
+    stdout_text("{\"path\":"); stdout_json_string(dir);
+    stdout_text(",\"version\":"); stdout_json_string(version);
+    stdout_text(supported == 2 ? ",\"experimental\":true" : ",\"experimental\":false");
+    stdout_text(supported > 0 ? ",\"supported\":true,\"reason\":" : ",\"supported\":false,\"reason\":");
+    stdout_json_string(why); stdout_text("}\n");
+    return 0;
 }
 
 static void discover_fl_dir(wchar_t *out, int cap) {
     static const wchar_t *roots[] = { L"ProgramW6432", L"ProgramFiles", L"ProgramFiles(x86)" };
+    wchar_t searched[3][MAX_PATH] = {{0}};
     WORD best[4] = { 0 };
     int bestKnown = -1;
     size_t i;
@@ -99,6 +178,12 @@ static void discover_fl_dir(wchar_t *out, int cap) {
         HANDLE search;
         DWORD n = GetEnvironmentVariableW(roots[i], root, MAX_PATH);
         if (!n || n >= MAX_PATH) continue;
+        {
+            size_t j;
+            for (j = 0; j < i; j++) if (!_wcsicmp(root, searched[j])) break;
+            if (j < i) continue;
+            wcscpy_s(searched[i], MAX_PATH, root);
+        }
         swprintf_s(mask, MAX_PATH * 2, L"%s\\Image-Line\\FL Studio*", root);
         search = FindFirstFileW(mask, &data);
         if (search == INVALID_HANDLE_VALUE) continue;
@@ -112,6 +197,7 @@ static void discover_fl_dir(wchar_t *out, int cap) {
             swprintf_s(engine, MAX_PATH * 2, L"%s\\FLEngine_x64.dll", dir);
             if (!file_version(engine, version)) continue;
             known = supported_install(dir, ver, why, 256);
+            if (known == 2) known = 0;
             for (j = 0; j < 4; j++) {
                 if (version[j] != best[j]) { newer = version[j] > best[j]; break; }
             }
@@ -146,12 +232,16 @@ static void browse_folder(HWND dlg) {
 static void show_fl_info(HWND dlg) {
     wchar_t dir[MAX_PATH * 2], why[256], ver[64], line[320];
     GetDlgItemTextW(dlg, IDC_FLDIR, dir, MAX_PATH * 2);
-    if (check_fl_dir(dir, why, 256, ver, 64))
-        swprintf_s(line, 320, known_build(ver) ? L"\x2714 FL Studio %s supported." : L"FL Studio %s found; flim support is not verified.", ver);
-    else swprintf_s(line, 320, L"\x2716 %s", why);
+    if (check_fl_dir(dir, why, 256, ver, 64)) {
+        int supported = supported_install(dir, ver, why, 256);
+        if (supported < 0) swprintf_s(line, 320, L"\x2716 %s", why);
+        else if (supported == 2) swprintf_s(line, 320, L"FL Studio %s test only: live sharing is unverified.", ver);
+        else swprintf_s(line, 320, supported ? L"\x2714 FL Studio %s supported." : L"FL Studio %s found; flim support is not verified.", ver);
+    } else swprintf_s(line, 320, L"\x2716 %s", why);
     SetDlgItemTextW(dlg, IDC_FLINFO, line);
 }
 
+#define FLIM_SETUP_CHECK_TIMER 1
 static INT_PTR CALLBACK setup_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
     (void)lp;
     switch (m) {
@@ -165,13 +255,30 @@ static INT_PTR CALLBACK setup_proc(HWND dlg, UINT m, WPARAM wp, LPARAM lp) {
         flimcfg_get(L"name", v, MAX_PATH * 2);
         SetDlgItemTextW(dlg, IDC_NAME, v);
         SendDlgItemMessageW(dlg, IDC_NAME, EM_LIMITTEXT, 64, 0);
+        KillTimer(dlg, FLIM_SETUP_CHECK_TIMER);
         show_fl_info(dlg);
         return TRUE;
     }
+    case WM_TIMER:
+        if (wp == FLIM_SETUP_CHECK_TIMER) {
+            KillTimer(dlg, FLIM_SETUP_CHECK_TIMER);
+            show_fl_info(dlg);
+            return TRUE;
+        }
+        break;
+    case WM_DESTROY:
+        KillTimer(dlg, FLIM_SETUP_CHECK_TIMER);
+        break;
     case WM_COMMAND:
         switch (LOWORD(wp)) {
         case IDC_BROWSE: browse_folder(dlg); return TRUE;
-        case IDC_FLDIR: if (HIWORD(wp) == EN_CHANGE) show_fl_info(dlg); return TRUE;
+        case IDC_FLDIR:
+            if (HIWORD(wp) == EN_CHANGE) {
+                SetDlgItemTextW(dlg, IDC_FLINFO, L"Checking compatibility...");
+                KillTimer(dlg, FLIM_SETUP_CHECK_TIMER);
+                if (!SetTimer(dlg, FLIM_SETUP_CHECK_TIMER, 350, NULL)) show_fl_info(dlg);
+            }
+            return TRUE;
         case IDOK: {
             wchar_t dir[MAX_PATH * 2], why[256], ver[64], raw[128], name[FLIM_NAME_MAX + 1];
             GetDlgItemTextW(dlg, IDC_FLDIR, dir, MAX_PATH * 2);
@@ -219,9 +326,17 @@ static int launch(const wchar_t *flDir) {
     if (!check_fl_dir(dirCopy, why, 256, ver, 64)) { fail_box(NULL, L"%s", why); return 1; }
     known = supported_install(dirCopy, ver, why, 256);
     if (known < 0) { fail_box(NULL, L"%s", why); return 1; }
+    if (known == 2 && g_machineOutput && !g_allowExperimental) {
+        fail_box(NULL, L"This build requires explicit experimental testing before starting this room.");
+        return 1;
+    }
     {
         if (!known) {
             wchar_t msg[768];
+            if (g_machineOutput) {
+                fail_box(NULL, L"FL Studio %s has no verified compatibility profile. It was not launched.", ver);
+                return 1;
+            }
             swprintf_s(msg, 768,
                 L"This FL Studio is version %s. Built-in profiles: %s.\n\n"
                 L"Additional FL 25/26 builds need a reviewed profile in flim\'s profiles folder. This engine has no verified profile. FL will start normally without flim.\n\n"
@@ -295,6 +410,7 @@ static int launch(const wchar_t *flDir) {
         goto failed;
     }
     result = 0;
+    g_launchedPid = pi.dwProcessId;
     goto cleanup;
 failed:
     // A timed-out LoadLibrary thread may still be reading remote; terminate before reclaiming it.
@@ -306,25 +422,72 @@ cleanup:
     return result;
 }
 
-int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
-    int argc = 0, i, setup = 0;
-    wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    wchar_t dir[MAX_PATH * 2], flDir[MAX_PATH * 2] = L"";
-    (void)prev; (void)cmd; (void)show;
+typedef struct {
+    int setup, desktop, inspect, allowExperimental;
+    wchar_t flDir[MAX_PATH * 2];
+} LaunchOptions;
+
+static int parse_options(int argc, wchar_t **argv, LaunchOptions *options) {
+    int i;
+    ZeroMemory(options, sizeof(*options));
     for (i = 1; i < argc; i++) {
-        if (_wcsicmp(argv[i], L"--setup") == 0 || _wcsicmp(argv[i], L"/setup") == 0) setup = 1;
-        // dev / tests: start the FL in another folder this once (flim.ini keeps its own)
-        else if (_wcsicmp(argv[i], L"--fl-dir") == 0 && i + 1 < argc) wcscpy_s(flDir, MAX_PATH * 2, argv[++i]);
+        if (!_wcsicmp(argv[i], L"--setup") || !_wcsicmp(argv[i], L"/setup")) options->setup = 1;
+        else if (!_wcsicmp(argv[i], L"--desktop")) options->desktop = 1;
+        else if (!_wcsicmp(argv[i], L"--allow-experimental")) {
+            if (options->allowExperimental) return 0;
+            options->allowExperimental = 1;
+        }
+        else if (!_wcsicmp(argv[i], L"--fl-dir") || !_wcsicmp(argv[i], L"--inspect-json")) {
+            if (options->flDir[0] || i + 1 == argc || !argv[i + 1][0] || wcslen(argv[i + 1]) >= MAX_PATH * 2) return 0;
+            options->inspect = !_wcsicmp(argv[i], L"--inspect-json");
+            wcscpy_s(options->flDir, MAX_PATH * 2, argv[++i]);
+        } else return 0;
     }
+    if ((options->desktop || options->inspect) && (options->setup || !local_absolute_dir(options->flDir))) return 0;
+    if (options->desktop && options->inspect) return 0;
+    if (options->allowExperimental && !options->desktop) return 0;
+    return 1;
+}
+
+static int environment_name_valid(void) {
+    wchar_t raw[128], name[FLIM_NAME_MAX + 1];
+    DWORD n = GetEnvironmentVariableW(L"FLIM_NAME", raw, 128);
+    return n && n < 128 && flim_sanitize_name(raw, name, FLIM_NAME_MAX + 1);
+}
+
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
+    int argc = 0, i, parsed, result;
+    wchar_t **argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    wchar_t dir[MAX_PATH * 2];
+    LaunchOptions options;
+    (void)prev; (void)cmd; (void)show;
+    if (!argv) return 1;
+    for (i = 1; i < argc; i++) if (!_wcsicmp(argv[i], L"--desktop") || !_wcsicmp(argv[i], L"--inspect-json")) g_machineOutput = 1;
+    parsed = parse_options(argc, argv, &options);
     LocalFree(argv);
+    if (!parsed) { fail_box(NULL, L"Invalid launcher options or FL Studio folder."); return 1; }
+    g_allowExperimental = options.allowExperimental;
+    if (options.inspect) return inspect_install(options.flDir);
+    if (options.desktop && !environment_name_valid()) {
+        fail_box(NULL, L"Enter a name before opening FL Studio."); return 1;
+    }
+    if (options.desktop) {
+        char status[96];
+        result = launch(options.flDir);
+        if (!result) {
+            sprintf_s(status, sizeof(status), "{\"launched\":true,\"pid\":%lu}\n", g_launchedPid);
+            stdout_text(status);
+        }
+        return result;
+    }
 
     SetProcessDPIAware();
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    if (setup || !config_ok()) {
+    if (options.setup || (!config_ok() && !(options.flDir[0] && environment_name_valid()))) {
         if (DialogBoxParamW(inst, MAKEINTRESOURCEW(IDD_SETUP), NULL, setup_proc, 0) != IDOK) return 1;
     }
     CoUninitialize();
-    if (flDir[0]) return launch(flDir);
+    if (options.flDir[0]) return launch(options.flDir);
     flimcfg_get(L"fl_dir", dir, MAX_PATH * 2);
     return launch(dir);
 }

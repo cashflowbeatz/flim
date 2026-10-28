@@ -8,13 +8,15 @@ int main(void) {
     void **vmt;
     size_t i, j;
     const int wire[PATOP_N] = { 0xd8, 0xe0, 0xe8, 0xf0, 0xf8, 0x100 };
+    const uint32_t slots24[PATOP_N] = { 0xc8, 0xd0, 0xd8, 0xe0, 0xe8, 0xf0 };
     const uint32_t slots26[PATOP_N] = { 0xe8, 0xf8, 0x108, 0x110, 0x118, 0x120 };
     image = (unsigned char *)VirtualAlloc(NULL, 8192, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     assert(image);
     g_flBase = (char *)image;
     for (i = 0; i < sizeof(k_flBuilds) / sizeof(k_flBuilds[0]); i++) {
         int major26 = !wcsncmp(k_flBuilds[i].build, L"26.", 3);
-        assert(major26 || !wcsncmp(k_flBuilds[i].build, L"25.", 3));
+        int exact24 = flim_profile_fl24(&k_flBuilds[i]);
+        assert(exact24 || major26 || !wcsncmp(k_flBuilds[i].build, L"25.", 3));
         memset(image, 0, 8192);
         g_fl = k_flBuilds[i];
         g_fl.FLPROJ = IMG_BASE + 0x100;
@@ -28,12 +30,12 @@ int main(void) {
         for (j = 0; j < 64; j++) vmt[j] = (void *)(uintptr_t)(0x100000 + j * 16);
         memcpy(image + 0x200, "\x48\x83\xec\x28\xb0\x03\x4d\x89\xc1\x41\x89\xc0", 12);
         assert(fl_project() == image + 0x380);
-        assert(FLPROJ_LOAD_SLOT == (major26 ? 0x40 : 0x38) / 8);
+        assert(FLPROJ_LOAD_SLOT == (exact24 ? 0x28 : major26 ? 0x40 : 0x38) / 8);
         patops_install();
         for (j = 0; j < 64; j++) {
             int k, matched = 0;
             for (k = 0; k < PATOP_N; k++) {
-                uint32_t slot = major26 ? slots26[k] : (uint32_t)wire[k];
+                uint32_t slot = exact24 ? slots24[k] : major26 ? slots26[k] : (uint32_t)wire[k];
                 assert(PATOP_SLOT[k] == wire[k]);
                 assert(patop_vmt_slot(k) == slot);
                 if (j * sizeof(void *) == slot) {

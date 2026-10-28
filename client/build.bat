@@ -35,6 +35,7 @@ if errorlevel 1 exit /b 1
 if exist "%ROOT%profiles" (
   if not exist "%OUT%\profiles" mkdir "%OUT%\profiles"
   copy /Y "%ROOT%profiles\25.*.profile" "%OUT%\profiles\" >nul
+  if "%FLIM_EXPERIMENTAL_FL26%"=="1" if exist "%ROOT%profiles\24.2.2.4597.profile" copy /Y "%ROOT%profiles\24.2.2.4597.profile" "%OUT%\profiles\" >nul
   if "%FLIM_EXPERIMENTAL_FL26%"=="1" copy /Y "%ROOT%profiles\26.*.profile" "%OUT%\profiles\" >nul
 )
 

@@ -8,9 +8,38 @@ client/out-experimental/
 # server
 server/node_modules/
 server/dist/
+server/cloudflare/node_modules/
+server/cloudflare/dist/
+server/cloudflare/.wrangler/
+server/cloudflare/.dev.vars
 # logs / FL projects never belong here
 *.log
 *.flp
 *.fst
 # dev tools
 __pycache__/
+# desktop app
+client/desktop/node_modules/
+client/desktop/dist/
+client/desktop/dist-files/
+client/desktop/release-files/
+client/out-file-sync/
+client/desktop/release/
+client/desktop/test/.tmp/
+client/desktop/test/evidence/
+client/dev/compatibility/startup-029/
+
+# Local credentials, diagnostics and generated evidence
+.wrangler/
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+server/cloudflare/test/evidence/
+client/desktop/test/latest-*.json
+# Obtain General Sans directly from Fontshare; do not redistribute standalone fonts.
+client/desktop/public/framer-assets/*.woff2
+# Historical, unused Framer export; the app uses src/RoomModule.tsx.
+client/desktop/src/vendor/

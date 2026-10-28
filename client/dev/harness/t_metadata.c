@@ -15,6 +15,7 @@ static void pattern_name(int i, const char *name) {
 
 static void fixture(void) {
     int i;
+    g_compatFault = 0; g_compatReady = 1;
     for (i = 1; i < MAX_PAT; i++)
         dstr_free(*(wchar_t **)((char *)patterns + (size_t)i * 64 + PAT_NAME));
     memset(image, 0, sizeof(image));
@@ -101,9 +102,39 @@ static void remote_meta_preserves_unobserved(void) {
     assert(g_mHash[M_PAT][1] == before && g_mSeen[M_PAT][1] == renamed);
 }
 
+static void typed_details(void) {
+    const char *invalid[] = {
+        "{\"e\":\"pt-more\",\"i\":2,\"l\":8}",
+        "{\"e\":\"pt\",\"i\":4294967298,\"l\":8}",
+        "{\"e\":\"pt\",\"i\":2,\"l\":4294967296}",
+        "{\"e\":\"pt\",\"i\":2,\"l\":8,\"c\":-1}",
+        "{\"e\":\"pt\",\"i\":2,\"l\":8,\"n\":\"%%%%\"}",
+        "{\"e\":\"pt\",\"i\":2,\"l\":8,\"n\":\"QQ==\"}",
+        "{\"e\":\"pt\",\"i\":2,\"l\":8,\"n\":\"AAAAAA==\"}",
+        "{\"e\":\"pt\",\"i\":2,\"l\":8,\"n\":\"ANg=\"}",
+        "{\"e\":\"ts\",\"i\":0,\"nu\":17,\"de\":4}"
+    };
+    QItem item = {0}; char message[512]; unsigned k; uint64_t before;
+    for (k = 0; k < sizeof(invalid)/sizeof(invalid[0]); k++) {
+        fixture(); g_compatFault = 0; g_compatReady = 1; before = g_mHash[M_PAT][2];
+        sprintf_s(message, sizeof(message), "{\"op\":%s}", invalid[k]); item.path = message; do_meta(&item);
+        assert(g_compatFault && !*(int32_t *)(pat_rec(2) + PAT_LENGTH) && g_mHash[M_PAT][2] == before);
+    }
+    fixture(); g_compatFault = 0;
+    item.path = "{ \"op\" : { \"e\" : \"pt\", \"i\" : 2, \"l\" : 321 } }";
+    do_meta(&item); assert(!g_compatFault && *(int32_t *)(pat_rec(2) + PAT_LENGTH) == 321);
+    fixture(); g_compatFault = 0; before = g_mHash[M_PAT][2];
+    item.path = "{\"op\":{\"e\":\"pt\",\"i\":2,\"n\":\"\"}}";
+    do_meta(&item); /* No setter is installed in this fixture: SEH must preserve the baseline. */
+    assert(g_compatFault && g_mHash[M_PAT][2] == before);
+    puts("PASS exact metadata types, direct bounded targets, strict lengths/colors, complete UTF16 names, time signatures and spaced valid details");
+}
+
 int main(void) {
     int i;
     InitializeCriticalSection(&g_qLock);
+    InitializeCriticalSection(&g_sendLock); InitializeCriticalSection(&g_netTextLock);
+    typed_details();
     channel_rebaseline_preserves_pending();
     channel_rebaseline_preserves_unobserved();
     remote_meta_preserves_unobserved();

@@ -46,6 +46,10 @@ static const FlProfileField flim_profile_fields[] = {
 #undef PF32
 #define FLIM_PROFILE_FIELDS (sizeof(flim_profile_fields) / sizeof(flim_profile_fields[0]))
 
+static int flim_profile_fl24(const FlBuild *row) {
+    return row->build && !wcscmp(row->build, L"24.2.2.4597");
+}
+
 static int flim_profile_hex(const char *s, uint64_t *value) {
     uint64_t n = 0; int digits = 0;
     if (s[0] != '0' || s[1] != 'x') return 0;
@@ -151,7 +155,8 @@ static int flim_profile_pe(HANDLE file, const FlBuild *row) {
         const FlProfileField *f = &flim_profile_fields[i]; uint64_t va, rva;
         if (f->width != 8) continue;
         va = *(const uint64_t *)((const char *)row + f->offset);
-        if (!va && row->msgbox == 2 && !strcmp(f->name, "MSGBOX_CORE")) continue;
+        if (!va && ((row->msgbox == 2 && !strcmp(f->name, "MSGBOX_CORE")) ||
+                    (flim_profile_fl24(row) && !strcmp(f->name, "MIXCNT")))) continue;
         if (va < FLIM_IMAGE_BASE || va - FLIM_IMAGE_BASE >= nt->OptionalHeader.SizeOfImage) goto done;
         rva = va - FLIM_IMAGE_BASE;
         for (j = 0; j < nt->FileHeader.NumberOfSections; j++) {

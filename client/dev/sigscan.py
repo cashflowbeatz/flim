@@ -268,7 +268,9 @@ class BuildTable:
             for field in self.address_fields:
                 if not isinstance(values[field], int):
                     raise ValueError(f'{version}: nonnumeric address {field}')
-                optional_zero = field == 'MSGBOX_CORE' and values['msgbox'] == 2 and values[field] == 0
+                optional_zero = values[field] == 0 and (
+                    (field == 'MSGBOX_CORE' and values['msgbox'] == 2) or
+                    (field == 'MIXCNT' and version == '24.2.2.4597'))
                 if values[field] < IMG_BASE and not optional_zero:
                     raise ValueError(f'{version}: invalid address {field}={values[field]!r}')
             if any(not isinstance(values[f], int) or not 0 <= values[f] <= 0xffffffff for f in self.offset_fields):

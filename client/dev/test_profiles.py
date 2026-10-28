@@ -2,6 +2,7 @@
 import copy
 import contextlib
 import io
+import json
 import tempfile
 from unittest.mock import patch
 from pathlib import Path
@@ -56,9 +57,66 @@ class ProfileTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, name): self.export(bad)
 
     def test_version_aliases_outside_family_and_overflow_are_rejected(self):
-        for value in ('25', '25.2.5', '25.02.5.5319', '26.1.7.65536', '24.1.2.3', '27.1.2.3', '26.1.7.5654\n', '../26.1.7.5654', '26.1٢.7.5654'):
+        for value in ('25', '25.2.5', '25.02.5.5319', '26.1.7.65536', '24.1.2.3', '24.2.2.4596',
+                      '24.2.2.4598', '24.02.2.4597', '27.1.2.3', '26.1.7.5654\n', '../26.1.7.5654', '26.1٢.7.5654'):
             self.assertFalse(profiles.version_ok(value), value)
         self.assertTrue(profiles.version_ok('25.0.0.0'))
+        self.assertTrue(profiles.version_ok('24.2.2.4597'))
+
+    def test_exact_fl24_zero_count_keeps_schema_and_requires_runtime_evidence(self):
+        self.image.version = '24.2.2.4597'
+        self.review['target']['build'] = self.image.version
+        self.review['fields'] = dict(self.table.select(self.image.version))
+        self.review['fields'].pop('build')
+        self.review['fields_sha256'] = profiles.field_hash(self.review['fields'])
+        values = dict(line.split('=', 1) for line in self.export().splitlines())
+        self.assertEqual(len(values), 88)
+        self.assertEqual(values['MIXCNT'], '0x0')
+        self.assertEqual(values['PLREFRESH'], '0xd30840')
+        self.assertEqual(len(self.table.address_fields), 62)
+        self.assertEqual(len(self.table.offset_fields), 21)
+        self.review['checks']['runtime']['passed'] = False
+        with self.assertRaisesRegex(ValueError, 'runtime'):
+            self.export()
+
+    def test_zero_count_exception_does_not_allow_other_builds_or_other_addresses(self):
+        for version in ('25.2.5.5319', '26.1.7.5654', '24.2.2.4598'):
+            self.image.version = version
+            self.review['target']['build'] = version
+            self.review['fields']['MIXCNT'] = 0
+            self.review['fields_sha256'] = profiles.field_hash(self.review['fields'])
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                self.export()
+        self.image.version = '24.2.2.4597'
+        self.review['target']['build'] = self.image.version
+        for field in ('REC', 'PLREFRESH', 'MAINFORM'):
+            bad = copy.deepcopy(self.review)
+            bad['fields'][field] = 0
+            bad['fields_sha256'] = profiles.field_hash(bad['fields'])
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, field):
+                self.export(bad)
+
+    def test_exact_fl24_draft_is_unattested_and_unknown_fl24_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.image.version = '24.2.2.4597'
+            output = Path(folder) / 'draft.json'
+            with patch('profiles.Image', return_value=self.image), contextlib.redirect_stdout(io.StringIO()):
+                result = profiles.main(['draft', str(Path(folder) / 'engine.dll'), '--output', str(output)])
+            self.assertEqual(result, 0)
+            draft = profiles.read_review(output)
+            self.assertEqual(draft['status'], 'draft')
+            self.assertEqual(draft['target']['build'], '24.2.2.4597')
+            expected = dict(self.table.select('24.2.2.4597'))
+            expected.pop('build')
+            self.assertEqual(draft['fields'], expected)
+            self.assertEqual(draft['fields_sha256'], profiles.field_hash(expected))
+            self.assertTrue(all(c == {'passed': False, 'evidence': ''} for c in draft['checks'].values()))
+            self.image.version = '24.2.2.4598'
+            refused = Path(folder) / 'unknown.json'
+            with patch('profiles.Image', return_value=self.image), contextlib.redirect_stderr(io.StringIO()):
+                result = profiles.main(['draft', str(Path(folder) / 'unknown.dll'), '--output', str(refused)])
+            self.assertEqual(result, 2)
+            self.assertFalse(refused.exists())
 
     def test_engine_and_field_fingerprints_cannot_be_reused(self):
         bad = copy.deepcopy(self.review); bad['target']['sha256'] = 'b' * 64
@@ -87,6 +145,42 @@ class ProfileTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'wire'): self.export(bad)
         bad = copy.deepcopy(self.review); bad['reviewer'] = ' '
         with self.assertRaisesRegex(ValueError, 'reviewer'): self.export(bad)
+
+    def test_malformed_review_metadata_is_refused(self):
+        for value in (True, 1.0, '1', None):
+            bad = copy.deepcopy(self.review); bad['schema'] = value
+            with self.subTest(schema=value), self.assertRaisesRegex(ValueError, 'reviewed attestation'):
+                self.export(bad)
+        for value in (None, [], 'passed', {'runtime': {'passed': True}}):
+            bad = copy.deepcopy(self.review); bad['checks'] = value
+            with self.subTest(checks=value), self.assertRaisesRegex(ValueError, 'review check'):
+                self.export(bad)
+        for value in (None, [], True, 'passed'):
+            bad = copy.deepcopy(self.review); bad['checks']['runtime'] = value
+            with self.subTest(runtime=value), self.assertRaisesRegex(ValueError, 'runtime'):
+                self.export(bad)
+
+    def test_json_review_rejects_duplicate_fields_and_nonfinite_numbers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            review = Path(folder) / 'review.json'
+            for raw in ('{"status":"draft","status":"reviewed"}',
+                        '{"checks":{"runtime":{"passed":false,"passed":true}}}',
+                        '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}'):
+                review.write_text(raw, encoding='utf-8')
+                with self.subTest(raw=raw), self.assertRaises(ValueError):
+                    profiles.read_review(review)
+            review.write_text(json.dumps(self.review), encoding='utf-8')
+            self.assertEqual(profiles.read_review(review), self.review)
+
+    def test_output_created_during_validation_is_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'result.json'
+            output.write_text('existing review', encoding='utf-8')
+            with patch.object(Path, 'exists', return_value=False), patch('profiles.Image', return_value=self.image), \
+                    contextlib.redirect_stderr(io.StringIO()):
+                result = profiles.main(['draft', str(Path(folder) / 'engine.dll'), '--output', str(output)])
+            self.assertEqual(result, 2)
+            self.assertEqual(output.read_text(encoding='utf-8'), 'existing review')
 
 
 if __name__ == '__main__':
