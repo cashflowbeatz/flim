@@ -1,4 +1,163 @@
-# FL 25 and FL 26 compatibility validation
+# FL 24–26 compatibility validation
+
+## Desktop 0.2.23: 2026-10-28
+
+[The manifest](desktop-0.2.23-2026-10-28.json) identifies the rebuilt complete portable app and
+native engine. [39 new fixes and QA](../../desktop/QA-0.2.23.md) concentrate on FL editing,
+mixed-build routing, CRDT allocation, plugin provenance and validation before native mutation.
+31 native harnesses pass, including nine synthetic host/member combinations. Desktop/worker
+suites, real Electron checks, sample/transfer loopbacks and portable/package startup pass.
+The same three reviewed builds remain; no new profile, live physical MIDI/two-computer test,
+GitHub commit/push or Cloudflare deployment occurred.
+
+## Desktop 0.2.22: 2026-10-28
+
+[The manifest](desktop-0.2.22-2026-10-28.json) records the complete local executable, rebuilt
+native status writer and [35-item QA report](../../desktop/QA-0.2.22.md). Automated coverage
+includes 177 backend tests, 127 room/UI checks, 68 Files/UI checks, 30 native harnesses,
+loopback sample transfers and actual Electron folder/zoom/recovery tests. Reviewed build
+profiles remain 24.2.2.4597, 25.2.5.5319 and 26.1.7.5654. Nine mocked mixed-build preflights
+test desktop decisions; they do not establish a fresh two-computer or physical MIDI result.
+No new universal-patch claim, commit, push or deployment.
+
+## Desktop 0.2.21: 2026-10-28
+
+[The manifest](desktop-0.2.21-2026-10-28.json) binds the complete local executable, rebuilt native
+sample engine and [40-item QA report](../../desktop/QA-0.2.21.md). It records 161 backend tests,
+124 room/UI checks, 55 Files/UI checks, 29 native harnesses, real Electron folder/zoom/recovery
+tests, loopback transfer failures and unpacked/portable startup. The received-files folder is
+selected locally before a room and stays bound to each launched FL process. Missing/locked/full
+storage retains pending edits without disconnecting the room. Reviewed build profiles remain
+24.2.2.4597, 25.2.5.5319 and 26.1.7.5654. Nine mocked mixed-build preflights are not a new live
+MIDI/two-computer result, and every FL patch is not claimed. No commit, push or deployment.
+
+## Desktop 0.2.15: 2026-10-27
+
+The tested FL24.2.2.4597 engine is supported without experimental classification or opt-in.
+Exact fingerprint and project-preservation checks remain. [The QA record](../../desktop/QA-0.2.15.md)
+also covers the supplied card/dropdown styling and replacement of dark field outlines with blue
+focus accents. Earlier dated sections below preserve the status of their own releases.
+[desktop-0.2.15-2026-10-27.json](desktop-0.2.15-2026-10-27.json) records the app/native hashes,
+100 desktop tests, 94 room UI checks, 11 Files UI checks, 29 native harnesses, eight WinHTTP cases
+and both package startup checks.
+
+## Desktop 0.2.14: 2026-10-27
+
+[desktop-0.2.14-2026-10-27.json](desktop-0.2.14-2026-10-27.json) binds the new portable app,
+rebuilt native payload and test evidence. [QA](../../desktop/QA-0.2.14.md) lists 37 new refinements.
+It separates 91 desktop tests, 81 UI checks, real renderer recovery, 29 native harnesses and
+eight loopback transfer cases from prior live FL runs. Profiles and the production relay are
+unchanged; no FL process was launched or stopped and nothing was sent to GitHub.
+
+## Desktop 0.2.13: 2026-10-27
+
+[desktop-0.2.13-2026-10-27.json](desktop-0.2.13-2026-10-27.json) binds the desktop UI, bridge,
+test evidence and portable executable. [The detailed QA report](../../desktop/QA-0.2.13.md)
+lists 40 fixes and refinements. Native payload and profiles match 0.2.12; no FL project was
+opened or stopped, no public room was created, and no GitHub write or relay deployment occurred.
+
+## Desktop 0.2.12: 2026-10-27
+
+[desktop-0.2.12-2026-10-27.json](desktop-0.2.12-2026-10-27.json) records the status-only native
+toolbar, duplicate-preset provenance regression, compact component UI and rebuilt portable app.
+FL mappings and the relay are unchanged. No live FL processes were launched or stopped; the
+existing user FL24 process remained open. [QA](../../desktop/QA-0.2.12.md) separates these checks
+from the earlier six native version pairs.
+
+## Desktop 0.2.11 and portable sync: 2026-10-27
+
+[desktop-0.2.11-2026-10-27.json](desktop-0.2.11-2026-10-27.json) records exact artifacts, six
+native cross-version pairs, public relay/CRDT tests and deployment identity. Any supported
+build may host when portable sync is negotiated; older members share notes/basic controls
+without loading newer project/preset bytes. FL24 remains experimental and unknown builds still
+need reviewed mappings. [Current QA](../../desktop/QA-0.2.11.md) records failures and limits.
+Earlier sections below describe their own versions.
+
+## Desktop 0.2.8, compact window and note CRDT: 2026-10-27
+
+[desktop-0.2.8-2026-10-27.json](desktop-0.2.8-2026-10-27.json) records the local CRDT, native
+synthetic regressions, compact-window UI checks and package identities. The Worker is undeployed;
+production rooms keep locked snapshots. No new live FL session or physical MIDI result exists.
+The older-host policy and exact supported-build checks remain. See
+[the current design/test report](../../desktop/QA-0.2.8.md) for scope and limitations.
+
+## Desktop 0.2.7 and all-pairs checks: 2026-10-27
+
+[desktop-0.2.7-2026-10-27.json](desktop-0.2.7-2026-10-27.json) records the simpler major-release
+picker, exact folder preservation and pre-launch member compatibility check. The desktop and
+local relay tests cover all nine combinations of installed FL24/25/26 builds. Allowed pairings
+exchange supported message markers both ways; older members are refused from newer hosts.
+These tests do not validate FL project parsing or MIDI. The installed engine fingerprints
+remain unchanged, FL24 remains experimental, and no native test launch bypassed the previous
+automatic approval rejection. No GitHub write or Cloudflare deployment is included.
+
+## Installed FL24 recheck: 2026-10-27
+
+[fl24-installed-2026-10-27.json](fl24-installed-2026-10-27.json) verifies the signed installed
+24.2.2.4597 engine identity, actual 0.2.6 package/portable discovery and selection, and local
+regressions. It records the package-test fix for multiple FL24 installations. Automatic approval
+review blocked the isolated native launch, so no new project, edit or MIDI runtime result exists.
+FL24 remains experimental. No profile was promoted, package rebuilt, relay deployed or GitHub
+change published. The existing user FL process was preserved.
+
+## Deployed relay hotfix: 2026-10-25
+
+[relay-fl24-hotfix-2026-10-25.json](relay-fl24-hotfix-2026-10-25.json) records the narrow Cloudflare
+deployment **`c5647634-648d-450d-ad79-a61c60b8336b`**. It adds relay admission for the exact
+**24.2.2.4597** compatibility declaration and separates transport/compatibility rejection messages.
+It does not deploy the broader local relay fixes, rebuild the desktop app, add a native build
+mapping, or publish anything to GitHub.
+
+Production validation passed **9/9 non-admitting probes** and **24/24 synthetic checks** in one
+disposable room with an FL24-declared host and FL25/26-declared members. Checks covered admission,
+note-message marker forwarding in both directions, sequence ordering, status and verified cleanup.
+There were **zero FL process launches and zero R2 uploads/downloads**. Synthetic messages establish
+relay behavior only; they do not exercise FL note handling, project loading or recorded MIDI.
+The failed native runs below remain unresolved, and native FL24 sharing remains unverified.
+
+## Current local sweep: 2026-10-25
+
+[sweep-2026-10-25-pass2.json](sweep-2026-10-25-pass2.json) records the separate 0.2.5
+file-safety and recovery update. Its evidence covers local native, relay, desktop and package
+checks. No new live FL run or physical MIDI test was made, and no new build profile was added.
+
+[sweep-2026-10-25.json](sweep-2026-10-25.json) records the 0.2.4 source/binary/package identities,
+local regression results and the unsuccessful fresh FL25/26 attempt (**0/6** basic checks).
+License/update prompts and member trial mode were observed; the normal initial sync did not
+complete. The run stopped before broader features or recording were retested. Later native
+fixes were built and tested in harnesses but have no fresh successful real-FL session result.
+Older passing records below remain tied to their original binary hashes.
+
+Desktop version **0.2.6** offers exact **24.2.2.4597** as an explicitly selected **experimental test**.
+Choosing it passes `--allow-experimental`; the native launcher still requires the candidate's
+exact engine fingerprint. The app prefers a non-experimental installation when no choice is
+saved. This replaces the 0.2.4 picker restriction, not the failed native test results. Unknown
+patch builds remain refused. See [the feature matrix](../../desktop/QA.md) and
+[current compatibility scope](../../../BUILD-COMPATIBILITY.md).
+
+## FL 24.2.2.4597 candidate
+
+The exact signed FL 24 engine has a [static mapping](24.2.2.4597-static.json) and native format
+adapters under `FLIM_EXPERIMENTAL_FL26`. [The investigation](24.2.2.4597-investigation.json)
+identifies the official archive and engine fingerprint. [The runtime record](24.2.2.4597-runtime.json)
+keeps successful startup/room admission separate from failed project loading and edit checks.
+The isolated application reported trial mode; no license restriction was bypassed. An unlocked
+runtime is required to continue project tests. No reviewed profile is exported, mixed FL 24/25/26
+sessions remain unverified, and unknown adjacent FL 24 builds stay refused.
+
+## Earlier cutoff and recorded-note validation
+
+[reliability-runtime.json](reliability-runtime.json) identifies the earlier client binaries and
+deployed Cloudflare Worker. Twenty local relay tests, fourteen deployed-service checks, sixteen
+native harness executables and sixty Python tests passed. Recording-style native FL tests passed
+8/8 for a local FL25 host/FL26 member, 14/14 for two FL26 instances (including member channel
+creation/deletion/reordering), and 8/8 through the deployed relay with FL25/FL26.
+
+Notes arrived while insertion continued in both directions; final contents, native moves and
+deletions matched. These probes insert persisted notes through FL functions. They do not inject
+physical MIDI input or verify unrecorded audition. The record preserves the earlier fixture
+failure and its correction. It also binds source, package and redacted log hashes. The broader
+feature results below are prior validation and are not substitutes for this latest record.
 
 One experimental Windows x64 client supports all five exact builds below. Build both launcher
 and engine with `FLIM_EXPERIMENTAL_FL26=1` using `client/build.bat`; output goes to
@@ -17,7 +176,7 @@ negotiate a shared format before admission. The oldest build must host; project 
 can only originate from people on that exact host build. Supported logical edits travel both ways.
 Unknown builds remain disabled until reviewed and tested. See [the policy](../../../BUILD-COMPATIBILITY.md).
 
-## Current profile and mixed-session validation
+## Earlier profile and mixed-session validation
 
 The installed FL 25.2.5.5319 host and FL 26.1.7.5654 member passed **34/34 feature checks** with the
 new profiles and negotiation, including supported parameter, name and note edits back to the host.

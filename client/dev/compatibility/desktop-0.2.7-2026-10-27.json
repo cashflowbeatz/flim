@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-27T08:28:01.187Z",
+  "version": "0.2.7",
+  "status": "desktop and local protocol verified; native FL24 sharing unverified",
+  "installations": [
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2024",
+      "version": "24.2.2.4597",
+      "engine_sha256": "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32",
+      "authenticode": "Valid (PowerShell verification)",
+      "experimental": true
+    },
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2025",
+      "version": "25.2.5.5319",
+      "engine_sha256": "1b7e2381f2853ee590bff74429fb8aa5540d33a5b33c0c5e41ec01c03fe0c7ac",
+      "authenticode": "Valid (PowerShell verification)",
+      "experimental": false
+    },
+    {
+      "path": "C:\\Program Files\\Image-Line\\FL Studio 2026",
+      "version": "26.1.7.5654",
+      "engine_sha256": "6d9c5ab09c1d5594012ac2c31cf9ed08e73f42164ed0964cccae10a95d9b8e02",
+      "authenticode": "Valid (PowerShell verification)",
+      "experimental": false
+    }
+  ],
+  "fixes": [
+    "One major-release dropdown choice per installed family; exact build and folder in keyboard-accessible details.",
+    "Preserve an explicit folder selection, including an unsupported copy; otherwise prefer reviewed builds with numeric version ordering and stable path tie-break.",
+    "Fresh authenticated host status before member launch; numeric full-build comparison, retryable failures and no native launch on rejected/offline/malformed/ambiguous status.",
+    "Keep exact engine checks, experimental FL24, native/server admission and oldest-host policy."
+  ],
+  "verification": {
+    "desktop": {
+      "passed": 63
+    },
+    "local_relay": {
+      "passed": 54,
+      "typecheck": "passed",
+      "build": "passed",
+      "scope": "Local undeployed source, synthetic protocol messages"
+    },
+    "ui": {
+      "passed": 35,
+      "errors": [],
+      "checks": [
+        "Framer variants, font and width 375",
+        "Escape and focus return 375",
+        "Framer variants, font and width 810",
+        "Escape and focus return 810",
+        "Framer variants, font and width 1200",
+        "Escape and focus return 1200",
+        "Empty required name prevents room allocation",
+        "One dropdown entry per FL family keeps build numbers in details",
+        "Folder picker route and unsupported-build gate",
+        "Canceled folder selection retains the selected FL version",
+        "FL24 is a selectable experimental test with an honest compatibility notice",
+        "Test logs open through the local desktop action",
+        "Create automatically launches and shows real-state participant rows",
+        "Copy, refresh and return to start",
+        "Join accepts spaced room code and launches once",
+        "Delayed status cannot restore a room after returning to start",
+        "Incompatible host guidance leaves a retryable room and a working return action",
+        "Room-number editing preserves the caret and accepts pasted hyphens",
+        "Copy feedback and status requests belong to the current room visit",
+        "Small windows keep every control scrollable with usable target sizes",
+        "Failed log-folder opening leaves an actionable error",
+        "Unavailable diagnostics are explained without blocking room creation",
+        "network state stays actionable",
+        "launch state stays actionable",
+        "status state stays actionable",
+        "waiting state stays actionable",
+        "ended state stays actionable",
+        "missing state stays actionable",
+        "Settings-storage notice remains readable and does not block a session",
+        "Temporary status failures recover automatically without another click",
+        "Hidden and offline windows pause status traffic and refresh when available again",
+        "Browser preview is explicit and cannot fake an FL connection",
+        "Actual desktop discovers installed FL24/25/26 without launching FL",
+        "Actual desktop at 200 percent zoom keeps installation details and submit reachable",
+        "Production CSP disables renderer networking"
+      ],
+      "delivery_gate": "PASS; see client/desktop/QA.md"
+    },
+    "package_installed_copy": {
+      "passed": true,
+      "renderer_errors": [],
+      "native_hashes": {
+        "flim.exe": "866f1ad636364ed5204244fb0e2a5c8566b881f4637dc9bec4e256177f612461",
+        "flim_engine.dll": "ac28fe137fc233c73008d5e58e3b91df534a5630a19bcb1e1a4d6eed0cdba985",
+        "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+        "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+      }
+    },
+    "portable_installed_copy": {
+      "passed": true,
+      "scope": "0.2.7 self-extraction, three family labels, actual installed FL24 selection, diagnostics; no room or FL launch"
+    },
+    "package_alternate_copy": {
+      "passed": true,
+      "path": "D:/Codex-flim-compat/24.2.2.4597/app"
+    },
+    "portable_alternate_copy": {
+      "passed": true,
+      "path": "D:/Codex-flim-compat/24.2.2.4597/app"
+    },
+    "package_source_match": {
+      "passed": true,
+      "files": [
+        "electron/bridge-core.cjs",
+        "electron/main.cjs",
+        "electron/preload.cjs",
+        "electron/diagnostics.cjs",
+        "dist/index.html",
+        "dist/assets/index-BGTCzqCh.js",
+        "dist/assets/index-CxD6ievP.css"
+      ]
+    },
+    "contrast_ratios": {
+      "summary_on_white": 9,
+      "details_on_white": 5.74,
+      "focus_on_white": 6.84
+    },
+    "initial_alternate_test_failure": {
+      "reason": "Empty fixture name passed to name-required savePreferences API",
+      "resolution": "Valid test name; no product change required"
+    },
+    "native_FL_runtime": {
+      "attempted": false,
+      "status": "unverified",
+      "blocker": "Prior automatic approval review rejected isolated runtime launch with only blocked by policy; not retried"
+    },
+    "rooms_created": 0,
+    "r2_uploads": 0,
+    "r2_downloads": 0
+  },
+  "matrix": [
+    {
+      "host": "24.2.2.4597",
+      "member": "24.2.2.4597",
+      "relay_admission": "allowed",
+      "desktop_preflight": "launch allowed",
+      "bidirectional_synthetic_edits": "passed notes/clips/metadata/parameters, sender build and sequence order"
+    },
+    {
+      "host": "24.2.2.4597",
+      "member": "25.2.5.5319",
+      "relay_admission": "allowed",
+      "desktop_preflight": "launch allowed",
+      "bidirectional_synthetic_edits": "passed notes/clips/metadata/parameters, sender build and sequence order"
+    },
+    {
+      "host": "24.2.2.4597",
+      "member": "26.1.7.5654",
+      "relay_admission": "allowed",
+      "desktop_preflight": "launch allowed",
+      "bidirectional_synthetic_edits": "passed notes/clips/metadata/parameters, sender build and sequence order"
+    },
+    {
+      "host": "25.2.5.5319",
+      "member": "24.2.2.4597",
+      "relay_admission": "rejected before project data",
+      "desktop_preflight": "rejected without native launch",
+      "bidirectional_synthetic_edits": "not admitted"
+    },
+    {
+      "host": "25.2.5.5319",
+      "member": "25.2.5.5319",
+      "relay_admission": "allowed",
+      "desktop_preflight": "launch allowed",
+      "bidirectional_synthetic_edits": "passed notes/clips/metadata/parameters, sender build and sequence order"
+    },
+    {
+      "host": "25.2.5.5319",
+      "member": "26.1.7.5654",
+      "relay_admission": "allowed",
+      "desktop_preflight": "launch allowed",
+      "bidirectional_synthetic_edits": "passed notes/clips/metadata/parameters, sender build and sequence order"
+    },
+    {
+      "host": "26.1.7.5654",
+      "member": "24.2.2.4597",
+      "relay_admission": "rejected before project data",
+      "desktop_preflight": "rejected without native launch",
+      "bidirectional_synthetic_edits": "not admitted"
+    },
+    {
+      "host": "26.1.7.5654",
+      "member": "25.2.5.5319",
+      "relay_admission": "rejected before project data",
+      "desktop_preflight": "rejected without native launch",
+      "bidirectional_synthetic_edits": "not admitted"
+    },
+    {
+      "host": "26.1.7.5654",
+      "member": "26.1.7.5654",
+      "relay_admission": "allowed",
+      "desktop_preflight": "launch allowed",
+      "bidirectional_synthetic_edits": "passed notes/clips/metadata/parameters, sender build and sequence order"
+    }
+  ],
+  "artifacts": {
+    "portable": {
+      "path": "client/desktop/release/flim-rooms-0.2.7-win64.exe",
+      "sha256": "c65dfb8f4fe013d93938ec77339815d202a62612a4458f7db1208be227f08197",
+      "bytes": 103597392
+    },
+    "asar_sha256": "0ea742d871a67696f5eb052a363b65e3609e3e1e342a54e9bc7e30542abf2860",
+    "native_payload_unchanged": true,
+    "previous_026_package_preserved": true
+  },
+  "sources_sha256": {
+    "client/desktop/src/App.tsx": "27a1ff619761b1f0719bf0be849ff619d9467ff77877e09b6e710be5dec8db13",
+    "client/desktop/src/styles.css": "74ab59d84516e1be24ba9faa9df129ccbfb0de11efcea893b9213a545703f9a5",
+    "client/desktop/src/utils/installOptions.js": "df730e584921baa56e22d2d0bd839ebec065ff254a43cd1cce1364d9b8af49b0",
+    "client/desktop/electron/bridge-core.cjs": "0b22b083ad16aac6e3d993ee6bd2b43b3b9ac93def3eb78c4aa3d914231d09b5",
+    "client/desktop/package.json": "09eb67b6e27130e9ec54a7789af0eee488fb8ef697061a68e5be185f7e2b8e8e",
+    "client/desktop/package-lock.json": "327f435818b032d6eab462bc1d855fbe5a54d36345954b469c1e915bf69ee593",
+    "client/desktop/test/bridge.test.cjs": "b294817a155e695edef8b84d1b86d420ed3221283427407db2878cad648d6401",
+    "client/desktop/test/install-options.test.mjs": "b8d164f8c992103c728dcb4610f33d281cd3762c776ca643f57c81fa5c98e312",
+    "client/desktop/test/ui.cjs": "1bb5a9454f7a77b14a2ecd9dd73549249d6e9ef77d023c8f3580cce9f807accf",
+    "client/desktop/test/package.cjs": "0749aab804698431f269523ac2e339db8f966f5f389554931fb572cc746d62a5",
+    "client/desktop/test/portable.cjs": "c7d4b5c2f2d4ba9b6a7483f0a5419f7e87fdb0b9e04c1e9726c3a5e908ec15bb",
+    "server/cloudflare/test/relay.test.mjs": "81cdc572dc8fb7693c2b8e33fb213e8f681687ac013ffd244652edf00511c555",
+    "server/src/compatibility.ts": "11ed06b62981a9c553b527b44598d0f5c30cc9f943c7657dbff8b1b629b0c6f1",
+    "server/cloudflare/src/worker.ts": "8802911cfaa297582abc0ae5c21f7790c989513a53085f8f73db49bfcc93b273",
+    "client/engine/flim_engine.c": "44e98486be8a12b7395ab0a55671e20fbf82578b856337a8eb03a956b8b3d08e",
+    "client/launcher/flim.c": "529e953db5f7ed5eeb2c8bd2fd6bad2d8a70b8131d6b0a2ebf01a51379b00af4",
+    "client/desktop/QA.md": "8afea0af95e112956cadbf2c130c411da4b3f2800e6dd5917393c84c8dd24d5b",
+    "BUILD-COMPATIBILITY.md": "1605521bedcfb9e1af7245d95d1a06fdd2b19ba0c5d1e2c266b5bbb728376e72"
+  },
+  "screenshots_sha256": {
+    "client/desktop/test/evidence/native-open.png": "c40459176bf781c85806f843d1eaff720b70c9cb1303200aa6e4d087fe328555",
+    "client/desktop/test/evidence/native-zoom-details.png": "14e623433e60931975f0141d42258d2cff030fa1a1744935a13c5d5ddddb8100",
+    "client/desktop/test/evidence/fl24-experimental.png": "3f0471f6f87f160d8ff9da00b893a9e70084cf8d75d63570b871b0db07b39ed3",
+    "client/desktop/test/evidence/install-details-320.png": "24e32e763f2a025f89d2af5db680701ed16ea8657179ae0246f1604fa546dcce",
+    "client/desktop/test/evidence/install-details-375.png": "05830dcb631afb106970b51d06b6126942b8fc6bff3fe5a1057ceffc23aefd85",
+    "client/desktop/test/evidence/install-details-810.png": "fe7b235641a82e954563c2e47d79eccbc6b413cb8d98fd6229cd902d7fb270d0",
+    "client/desktop/test/evidence/install-details-1200.png": "975ef8186fcde89d835184b956470c1afab37c980bb3c4bf827d2ce946b5475c",
+    "client/desktop/test/evidence/packaged-open.png": "5d84b58e744ced12839556c54391b5bd0b8fa28babd754d57deba60ce47951d2"
+  },
+  "limits": [
+    "Native FL24 project reopening, edit application and recorded MIDI remain unverified.",
+    "Earlier failed native FL25/26 sweep remains unresolved; historical passes do not certify the current payload.",
+    "No universal support for every patch: reviewed mappings and exact engine fingerprints remain required.",
+    "Oldest full build must host mixed sessions; newer opaque state, channel creation and project replacement retain existing restrictions.",
+    "Physical MIDI audition, audio streaming, remote latency and speed guarantees were not established."
+  ],
+  "github_writes": false,
+  "cloudflare_deployment": false
+}

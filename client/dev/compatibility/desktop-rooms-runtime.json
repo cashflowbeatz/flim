@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "verified_date": "2026-10-23",
+  "scope": "Local Cloudflare runtime and native desktop launcher; no production deployment is asserted by this record",
+  "launcher_contract": {
+    "inspect": "flim.exe --inspect-json <absolute local FL folder>",
+    "inspect_result": [
+      "path",
+      "version",
+      "supported",
+      "reason"
+    ],
+    "launch": "flim.exe --desktop --fl-dir <absolute local FL folder>",
+    "launch_success": {
+      "launched": true,
+      "pid": "owned FL process ID"
+    },
+    "launch_failure": "Nonzero exit with a JSON error; no unsupported-build fallback",
+    "environment": [
+      "FLIM_NAME",
+      "FLIM_AUTOCONNECT",
+      "FLIM_PASSWORD",
+      "FLIM_HOST",
+      "FLIM_OWNER_KEY"
+    ],
+    "persists_setup": false
+  },
+  "rooms": {
+    "websocket_path": "/room/<8 decimal digits>",
+    "welcome_requires_matching_room": true,
+    "file_transport": "Root /blob and /blobs/missing paths, authenticated by x-flim-key",
+    "legacy_slots_preserved": true,
+    "automatic_legacy_host_dialog_suppressed_for_desktop_rooms": true
+  },
+  "verification": {
+    "standard_and_experimental_builds": "passed",
+    "native_harness_executables": {
+      "passed": 17,
+      "failed": 0
+    },
+    "actual_install_inspection": {
+      "25.2.5.5319": "Accepted in standard and experimental launchers",
+      "26.1.7.5654": "Accepted only in experimental launcher",
+      "missing_installation": "Reported unsupported"
+    },
+    "native_room": {
+      "host_fl": "25.2.5.5319",
+      "member_fl": "26.1.7.5654",
+      "launcher": "Actual --desktop invocation with child environment credentials",
+      "participants": 2,
+      "separate_reserved_room": "Remained waiting with zero participants",
+      "collaboration_checks": {
+        "passed": 17,
+        "failed": 0
+      },
+      "checks_include": [
+        "host edits",
+        "member edits",
+        "member piano-roll note",
+        "channel add/delete",
+        "sample download",
+        "6000-note upload/download"
+      ],
+      "project_resync": {
+        "received": true,
+        "stored": true,
+        "serialized_bytes": 254283
+      },
+      "owned_processes_stopped": true,
+      "local_relay_stopped": true
+    }
+  },
+  "sha256": {
+    "client/launcher/flim.c": "28ced7d847022893a6379aacaa33203c600c37f308dff20f4159c874421e6bd6",
+    "client/engine/flim_engine.c": "9e98b932a633882824f8f0beb8f74c00edf5b8f0ccc37ff1b3d7b78412b406cc",
+    "client/out-experimental/flim.exe": "348aa06334a902a63484529ed36cef86788c4d48d1e6db8f6b12b18649ec56dc",
+    "client/out-experimental/flim_engine.dll": "3d42bc56087049e577cffa52ac4606af1d7b884fbd898fde08ba4d20daf0e375",
+    "work/desktop-rooms-native-runtime.log": "4b21e0605e0ebb536e5a2e8cfd5c1367d574e3853504b685aacf00456e52e224",
+    "work/desktop-rooms-native-project.log": "1d031b56b669ea52e588b58f5e6170a04a7f1c8f8455de8a35c27c75355f3175",
+    "work/desktop-rooms-native-engine.log": "e9de1505b1d1c9581c3dfd4195a188bc08a49cd6ae8a1a04177619f48439584c"
+  },
+  "test_environment_notes": [
+    "Initial sandbox loopback attempts failed before any FL process was created. The local relay and native test were rerun with authorized access.",
+    "The sample alias harness failed with restricted Documents access and an overlong redirected profile path; its normal short sample-cache path passed with authorized access.",
+    "Miniflare printed WSARecv network-closed messages while the owned native processes and local relay were shut down after all checks passed."
+  ],
+  "limitations": [
+    "Only verified exact FL profiles are enabled; this does not establish compatibility with arbitrary FL builds.",
+    "Physical MIDI hardware and unrecorded live audio were not tested.",
+    "The renderer UI and packaged desktop application are outside this native evidence record.",
+    "Existing mixed-build opaque-plugin and project-version restrictions remain."
+  ]
+}

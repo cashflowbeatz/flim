@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "investigated_utc_date": "2026-10-24",
+  "requested_build": "24.2.2.4597",
+  "status": "experimental_candidate_runtime_project_load_failed_trial_mode_observed",
+  "runtime_validated": false,
+  "runnable_profile_created": false,
+  "current_app_supports_requested_build": false,
+  "local_target_inventory": {
+    "exact_build_found": true,
+    "registered_builds": [
+      "25.2.5.5319",
+      "26.1.7.5654"
+    ],
+    "isolated_test_directory": "D:\\Codex-flim-compat\\24.2.2.4597\\app",
+    "installer_executed": false
+  },
+  "official_sources": {
+    "release_announcement": "https://forum.image-line.com/viewtopic.php?t=331420",
+    "older_installers_instructions": "https://support.image-line.com/action/knowledgebase?ans=300",
+    "customer_archive": "https://forum.image-line.com/viewtopic.php?f=200&t=194258",
+    "archive_requires_login": true,
+    "authenticated_archive_access_verified": true,
+    "exact_archive_filename": "flstudio_win64_24.2.2.4597.zip",
+    "exact_archive_download": "https://forum.image-line.com/download/file.php?id=319608",
+    "archive_display_size_mib": 1022.63,
+    "public_announcement_installer_redirects_to": "26.1.7.5654",
+    "historical_direct_installer": "https://install.image-line.com/flstudio/flstudio_win64_24.2.2.4597.exe",
+    "historical_direct_installer_http_status": 404
+  },
+  "download_attempts": {
+    "browser": "Brave",
+    "browser_download_helper": "timed_out_at_55_seconds_and_at_120_seconds; no_completed_artifact_returned",
+    "visible_browser_download_result": "ERR_BLOCKED_BY_CLIENT: This page has been blocked by Brave",
+    "unauthenticated_official_download_head_http_status": 403,
+    "completed_target_found_in_downloads": true,
+    "manual_download_requested": true,
+    "browser_protections_changed": false,
+    "resolved_by": "User downloaded the official archive; verified and selectively extracted without running setup"
+  },
+  "verified_artifacts": {
+    "archive_sha256": "a045018bb66c85230a4a0db8f237a4342f152ae1e9bd91bb0efa1f341affca66",
+    "installer_sha256": "571516112685c54818942e193b0c76971a6cd6b243ce6fec9122d4b51d51e86c",
+    "engine_sha256": "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32",
+    "engine_file_version": "24.2.2.4597",
+    "engine_size_bytes": 56784616,
+    "installer_and_engine_authenticode": "Valid; Image Line"
+  },
+  "static_findings": {
+    "candidate_address_fields": 62,
+    "reviewed_layout_fields": 21,
+    "mixer_count": 126,
+    "mixer_count_global": "Absent; exact FL24 uses a reviewed fixed count, not another build's address",
+    "mixer_native_parameter_base": "0x20000000",
+    "mixer_canonical_wire_base": "0x70000000",
+    "native_clip_bytes": 60,
+    "canonical_clip_bytes": 80,
+    "clip_adapter": "Append exact default extension fields on send; refuse nondefault newer fields before replacing FL24 clips",
+    "note_record_bytes": 24,
+    "marker_record_bytes": 52,
+    "playlist_refresh": "Exact FL24 inlines the form wrapper; local adapter calls grid invalidator and note refresh helper",
+    "source_gate": "FL24 candidate is opt-in under the existing FLIM_EXPERIMENTAL_FL26 build flag",
+    "runtime_validated": false,
+    "unavailable_parameter_value": "0x7fffffff; normalized to REC_NONE at the exact FL24 native boundary"
+  },
+  "ghidra_limitations": {
+    "provider": "Ghidra 12.1.4 through REA",
+    "function_dossier": "provider_timeout at 330000ms",
+    "smaller_assembly_request": "provider_timeout at 330000ms",
+    "doctor": "Ghidra, JDK and Codex registration available; no runtime prerequisite repair indicated",
+    "session_closed": true,
+    "static_instruction_evidence_source": "Exact PE files inspected with the repository's Capstone/pefile tools; not represented as successful Ghidra decompilation"
+  },
+  "native_evidence_required": [
+    "Exact engine fixed PE version and SHA-256",
+    "All 62 addresses, 21 layout/VMT fields and message-box calling mode",
+    "Reviewed 24-byte notes, 60-to-80-byte clip adapter, marker data and local-to-canonical parameter identifiers",
+    "Disposable same-build FL24 runtime checks",
+    "FL24-host/FL25-member and FL24-host/FL26-member project loading and supported bidirectional edits",
+    "Refusal of newer-host/older-member admission and incompatible opaque states"
+  ],
+  "constraints": [
+    "Do not borrow addresses from another build or export a scanner result as a reviewed profile",
+    "Preserve existing FL25/26 profiles and oldest-host enforcement",
+    "A changed native record format may require a serializer adapter, not only a new address profile",
+    "Unknown adjacent FL24 builds remain refused; candidate is not a runtime support attestation",
+    "No deployment or GitHub writes"
+  ],
+  "experimental_candidate_implemented": true,
+  "source_gates_reviewed": [
+    "Exact 24.2.2.4597 descriptor accepted by native and relay compatibility helpers; adjacent FL24 builds refused",
+    "Exact FL24 candidate table and adapters compiled only under FLIM_EXPERIMENTAL_FL26",
+    "Profile tooling recognizes exact FL24, retains the complete review and successful-runtime export requirements",
+    "Build script copies an exact FL24 profile only if present; none exported",
+    "Default build retains three FL25 tables; existing FL25/26 profiles preserved"
+  ],
+  "runtime_record": "24.2.2.4597-runtime.json",
+  "runtime_resume_requirement": "An unlocked exact FL24 runtime and successful project loading; user deferred installation/activation"
+}

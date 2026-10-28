@@ -1,0 +1,53 @@
+{
+  "version": "0.2.22",
+  "date": "2026-10-28T11:47:51.7120857-04:00",
+  "localOnly": true,
+  "changes": 35,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.22-win64.exe",
+    "bytes": 103554566,
+    "unpackedBytes": 384917397.0,
+    "sha256": "ea35c4a59e6538a1fcd39121f4672447cfc3a0a7cb6183e53d0fd6977af5962d"
+  },
+  "native": {
+    "changed": true,
+    "launcher": "7d6bf8179f5a0613d847bbe131890dc4c4e8cade455b80f752aa500fb49b541f",
+    "engine": "599daa6ea314c13565d09c943a3cf2cee9defdbf3dee167150332558ea327a2b",
+    "profilesChanged": false
+  },
+  "desktopTests": 177,
+  "newRegressionTests": 16,
+  "roomUiChecks": 127,
+  "filesUiChecks": 68,
+  "nativeHarnessExecutables": 30,
+  "loopbackFileStore": {
+    "uploads": 1,
+    "downloads": 13,
+    "sourceUntouched": true
+  },
+  "browserErrors": [],
+  "packagedStartup": true,
+  "portableStartup": true,
+  "reviewedBuilds": [
+    "24.2.2.4597",
+    "25.2.5.5319",
+    "26.1.7.5654"
+  ],
+  "mixedBuildPreflightCombinations": 9,
+  "noFreshTwoComputerOrMidiTest": true,
+  "sampleLocation": {
+    "scope": "received shared files per computer",
+    "rootMaxUtf16": 180,
+    "appliesTo": "next launched FL process",
+    "default": "Windows Documents/flim/samples",
+    "silentFallback": false,
+    "filesMoved": false
+  },
+  "userFLObservedAtEnd": "[private workstation process observation omitted]",
+  "githubPush": false,
+  "githubCommit": false,
+  "cloudflareDeployment": false,
+  "evidence": "client/desktop/test/evidence/0.2.22",
+  "report": "client/desktop/QA-0.2.22.md",
+  "antislop": "PASS"
+}

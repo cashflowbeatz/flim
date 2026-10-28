@@ -1,0 +1,345 @@
+{
+  "schema_version": 1,
+  "verified_utc": "2026-10-24T02:12:30.4125704Z",
+  "worker_version": "23d1001c-7c2a-4bc1-bfc1-7ae9dbb8b4cc",
+  "renderer": {
+    "passed": 23,
+    "results": [
+      "Framer variants, font and width 375",
+      "Escape and focus return 375",
+      "Framer variants, font and width 810",
+      "Escape and focus return 810",
+      "Framer variants, font and width 1200",
+      "Escape and focus return 1200",
+      "Empty required name prevents room allocation",
+      "Folder picker route and unsupported-build gate",
+      "Create automatically launches and shows real-state participant rows",
+      "Copy, refresh and return to start",
+      "Join accepts spaced room code and launches once",
+      "Delayed status cannot restore a room after returning to start",
+      "network state stays actionable",
+      "launch state stays actionable",
+      "status state stays actionable",
+      "waiting state stays actionable",
+      "ended state stays actionable",
+      "missing state stays actionable",
+      "Temporary status failures recover automatically without another click",
+      "Hidden and offline windows pause status traffic and refresh when available again",
+      "Browser preview is explicit and cannot fake an FL connection",
+      "Actual desktop discovers both installed supported builds without launching FL",
+      "Production CSP disables renderer networking"
+    ],
+    "errors": []
+  },
+  "bridge_tests": {
+    "passed": 26,
+    "failed": 0
+  },
+  "relay_tests": {
+    "passed": 31,
+    "failed": 0,
+    "scope": "Local Miniflare only; not deployed"
+  },
+  "native_harnesses": {
+    "passed": 17,
+    "failed": 0,
+    "executables": [
+      "t_build_gate_experimental.exe",
+      "t_build_gate.exe",
+      "t_cloud.exe",
+      "t_compat.exe",
+      "t_flp.exe",
+      "t_injection_experimental.exe",
+      "t_injection.exe",
+      "t_launcher.exe",
+      "t_metadata.exe",
+      "t_notes.exe",
+      "t_patops.exe",
+      "t_plugin_apply.exe",
+      "t_profile_loader.exe",
+      "t_profiles.exe",
+      "t_rooms.exe",
+      "t_samples.exe",
+      "t_ws_buffer.exe"
+    ],
+    "scope": "Offline/native harnesses; no collaboration session"
+  },
+  "live_desktop": {
+    "date": "2026-10-23",
+    "workerVersion": "23d1001c-7c2a-4bc1-bfc1-7ae9dbb8b4cc",
+    "relay": "https://flim-relay.cashflowbeatz.workers.dev",
+    "passed": 3,
+    "results": [
+      "Actual desktop UI creates one live room and launches verified FL25",
+      "Live participant list contains actual FL25 host and FL26 member",
+      "Live FL26 member volume, pattern name and piano-roll note reach FL25 host"
+    ],
+    "errors": [],
+    "uiMocked": false,
+    "nativeMocked": false,
+    "participantBuilds": [
+      "25.2.5.5319",
+      "26.1.7.5654"
+    ],
+    "baseline_only_for_current_revision": true,
+    "rerun_after_native_transfer_changes": false
+  },
+  "packaged_payload": {
+    "passed": true,
+    "checks": [
+      "Native payload matches tested binaries",
+      "No private keys, test fixtures, preferences or logs in ASAR",
+      "Bundled launcher verifies installed FL25",
+      "Packaged app ignores inherited dev flag",
+      "Local renderer and General Sans load under production CSP",
+      "Actual FL25/26 discovery succeeds",
+      "Renderer has no Node access",
+      "No room allocated or FL launched by packaging check",
+      "Header logo and favicon load locally",
+      "All nine icon sizes embedded in the app and portable executable",
+      "Running Windows small and large icons match the new logo"
+    ],
+    "hashes": {
+      "flim.exe": "91f911c0e57ef2052ca4c41f81ba54074cbbbba67bd86c9d0564a326de62b749",
+      "flim_engine.dll": "01ac32079cc24a08292e37bf6358811d28bdd8d2aba88a5d34a919277f233845",
+      "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+      "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+    },
+    "icons": [
+      {
+        "executable": "flim.exe",
+        "sizes": [
+          16,
+          20,
+          24,
+          32,
+          40,
+          48,
+          64,
+          128,
+          256
+        ]
+      },
+      {
+        "executable": "flim-rooms-0.2.3-win64.exe",
+        "sizes": [
+          16,
+          20,
+          24,
+          32,
+          40,
+          48,
+          64,
+          128,
+          256
+        ]
+      }
+    ],
+    "windowIcons": [
+      {
+        "name": "window-small",
+        "width": 16,
+        "height": 16,
+        "meanDifference": 0
+      },
+      {
+        "name": "window-large",
+        "width": 32,
+        "height": 32,
+        "meanDifference": 0
+      }
+    ],
+    "errors": []
+  },
+  "portable": {
+    "passed": true,
+    "checks": [
+      "Portable executable self-extracts and opens the actual app",
+      "Bundled native discovery finds both supported installations",
+      "No real room allocated and no FL instance launched"
+    ]
+  },
+  "artifact": {
+    "file": "flim-rooms-0.2.3-win64.exe",
+    "bytes": 114498616,
+    "sha256": "0024047be2c7754f931333cb1cbc0253d1b6705d6eb20a5cb69931d022b8d0b2",
+    "signed": false
+  },
+  "source_sha256": {
+    "src/vendor/Nh9unIpFh.js": "09c7decb29cd90179af4396040209e7706e49e0fc634ef1da0e8d9133693348c",
+    "src/vendor/_framer-runtime.js": "4baa1782921b29efb6027b4cdf4db8a0706420c8658cdb80c9e85704bcb085d6",
+    "electron/main.cjs": "2a0648875c8b573693fc4ebfcc166b53c2aca011553c30bb77661183e5287a1e",
+    "electron/preload.cjs": "39dfb54bdbc7814840ccd0cf6f9ef94fb21709272ba38745c2b257a16a904725",
+    "electron/bridge-core.cjs": "792af8ce0983621ab52ca6a6ccea77a2d183c84b81941807bc19aaeb6389687d",
+    "src/App.tsx": "2fe6da66181006a906d757489a16cb844fb3019cb3e817103da22c04144ef00a",
+    "src/styles.css": "dbf51956f0dc5b4a578f8e49fca88d1cca281562a9c17b30efac1046e969fba6",
+    "package.json": "7215c31fa5261753de4e5804a8071a6a6848c45ada02e4fab5e70b1d716b571d",
+    "public/framer-assets/session-link.png": "ebe74cfec7089aba62e866f771d6e75134ebcdffe6791b5936eb705cebce91db",
+    "index.html": "480c89ff959d4c46e72d53c8b18ab78b70970a13b9735610227977f150d911d4",
+    "artwork/flim-logo-master.png": "5d431603b9698f597874175958ee9aaa525937e6c631d7b3e622091a4c15f2a2",
+    "public/brand/flim-logo.png": "3d1ba32428575bcef8d3981c3ccbd6a88a6901519f96eee0df8e05d4c4409bff",
+    "public/brand/flim.ico": "fdf72d8e299f89adada89f972de28e73a157b53e1c36d574dbacd5f9a4563e6e",
+    "scripts/build-icons.cjs": "6136be0215a3a0d5a41fceaac171e7539775120584dca72a8e99ec20cfe7c146",
+    "test/package.cjs": "82da99c3e6d2f3204c054b016972f456a8aa4cce7043ca9209d6c7cf3f208db9",
+    "test/icons.cjs": "11d149fffcd4ff4dbc3b86905e8a7a2563ef9cf43d989b155c84e08a48339231",
+    "test/window-icons.ps1": "cf73bfca53348544e15aae407065a1b78764aa5a0f61208db9df9f2af1d01442",
+    "package-lock.json": "e40230c30ef6649e2bcc108873b32701ea552ccaa73609bd5084444f0e5e6fce",
+    "test/bridge.test.cjs": "356950afd8bc9a0f95af2fca094228b428506f1cee9bc3e308f9df83dee724a3",
+    "test/ui.cjs": "bdac979f24d11a2cb2b4b6e2d3225dc6b297cb6a3618c1bee7d8625b1838415a",
+    "test/portable.cjs": "e0e69df8f595d036b319c7756f312b87caba6f8dcf4ef7964d86d4d58783fa91"
+  },
+  "limits": [
+    "Verified installed FL25.2.5.5319 and FL26.1.7.5654 only",
+    "Physical MIDI hardware, unrecorded audition and cross-country latency not tested",
+    "Earlier live FL collaboration results predate this native transport revision; current native transport checks use real WinHTTP against loopback fixtures",
+    "Relay fixes are local and undeployed; shared usage counters and Durable Object identity unchanged"
+  ],
+  "github_writes": false,
+  "previous_artifact": {
+    "file": "flim-rooms-0.2.2-win64.exe",
+    "bytes": 114499049,
+    "sha256": "e446de5d407ae1ad96b879f4e3361828781ef83d0e67d5257934b44bb16035e1",
+    "signed": false
+  },
+  "visual_update": {
+    "version": "0.2.1",
+    "description": "Replaced portrait with two music computers connected through a MIDI keyboard",
+    "tool": "Built-in image generation",
+    "asset": "public/framer-assets/session-link.png",
+    "portrait_removed_from_payload": true,
+    "ui_checks": 21,
+    "packaged_and_portable_startup": "passed",
+    "relay_and_native_changes": false
+  },
+  "older_artifacts": [
+    {
+      "sha256": "b8b55bdf08d622df13288bc236b0ddd23e23472905d2d8f241c056442e027f41",
+      "file": "flim-rooms-0.2.0-win64.exe",
+      "signed": false,
+      "bytes": 113164021
+    },
+    {
+      "file": "flim-rooms-0.2.1-win64.exe",
+      "bytes": 114201690,
+      "sha256": "94cd75dd662a0f0b7e8b7b69fb5a2f4862146e5891902834861a759f73f2476b",
+      "signed": false
+    }
+  ],
+  "icon_update": {
+    "version": "0.2.2",
+    "description": "Connected computers and keyboard mark applied to header, favicon, executable and running Windows window/taskbar icons",
+    "tool": "Built-in image generation",
+    "icon_sizes": [
+      16,
+      20,
+      24,
+      32,
+      40,
+      48,
+      64,
+      128,
+      256
+    ],
+    "exe_icon_frames_byte_equal": true,
+    "running_window_icons_pixel_equal": true,
+    "app_user_model_id": "com.cashflowbeatz.flim",
+    "ui_checks": 21,
+    "packaged_and_portable_startup": "passed",
+    "isolated_test_profiles": true,
+    "relay_and_native_changes": false
+  },
+  "baseline_before_reliability_review": {
+    "version": "0.2.2",
+    "verified_utc": "2026-10-24T00:16:34.5820752Z",
+    "artifact": {
+      "file": "flim-rooms-0.2.2-win64.exe",
+      "bytes": 114499049,
+      "sha256": "e446de5d407ae1ad96b879f4e3361828781ef83d0e67d5257934b44bb16035e1",
+      "signed": false
+    },
+    "bridge_tests": {
+      "passed": 21,
+      "failed": 0
+    },
+    "relay_tests": {
+      "passed": 29,
+      "failed": 0
+    },
+    "native_hashes": {
+      "flim.exe": "348aa06334a902a63484529ed36cef86788c4d48d1e6db8f6b12b18649ec56dc",
+      "flim_engine.dll": "3d42bc56087049e577cffa52ac4606af1d7b884fbd898fde08ba4d20daf0e375",
+      "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+      "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+    },
+    "source_sha256": {
+      "src/vendor/Nh9unIpFh.js": "09c7decb29cd90179af4396040209e7706e49e0fc634ef1da0e8d9133693348c",
+      "src/vendor/_framer-runtime.js": "4baa1782921b29efb6027b4cdf4db8a0706420c8658cdb80c9e85704bcb085d6",
+      "electron/main.cjs": "2a0648875c8b573693fc4ebfcc166b53c2aca011553c30bb77661183e5287a1e",
+      "electron/preload.cjs": "39dfb54bdbc7814840ccd0cf6f9ef94fb21709272ba38745c2b257a16a904725",
+      "electron/bridge-core.cjs": "dfb996e23fc538288bd24af45736197c409f12429130ab167ab3c59b544443fd",
+      "src/App.tsx": "107f297859598fa46f08894e1cef584f53a68cf8ff6542a065c81ec9002a294a",
+      "src/styles.css": "dbf51956f0dc5b4a578f8e49fca88d1cca281562a9c17b30efac1046e969fba6",
+      "package.json": "45585213b43f63b4c99bc54192bee1522b6767be528d209e0d6d53757f6ca270",
+      "public/framer-assets/session-link.png": "ebe74cfec7089aba62e866f771d6e75134ebcdffe6791b5936eb705cebce91db",
+      "index.html": "480c89ff959d4c46e72d53c8b18ab78b70970a13b9735610227977f150d911d4",
+      "artwork/flim-logo-master.png": "5d431603b9698f597874175958ee9aaa525937e6c631d7b3e622091a4c15f2a2",
+      "public/brand/flim-logo.png": "3d1ba32428575bcef8d3981c3ccbd6a88a6901519f96eee0df8e05d4c4409bff",
+      "public/brand/flim.ico": "fdf72d8e299f89adada89f972de28e73a157b53e1c36d574dbacd5f9a4563e6e",
+      "scripts/build-icons.cjs": "6136be0215a3a0d5a41fceaac171e7539775120584dca72a8e99ec20cfe7c146",
+      "test/package.cjs": "82da99c3e6d2f3204c054b016972f456a8aa4cce7043ca9209d6c7cf3f208db9",
+      "test/icons.cjs": "11d149fffcd4ff4dbc3b86905e8a7a2563ef9cf43d989b155c84e08a48339231",
+      "test/window-icons.ps1": "cf73bfca53348544e15aae407065a1b78764aa5a0f61208db9df9f2af1d01442"
+    },
+    "live_desktop": {
+      "date": "2026-10-23",
+      "workerVersion": "23d1001c-7c2a-4bc1-bfc1-7ae9dbb8b4cc",
+      "relay": "https://flim-relay.cashflowbeatz.workers.dev",
+      "passed": 3,
+      "results": [
+        "Actual desktop UI creates one live room and launches verified FL25",
+        "Live participant list contains actual FL25 host and FL26 member",
+        "Live FL26 member volume, pattern name and piano-roll note reach FL25 host"
+      ],
+      "errors": [],
+      "uiMocked": false,
+      "nativeMocked": false,
+      "participantBuilds": [
+        "25.2.5.5319",
+        "26.1.7.5654"
+      ],
+      "baseline_only_for_current_revision": true,
+      "rerun_after_native_transfer_changes": false
+    }
+  },
+  "version": "0.2.3",
+  "native_transfer_checks": {
+    "passed": 4,
+    "scope": "Real native WinHTTP against an ephemeral loopback fixture; no FL processes or Cloudflare writes",
+    "batches": [
+      512,
+      512,
+      1
+    ],
+    "output": "PASS 1025 sample references looked up in bounded batches\r\nPASS partial HTTP writes send the complete file\r\nPASS streamed download content and checksum\r\nPASS a stale session stops writing downloaded data\r\n"
+  },
+  "native_source_sha256": {
+    "client/engine/flim_engine.c": "8d6fb6cb43e3de06d0e9cb1d0a972dc6d25b7b6541b3657ed687957e89b4a67a",
+    "client/common/flim_cloud.h": "d169214a4fef9ef02cef90adc0dfc1264a0a862cfbd2d33e0841122b801109a6",
+    "client/dev/harness/t_transfer.c": "2baf409660bff1287fdd460bf35d244cf609f06953b48562ed7f44f92fd71f67",
+    "client/dev/harness/build.bat": "38517ffa845365eb241231139711a78c51dfae7809b790893e937b637402829f",
+    "client/dev/transfer_test.cjs": "f2271d127a2daebfccbc83a2c275036392c93df04a9d1df6b80e8984c97cc27b"
+  },
+  "staged_relay": {
+    "deployed": false,
+    "local_tests_passed": 31,
+    "source_sha256": {
+      "server/cloudflare/src/worker.ts": "17835b8d996af925410d0989617246fb5c467db11be8c63550888f3e3427a3b9",
+      "server/cloudflare/test/fixture.mjs": "fbbcc2db747af6d651446ed5079c2231c3f9a07286ca945babc964cb9bdd0c6a",
+      "server/cloudflare/test/cleanup-fixture.mjs": "bd8eb19603b0b663c43539f2b494a147706a601945152aa32062132dc03d38c1",
+      "server/cloudflare/test/cleanup.test.mjs": "4554be9398fb7c6f9041aee21db1080a9a8033a04ac4c4c2f7802d818dc0ad9a",
+      "server/cloudflare/test/rooms.test.mjs": "f60855ac4c8386655adb4dbaf9ccb486dec447f4a597bcd9c573232b34ce098c"
+    },
+    "budget_identity_changed": false,
+    "last_recorded_deployed_version": "23d1001c-7c2a-4bc1-bfc1-7ae9dbb8b4cc"
+  }
+}

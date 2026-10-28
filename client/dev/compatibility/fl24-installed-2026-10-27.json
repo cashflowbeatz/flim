@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-27T07:51:11.428256+00:00",
+  "status": "installed_fl24_discovery_and_offline_checks_passed_native_collaboration_test_blocked",
+  "installation": {
+    "path": "C:\\Program Files\\Image-Line\\FL Studio 2024",
+    "version": "24.2.2.4597",
+    "engine_sha256": "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32",
+    "authenticode": "Valid",
+    "signer": "Image Line"
+  },
+  "desktop_package": {
+    "version": "0.2.6",
+    "path": "client/desktop/release/flim-rooms-0.2.6-win64.exe",
+    "sha256": "657c19417b17365132dec1c78bdf98937061797b9bb4109ef1f59f10358ac728",
+    "rebuilt": false,
+    "installed_FL24_inspection": {
+      "supported": true,
+      "experimental": true
+    }
+  },
+  "fixes": [
+    "Package and portable integration tests now default to the installed FL Studio 2024 instead of an extracted D: drive fixture; FLIM_TEST_FL24_DIR supports an explicit alternate directory.",
+    "Package verification no longer assumes there can be only one experimental installation. It verifies the required exact build and selected path alongside the reviewed FL25/26 builds.",
+    "Both package tests select the installed FL24 in the actual app and verify the experimental notice and available room button without allocating a room or launching FL."
+  ],
+  "verification": {
+    "python_tests": {
+      "passed": 72,
+      "exit_code": 0
+    },
+    "desktop_tests": {
+      "passed": 48,
+      "exit_code": 0
+    },
+    "local_cloudflare_tests": {
+      "passed": 45,
+      "typecheck": "passed",
+      "build": "passed",
+      "exit_code": 0,
+      "scope": "Current local source; not deployed by this check"
+    },
+    "native_harnesses": {
+      "passed": 11,
+      "exit_code": 0,
+      "scope": "Existing offline executables; synthetic FL objects/mocked Win32 APIs, not native FL runtime",
+      "artifacts": {
+        "t_compat": "665604af85f102142a0dd08be5244ff760e77b849429809bead5d2de83cc4081",
+        "t_clip": "0d72e96a7197778bacafa9c7a04f8e512c9a309ab80fd1a94e9ef085d8bf3c2f",
+        "t_clip_native": "9fb138b232cdfb54f0b19f319361ca15162517259cde3de77ed217911e57589e",
+        "t_profiles": "350c1d3d03add7c44da61f1101da7cb67bdaac88e0206a7af430c1d335ede258",
+        "t_profile_loader": "777e67e2788c108414bc74bf80c60520691bb0ed066141f8a350d86f3a7be80c",
+        "t_project_load": "26b3eb119efc5a6530a7e0f79f53b62c2e7efa98d105b836d99ecf81d66c871e",
+        "t_notes": "184228cb0aa07211aa55ebaad030a0c117274cd06919b957e78c7b1158db6126",
+        "t_rooms": "f08cbddcb7f8d0a706ba94dcafdfb0e950dde14386d4885acbe16209d46d0338",
+        "t_launcher": "15932e2c7a3b1800dd6e25cf652506537470543dc50fa61d4c55b6c5ba5c7682",
+        "t_build_gate_experimental": "19f6ef35d8b979f645ec9f3fc7f56991d85a1e203b71aba9166b7fc3b72ea908",
+        "t_injection_experimental": "ec017e76e56bdccc3649534f0b293f04eecd5dfed8595a6c97f20d6e9f31b2be"
+      }
+    },
+    "packaged_app": {
+      "passed": true,
+      "installed_FL24_selected": true,
+      "renderer_errors": 0
+    },
+    "packaged_alternate_copy": {
+      "passed": true,
+      "path": "D:/Codex-flim-compat/24.2.2.4597/app",
+      "scope": "Same exact build alongside the newly installed copy; regression for multiple installation copies"
+    },
+    "portable_app": {
+      "passed": true,
+      "installed_FL24_selected": true,
+      "checks": [
+        "Portable executable self-extracts and opens the actual app",
+        "Installed FL24 is discovered and selectable alongside reviewed FL25/26 without changing the user profile",
+        "Real local diagnostics include app version, inspected builds and matching native file hashes",
+        "No real room allocated and no FL instance launched"
+      ]
+    },
+    "live_relay_non_admitting_probes": {
+      "passed": 9,
+      "FL24": "passes compatibility before invalid-user rejection",
+      "FL25": "passes compatibility before invalid-user rejection",
+      "FL26": "passes compatibility before invalid-user rejection",
+      "rooms_created": 0,
+      "r2_uploads": 0,
+      "r2_downloads": 0
+    },
+    "initial_package_failure": {
+      "message": "Expected one experimental installation, discovered two",
+      "cause": "Test selected extracted fixture plus new installed FL24; the app correctly discovered both",
+      "fixed": true
+    }
+  },
+  "native_collaboration": {
+    "status": "not_run",
+    "reason": "Automatic approval review rejected both isolated-runtime launch commands with only \"blocked by policy\". Neither command executed. No FL test process or test room was created.",
+    "project_loading": "unverified",
+    "bidirectional_editing": "unverified",
+    "MIDI": "not tested",
+    "current_license_state": "not established; no license/trial/welcome text was visible in the existing window titles; no license values inspected"
+  },
+  "preserved_user_process": {
+    "pid": 77360,
+    "path": "C:/Program Files/Image-Line/FL Studio 2024/FL64.exe",
+    "creation_local": "2026-10-27T03:42:34.444845-04:00",
+    "untouched": true
+  },
+  "cleanup": {
+    "temporary_local_relay_stopped": true,
+    "FL_processes_started": 0,
+    "FL_processes_stopped": 0,
+    "disposable_registry_keys_created": false,
+    "live_rooms_created": 0
+  },
+  "github_writes": false,
+  "git_commit_created": false,
+  "cloudflare_deployed": false,
+  "native_product_rebuilt": false,
+  "source_sha256": {
+    "client/desktop/test/package.cjs": "ca25b55bbe272fdb8f7beab3fbb36bfa129313022844b3fc442648b5609306cc",
+    "client/desktop/test/portable.cjs": "4e2c81348208569de188813d8c93b41cc685ca3cd4d986a34319d44d8b017dc7",
+    "client/engine/flim_engine.c": "44e98486be8a12b7395ab0a55671e20fbf82578b856337a8eb03a956b8b3d08e",
+    "client/launcher/flim.c": "529e953db5f7ed5eeb2c8bd2fd6bad2d8a70b8131d6b0a2ebf01a51379b00af4"
+  },
+  "limitations": [
+    "FL24 remains explicitly experimental. Installation recognition and offline tests do not establish native project or edit synchronization.",
+    "Earlier failed native FL24 results remain historical evidence. Installation alone does not replace a successful collaboration run.",
+    "Unknown FL24 patch builds remain refused; this check covers only exact 24.2.2.4597.",
+    "Oldest supported build must host a mixed-version room.",
+    "No real-time physical MIDI or unrecorded live audio/MIDI check was made."
+  ]
+}

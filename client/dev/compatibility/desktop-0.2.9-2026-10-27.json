@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-27T09:37:43.9175832Z",
+  "version": "0.2.9",
+  "status": "Observed local startup failure fixed; live relay host admission verified on installed FL24/25/26 and FL26 member admission verified",
+  "reported_failure": "FL opens but the room does not connect",
+  "baseline": {
+    "normalProfile": true,
+    "flVersion": "26.1.7.5654",
+    "pid": 100600,
+    "getMessageError": 126,
+    "callWindowError": 126,
+    "mainWindowClass": "TApplication",
+    "connectionAttempted": false
+  },
+  "artifacts": {
+    "client/desktop/release/flim-rooms-0.2.9-win64.exe": {
+      "sha256": "7092ff2b93d05c35e5ecc42b6719dc8a4d2160dd2a08f3de4027c4b1bf124423",
+      "bytes": 103601046
+    },
+    "client/out-experimental/flim.exe": {
+      "sha256": "0343ddb4554befec35c76bc104d04c6f6da86c887e293c031501b3d5f2e6e5d9",
+      "bytes": 311296
+    },
+    "client/out-experimental/flim_engine.dll": {
+      "sha256": "253f6e06c82c613ba278d1c702554f8812f4c45fee2681626c6f176de44fa911",
+      "bytes": 594944
+    }
+  },
+  "source_sha256": {
+    "client/engine/flim_engine.c": "fe4df4a28b35a352076ac85d60f53176726b290982b820d8cde77adb7956ada6",
+    "client/dev/harness/t_startup.c": "0108cae176bc7d69cbbf4852d3e8866a61f47e33520a0f9dc95a13c256e84803",
+    "client/desktop/test/native-room-startup.cjs": "6c96477936be718fad145f100d2cc92b251f86704c61f3e1258e3b1c803bd214",
+    "client/desktop/electron/bridge-core.cjs": "0b22b083ad16aac6e3d993ee6bd2b43b3b9ac93def3eb78c4aa3d914231d09b5",
+    "client/desktop/electron/main.cjs": "291398a16429b6d9d4cf67c7bf2a4739858e3d5b1f7b693062d3c886b1d541b2",
+    "client/desktop/src/App.tsx": "4354e2840efb00527023f7e7ccdcdee785ff7a1b57933f93f171960826067237",
+    "server/cloudflare/src/worker.ts": "59303bef395bbffdfed5d35d56f9b1a0dcf992cd8aa002ac172c669f5c2e23d8"
+  },
+  "live_runs": [
+    {
+      "flVersion": "26.1.7.5654",
+      "pid": 108312,
+      "role": "host",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 6381,
+      "fixtureHost": false,
+      "resultPath": "client\\desktop\\test\\.tmp\\native-room-26-5gSNL5\\result.json"
+    },
+    {
+      "flVersion": "25.2.5.5319",
+      "pid": 76172,
+      "role": "host",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 9683,
+      "fixtureHost": false,
+      "resultPath": "client\\desktop\\test\\.tmp\\native-room-25-P3BLTI\\result.json"
+    },
+    {
+      "flVersion": "24.2.2.4597",
+      "pid": 109776,
+      "role": "host",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 8579,
+      "fixtureHost": false,
+      "resultPath": "client\\desktop\\test\\.tmp\\native-room-24-nbXBcs\\result.json"
+    },
+    {
+      "flVersion": "26.1.7.5654",
+      "pid": 110416,
+      "role": "member",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 8966,
+      "fixtureHost": true,
+      "resultPath": "client\\desktop\\test\\.tmp\\native-room-26-lk4dgX\\result.json"
+    }
+  ],
+  "verification": {
+    "native_harnesses": 26,
+    "desktop_tests": 67,
+    "http_transfer_checks": 4,
+    "package": "passed",
+    "portable": "passed",
+    "git_diff_check": "passed",
+    "leftover_test_processes": 0
+  },
+  "limits": [
+    "Room startup/admission only; no project or preset sent",
+    "Member host is a protocol fixture; project loading is not verified",
+    "Hardware MIDI and all edit features were not tested",
+    "Only exact installed builds tested; FL24 remains experimental",
+    "No isolation helper or registry/license copying used",
+    "Worker unchanged and undeployed; production uses locked snapshots",
+    "Nothing committed or pushed to GitHub"
+  ]
+}

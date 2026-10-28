@@ -1,0 +1,52 @@
+{
+  "version": "0.2.19",
+  "date": "2026-10-28T09:22:47.7289920-04:00",
+  "localOnly": true,
+  "changes": 37,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.19-win64.exe",
+    "bytes": 103551106,
+    "unpackedBytes": 384890238.0,
+    "sha256": "4915ce7cfb7246598aa50da4d138eb750456167c0d151ed6036b93778156d0b5"
+  },
+  "native": {
+    "changed": false,
+    "priorValidation": "desktop-0.2.18-2026-10-27.json",
+    "launcher": "4157b725f0b51a9d5b506177ca1708016fc27c3bc53937c73ab0913d22ba85e2",
+    "engine": "94de8224c448bf3e3dddf4a897d6a1ffd5a652aa90b8f3e7fa3e016d4c67209a"
+  },
+  "desktopTests": 108,
+  "roomUiChecks": 121,
+  "filesUiChecks": 39,
+  "browserErrors": [],
+  "nativeWindowChecks": [
+    "ten Create/Join switches preserve geometry",
+    "immediate input",
+    "400/680px sidebar placement without transient collapse",
+    "focus restoration",
+    "200% zoom",
+    "bounded renderer recovery"
+  ],
+  "packagedStartup": true,
+  "portableStartup": true,
+  "portableExtraction": {
+    "processOnlyTempOverride": true,
+    "testedTempDrive": "D:",
+    "minimumRecommendedTempBytes": 600000000
+  },
+  "reviewedBuilds": [
+    "24.2.2.4597",
+    "25.2.5.5319",
+    "26.1.7.5654"
+  ],
+  "noFreshTwoComputerOrMidiTest": true,
+  "userFL": {
+    "start": "2026-10-27T08:20:55.9275592-04:00",
+    "pid": null
+  },
+  "githubPush": false,
+  "cloudflareDeployment": false,
+  "evidence": "client/desktop/test/evidence/0.2.19",
+  "report": "client/desktop/QA-0.2.19.md",
+  "antislop": "PASS"
+}

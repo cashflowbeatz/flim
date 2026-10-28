@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-23T21:35:38.0149214Z",
+  "status": "deployed_cloudflare_transport_validated",
+  "deployment": {
+    "deployed": true,
+    "endpoint": "https://flim-relay.cashflowbeatz.workers.dev",
+    "workers_plan": "Free (confirmed in Cloudflare dashboard)",
+    "worker": "flim-relay",
+    "version_id": "4b9a6452-dedb-434a-8338-63ac7ada807b",
+    "durable_object": "FlimRoom (SQLite)",
+    "r2_activation": "active; user completed billing activation",
+    "r2_bucket": "flim-private-files",
+    "r2_storage_class": "Standard",
+    "r2_public_access": "Disabled (confirmed in Cloudflare dashboard)",
+    "cli_auth": "isolated cashflowbeatz-flim auth profile; encrypted with separate Windows Credential Manager entry; unrelated global login preserved",
+    "target_account": "81a0f909df6dc284b79c61bad653620e",
+    "host_key": "random 256-bit key stored as Worker secret; private local copy excluded from repository and client package",
+    "github_writes": false
+  },
+  "local_runtime": {
+    "tests_passed": 11,
+    "engine": "Miniflare with real Worker module, SQLite Durable Object and R2",
+    "dry_run_passed": true
+  },
+  "native": {
+    "standard_build": "passed",
+    "experimental_build": "passed",
+    "harness_programs_passed": [
+      "t_cloud",
+      "t_compat",
+      "t_ws_buffer",
+      "t_build_gate",
+      "t_build_gate_experimental",
+      "t_profiles",
+      "t_profile_loader",
+      "t_patops",
+      "t_flp",
+      "t_metadata",
+      "t_plugin_apply"
+    ]
+  },
+  "live": {
+    "project_resyncs_passed": 3,
+    "runs": [
+      {
+        "tag": "cloud-final-mixed",
+        "passed": true,
+        "checks": 17,
+        "runtime_log_sha256": "1512f8565948fc53cbe7325b3dcae0ee25ec516cc5cd6c60c79590d892e919dd",
+        "engine_log_sha256": "32b039f87e7727fb522cbeb9bbdc667032a567f986a4ed0cc809818625c087f2",
+        "project_resync": {
+          "project": "received",
+          "stored": true,
+          "serializedBytes": 254283
+        }
+      },
+      {
+        "tag": "cloud-final-same25",
+        "passed": true,
+        "checks": 14,
+        "runtime_log_sha256": "d18ec72e0d92f8d4ec863ab56c07586f7fc6ac3d3a92b657eab4422034ffc1bf",
+        "engine_log_sha256": "95f7b94c91784f9b7da48187c1947cf275a8baac3c639fc6a24203974a8dee77",
+        "project_resync": {
+          "project": "received",
+          "stored": false,
+          "serializedBytes": 62336
+        }
+      },
+      {
+        "tag": "cloud-final-same26",
+        "passed": true,
+        "checks": 14,
+        "runtime_log_sha256": "867715096eb344d29cc30a70ecfc79c7e05b8a62cfd12128d9ebd78fa7ebacf1",
+        "engine_log_sha256": "08314a088cc4aa12cdd134eaf002a5617ef77aa5f299658c2ab3cb46293ace0f",
+        "project_resync": {
+          "project": "received",
+          "stored": false,
+          "serializedBytes": 62316
+        }
+      }
+    ],
+    "client": "experimental",
+    "fl26": "26.1.7.5654",
+    "fl25": "25.2.5.5319",
+    "checks_passed": 45,
+    "relay": "local Miniflare at 127.0.0.1:49938"
+  },
+  "source_hashes": [
+    {
+      "path": "client/engine/flim_engine.c",
+      "sha256": "7a3626eabaa11fea4689fecf004769b84f769749acb205c47182696909d0e1c5"
+    },
+    {
+      "path": "client/common/flim_cloud.h",
+      "sha256": "becd7c7ed6469faa98d5b476992494a90ab34f99ce47134d02540491f6b5776b"
+    },
+    {
+      "path": "server/cloudflare/src/worker.ts",
+      "sha256": "c6d43375fb87e235f2d249f256e0aa99ecae3f0c207eee3d7b63074adbbf04b5"
+    },
+    {
+      "path": "server/cloudflare/src/policy.ts",
+      "sha256": "ee3256d2591e700143086256e8e3369eb9f81d9f5f2cf4533a9d5f5618af498a"
+    },
+    {
+      "path": "server/cloudflare/wrangler.jsonc",
+      "sha256": "f0aa81f4b239ad31531bf077995942e566e34ce50f76afcae2d248a3c2746641"
+    },
+    {
+      "path": "server/cloudflare/package-lock.json",
+      "sha256": "bb07a51c360b68c066bc85153eac03d365dd78cc2eedac56ce2407a3bcc8fe08"
+    },
+    {
+      "path": "server/src/compatibility.ts",
+      "sha256": "f85708b4b312be9be86d2eb753b1e994769865b8c7f0fe25b31306e738186e1b"
+    },
+    {
+      "path": "server/src/protocol.ts",
+      "sha256": "6d1f344122e6d07dd0080f2a1210ce8db60bb5b0af1577b23b2a52549412b474"
+    },
+    {
+      "path": "client/dev/cloudflare_smoke.py",
+      "sha256": "ed9878c8d2af127bf0663b53b82f5740430b5c2436865b1558b3d32fc6e1a787"
+    },
+    {
+      "path": "server/cloudflare/test/remote-smoke.mjs",
+      "sha256": "07c30a1de3221a9c0772b0c2b0ad4192cc16b8a0da13500b7f72813b2b00903f"
+    }
+  ],
+  "binary_hashes": [
+    {
+      "path": "client/out/flim.exe",
+      "sha256": "bab229dbed54cb06507bb9f31d63dde34566ab970f67e795e254e425a11956be"
+    },
+    {
+      "path": "client/out/flim_engine.dll",
+      "sha256": "2df8d337bc8d1cf72ff4cb36c250a7730d60fc15ffe9df1508102f19a5057187"
+    },
+    {
+      "path": "client/out-experimental/flim.exe",
+      "sha256": "40eceae6c5efefe3b2e94ccc4521c1d20428f2b48bb9f6da1e6da808c0ce6522"
+    },
+    {
+      "path": "client/out-experimental/flim_engine.dll",
+      "sha256": "a4a83639b20b72f547c0617074bbf5d87c1299a51a66f4e64dfa1dbf52678a57"
+    }
+  ],
+  "limitations": [
+    "Deployed internet checks are selected smoke tests, not an internet latency benchmark or long-duration soak",
+    "No broad plugin/audio-render matrix or real hibernation/redeploy recovery test",
+    "Local native 45-check record and remote native 17-check record are distinct; historical 34-check suites refer to older binaries",
+    "FL26 remains experimental; unknown FL25/26 builds still require reviewed profiles and runtime tests",
+    "No automatic reconnect/replay, CRDT merging or project/preset down-conversion",
+    "Free account quotas can interrupt sessions; R2 activation permits overage billing, and application limits are not an account-wide spending cap",
+    "Initial remote native attempts failed or were interrupted and are recorded separately; the final complete run passed",
+    "Owned native test processes were forcibly stopped after checks; local Miniflare emitted Windows socket-reset diagnostics during earlier cleanup"
+  ],
+  "internet_runtime": {
+    "endpoint": "https://flim-relay.cashflowbeatz.workers.dev",
+    "server_smoke": {
+      "passed": true,
+      "checks": 12,
+      "log_sha256": "609ba2b97b38f2b5d6e5f74e7e0683aabebf3faf304f4e1b26dce294e2cab5ed",
+      "names": [
+        "public health endpoint",
+        "incorrect hosting key rejected",
+        "host admitted without session countdown",
+        "incorrect room password rejected",
+        "mixed FL 25/26 room admitted",
+        "ordered edits retain sender build",
+        "mixed-build project replacement restriction",
+        "private file access enforced",
+        "incorrect file hash rejected",
+        "native missing-file line protocol",
+        "large edit uploaded and downloaded through private R2",
+        "host departure ends session and revokes file access"
+      ]
+    },
+    "native": {
+      "passed": true,
+      "host": "25.2.5.5319",
+      "member": "26.1.7.5654",
+      "checks": 17,
+      "runtime_log_sha256": "4b21e0605e0ebb536e5a2e8cfd5c1367d574e3853504b685aacf00456e52e224",
+      "engine_log_sha256": "d00dec65193da1125ff4a28b21c3c9477ebfdf56937e3d5c27116b6b9ebe6151",
+      "project_resync": {
+        "project": "received",
+        "stored": true,
+        "serializedBytes": 254283
+      },
+      "project_log_sha256": "1d031b56b669ea52e588b58f5e6170a04a7f1c8f8455de8a35c27c75355f3175",
+      "large_edit_notes": 6000
+    },
+    "transport_only_run": {
+      "passed": true,
+      "checks": 12,
+      "runtime_log_sha256": "b16bc2f345a37339e8f7477e53ef1f0430bf97a7dca2ed96e13cbcfdb7178b2a",
+      "engine_log_sha256": "27a944004f422150469a1ce007cc3724e04f6c602a05cd1ae70676149e404165",
+      "project_log_sha256": "1d031b56b669ea52e588b58f5e6170a04a7f1c8f8455de8a35c27c75355f3175"
+    },
+    "earlier_attempts": [
+      {
+        "tag": "cloud-live-mixed",
+        "passed": false,
+        "checks_passed": 15,
+        "checks_total": 17,
+        "observation": "Additional drum/channel edits appeared during the run; newer member channel creation triggered the mixed-build safety stop before large-edit reception.",
+        "runtime_log_sha256": "8232c427ba437bbb517b69ed224e9db6b45a574a927d99a75591511ca0421f85",
+        "engine_log_sha256": "2a9bfc8a0612c0452d34997b2394066758e72bec0ad143b8dd464a1ea18d7a9a"
+      },
+      {
+        "tag": "cloud-live-mixed-repeat",
+        "passed": false,
+        "observation": "Channel baseline differed, add/name checks failed and delete probe faulted; full run aborted. The launcher had admitted the member on welcome before waiting for project load completion.",
+        "runtime_log_sha256": "50869f7b1d58ce7d6cf3f3c9f57e7e93b07ce7b2a8084aca67acc8d9ef1ebda9",
+        "engine_log_sha256": "2b6d8089e51a2ab204d999fe6779b0de99c9d51bb2c29e85010083909fa3bab0"
+      }
+    ],
+    "test_readiness_fix": "Native test launcher waits for the joining FL PROJECT settled log; final complete 17-check run and project resync passed after that change.",
+    "test_processes": "All explicitly owned FL test processes stopped after checks; unrelated processes untouched."
+  },
+  "shareable_package": {
+    "file": "flim-cloudflare-win64-experimental.zip",
+    "sha256": "39599d5a6292ef08b681aef59e488ab2a9bf6da7b9ce0c7e2887a32943f8308f",
+    "contains_host_key": false
+  }
+}

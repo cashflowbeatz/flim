@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-25T10:39:59.294588+00:00",
+  "status": "deployed_relay_fix_verified_native_fl24_project_sharing_unverified",
+  "diagnosis": "The packaged native client sends transport 2 and valid build metadata. The previous deployed relay admitted FL25/26 but rejected exact FL24.2.2.4597 with a generic instruction to install a Cloudflare-enabled client.",
+  "cloudflare_deployed": true,
+  "github_writes": false,
+  "git_commit_created": false,
+  "desktop_rebuilt": false,
+  "deployment": {
+    "worker": "flim-relay",
+    "url": "https://flim-relay.cashflowbeatz.workers.dev",
+    "previous_version": "23d1001c-7c2a-4bc1-bfc1-7ae9dbb8b4cc",
+    "previous_source_sha256": "d70a9f85ea26a83888367b7de2dd244adc844a6045e88b477a0847488b5e3bfb",
+    "version": "c5647634-648d-450d-ad79-a61c60b8336b",
+    "created_at": "2026-10-25T10:36:39.689118Z",
+    "source_sha256": "01280f8167ebd9cb8db4e470befea8086676c4e91b9dd6fbffe6a924b560c1d9",
+    "traffic_percent": 100,
+    "artifact": "Isolated copy of the previous deployed Worker with three reviewed diff hunks; ordinary repository deploy was not used.",
+    "changes": [
+      "Admit exact experimental FL24.2.2.4597 identity",
+      "Differentiate three refusal causes without changing compatibility error code",
+      "Remove obsolete source map marker"
+    ],
+    "verification": {
+      "status": "passed",
+      "activeTrafficPercent": 100,
+      "downloadedSourceSha256": "01280f8167ebd9cb8db4e470befea8086676c4e91b9dd6fbffe6a924b560c1d9",
+      "candidateSourceSha256": "01280f8167ebd9cb8db4e470befea8086676c4e91b9dd6fbffe6a924b560c1d9",
+      "codeMatchesTestedCandidate": true,
+      "allNonSecretBindingsUnchanged": true,
+      "durableObjectNamespace": "427044484c934a268a21546e208feef2",
+      "durableObjectClass": "FlimRoom",
+      "migrationTag": "v1",
+      "r2Bucket": "flim-private-files",
+      "hostKeyBindingPreserved": true,
+      "r2Limits": {
+        "R2_MONTHLY_DOWNLOAD_LIMIT": "100000",
+        "R2_MONTHLY_UPLOAD_LIMIT": "20000",
+        "R2_STORAGE_LIMIT_BYTES": "536870912"
+      },
+      "runtimeSettingsUnchanged": true,
+      "workersDevAndPreviewFlagsUnchanged": true,
+      "scope": "Authenticated GET requests only; credentials excluded from saved output; no rooms, R2 writes, deployments or settings changes performed by verification"
+    },
+    "broader_pending_relay_changes_deployed": false
+  },
+  "source_sha256": {
+    "server/cloudflare/src/worker.ts": "8802911cfaa297582abc0ae5c21f7790c989513a53085f8f73db49bfcc93b273",
+    "server/cloudflare/test/relay.test.mjs": "ef9bbf602f3668760ea94bb7ab7ebfe089751b195eb57c798a2834908648dfa8",
+    "server/cloudflare/test/compatibility-smoke.mjs": "4c8e4692ab2602ee7c3bad2bc90831e36e26be1a0f648d2f88d4367dfc57be30",
+    "server/src/compatibility.ts": "11ed06b62981a9c553b527b44598d0f5c30cc9f943c7657dbff8b1b629b0c6f1"
+  },
+  "unchanged_desktop_package": {
+    "path": "client/desktop/release/flim-rooms-0.2.6-win64.exe",
+    "sha256": "657c19417b17365132dec1c78bdf98937061797b9bb4109ef1f59f10358ac728",
+    "native_launcher_sha256": "866f1ad636364ed5204244fb0e2a5c8566b881f4637dc9bec4e256177f612461",
+    "native_engine_sha256": "ac28fe137fc233c73008d5e58e3b91df534a5630a19bcb1e1a4d6eed0cdba985",
+    "previous_package_checks": "diagnostics-0.2.6-2026-10-25.json",
+    "audit": "Complete native payload and reviewed profiles are bundled. Launcher and engine handshake require no separate Cloudflare software or account."
+  },
+  "tests": {
+    "current_local_source": {
+      "total": 45,
+      "passed": 45,
+      "typecheck": "passed",
+      "build": "passed",
+      "native_alert_length_regression": "2/2 targeted passed"
+    },
+    "wrangler_dry_run": "passed",
+    "local_exact_artifact": {
+      "status": "passed",
+      "sha256": "01280f8167ebd9cb8db4e470befea8086676c4e91b9dd6fbffe6a924b560c1d9",
+      "non_admitting_checks": 9,
+      "owned_room_checks": 24,
+      "failed_host_cleanup": "passed against legacy relay without cancellation endpoint; reused sole owned reservation and verified its cleanup",
+      "evidence": "Agent tool outputs ba0ad4, 219737 and 164e80; no separate output files saved"
+    },
+    "live_non_admitting": {
+      "mode": "read-only-invalid-user-probes",
+      "target": "selected-relay",
+      "status": "passed",
+      "passed": 9,
+      "checks": [
+        "Relay health",
+        "Room API is available",
+        "FL 24.2.2.4597 passes compatibility before invalid-user rejection",
+        "FL 25.2.5.5319 passes compatibility before invalid-user rejection",
+        "FL 26.1.7.5654 passes compatibility before invalid-user rejection",
+        "Unmapped FL 24.2.2.4596 is refused before admission",
+        "Unmapped FL 24.2.2.4598 is refused before admission",
+        "Unsupported FL family is refused before admission",
+        "Unsupported transport is refused before admission"
+      ],
+      "roomReservationsUsed": 0,
+      "r2Uploads": 0,
+      "r2Downloads": 0,
+      "flProcessesStarted": 0
+    },
+    "live_owned_room": {
+      "mode": "scoped-room-compatibility",
+      "target": "selected-relay",
+      "status": "passed",
+      "passed": 24,
+      "checks": [
+        "Relay health",
+        "Room API is available",
+        "FL 24.2.2.4597 passes compatibility before invalid-user rejection",
+        "FL 25.2.5.5319 passes compatibility before invalid-user rejection",
+        "FL 26.1.7.5654 passes compatibility before invalid-user rejection",
+        "Unmapped FL 24.2.2.4596 is refused before admission",
+        "Unmapped FL 24.2.2.4598 is refused before admission",
+        "Unsupported FL family is refused before admission",
+        "Unsupported transport is refused before admission",
+        "FL 24.2.2.4597 receives the correct welcome",
+        "FL 24.2.2.4597 joins an empty test project",
+        "FL 25.2.5.5319 receives member-only credentials",
+        "FL 25.2.5.5319 receives the correct welcome",
+        "FL 25.2.5.5319 joins an empty test project",
+        "FL 26.1.7.5654 receives member-only credentials",
+        "FL 26.1.7.5654 receives the correct welcome",
+        "FL 26.1.7.5654 joins an empty test project",
+        "FL24 host observes the mixed-build membership",
+        "Room status lists only the three owned peers",
+        "FL25 note marker reaches FL24 host and FL26 member",
+        "FL26 note marker reaches FL24 host and FL25 member",
+        "FL24 host reply reaches both members",
+        "Relay sequence increases across all senders",
+        "Owned room is unavailable after cleanup"
+      ],
+      "roomReservationsUsed": 1,
+      "r2Uploads": 0,
+      "r2Downloads": 0,
+      "flProcessesStarted": 0
+    }
+  },
+  "limits": [
+    "Synthetic WebSocket build identities and small inline note markers exercise relay admission and forwarding, not FL project loading or actual piano-roll application.",
+    "No FL process launched; no physical MIDI or unrecorded live MIDI/audio check.",
+    "FL24.2.2.4597 remains experimental and needs an unlocked installation for project reopening; prior trial-mode refusal remains unresolved.",
+    "Only the exact mapped FL24 build was admitted. Adjacent unknown FL24 builds remain refused. Native FL25/26 support still requires reviewed exact fingerprints.",
+    "Oldest supported build must host mixed sessions; newer members retain existing project/preset restrictions.",
+    "No R2 uploads or downloads in this live check; existing cutoff configuration was verified unchanged, not a new account-wide billing guarantee.",
+    "Broader local relay recovery, cancellation and backlog changes were not deployed."
+  ],
+  "retry": "Open the complete 0.2.6 portable app on each computer, create a fresh room, and use FL24 as host when testing the FL24 candidate with newer builds. No extra Cloudflare installation is required."
+}

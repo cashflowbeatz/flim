@@ -1,0 +1,783 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-25T08:10:23.535257+00:00",
+  "desktop_version": "0.2.5",
+  "status": "local_regressions_and_package_passed_no_new_live_fl_run",
+  "github_writes": false,
+  "git_commit_created": false,
+  "cloudflare_deployed": false,
+  "repository_head": "ff2af860a4e5a59a82b2f01b1b84c9fcff03f572",
+  "source_scope": "Prior runtime source inventory plus current native harnesses, desktop and Cloudflare source/tests. Dirty worktree preserved.",
+  "sources": [
+    {
+      "path": "client/build.bat",
+      "bytes": 1612,
+      "sha256": "240b84292822e2dbe9d88d824117c7713b4c3ffad622ee3fb63764090854aba6"
+    },
+    {
+      "path": "client/common/flim_clip.h",
+      "bytes": 1865,
+      "sha256": "28310902fb38c5ff473e476f8b9a369540384c52f5ac8df34883b084dffccb7c"
+    },
+    {
+      "path": "client/common/flim_cloud.h",
+      "bytes": 8206,
+      "sha256": "d169214a4fef9ef02cef90adc0dfc1264a0a862cfbd2d33e0841122b801109a6"
+    },
+    {
+      "path": "client/common/flim_compat.h",
+      "bytes": 1761,
+      "sha256": "f68b73914add5625f59d35a6a3ce0635b65e226f5ffd04e373d0b0f921441dde"
+    },
+    {
+      "path": "client/common/flim_config.h",
+      "bytes": 4801,
+      "sha256": "3caa680ccf5cf6534fc6d25ebc81c45b4b07e4a21d1c1a5f19a03f113335566d"
+    },
+    {
+      "path": "client/common/flim_flp.h",
+      "bytes": 2392,
+      "sha256": "2bc9dbb9ceecccb4a9cce465720119ff96efb33fcccd860a3985bbe292e00b6d"
+    },
+    {
+      "path": "client/common/flim_json.h",
+      "bytes": 4608,
+      "sha256": "4748c1e311f53b1b461e34c79c3481199204a679d649ef73066730b0a34818fe"
+    },
+    {
+      "path": "client/common/flim_profile.h",
+      "bytes": 12224,
+      "sha256": "b561879fb59754a18317e57469abfb6ac3d58069e5d61930a6b9465d6679f0b4"
+    },
+    {
+      "path": "client/common/flim_res.h",
+      "bytes": 873,
+      "sha256": "6f93be9a0a837002388679b7a23a4c38ed02b52a8c76dddfe084d60bdd91b2bf"
+    },
+    {
+      "path": "client/common/flim_unit_bursts.h",
+      "bytes": 607,
+      "sha256": "39239486c8ea78c442f40a4360c5598ec290907d7a8e6afa95297cd4bb23242f"
+    },
+    {
+      "path": "client/common/flim_version.h",
+      "bytes": 304,
+      "sha256": "ce7c339225dcec768134890ae3eac6f85486344d57b0aeb3a9f7f740835b070d"
+    },
+    {
+      "path": "client/common/flim_ws_buffer.h",
+      "bytes": 916,
+      "sha256": "d11a1dc45bd9167fb8b000033499af6ff6f595ed2b09ad403c1e1e4936ac9c14"
+    },
+    {
+      "path": "client/desktop/electron/bridge-core.cjs",
+      "bytes": 20875,
+      "sha256": "791369ccf998529d9170ce299036fac8fb9d7a65897d24d78e176afd654ead7b"
+    },
+    {
+      "path": "client/desktop/electron/main.cjs",
+      "bytes": 4244,
+      "sha256": "a7341de48e26199985ec235b8b3fc358d0ea390a240d0f967cee1cc94f25121e"
+    },
+    {
+      "path": "client/desktop/electron/preload.cjs",
+      "bytes": 963,
+      "sha256": "72be0cb2150288db424649734a5b6050dd75a12f4413787766214d616c55a908"
+    },
+    {
+      "path": "client/desktop/package-lock.json",
+      "bytes": 158491,
+      "sha256": "64d29f6af35f31d250f9e8bb753cb470a5ab6f5b51ee1055efd94fa81b1f6329"
+    },
+    {
+      "path": "client/desktop/package.json",
+      "bytes": 1640,
+      "sha256": "d567532e61fdab9c232dcdb235b8a7ca053ed8b26a49351de6eee809862e2208"
+    },
+    {
+      "path": "client/desktop/src/App.tsx",
+      "bytes": 13583,
+      "sha256": "98b3c67be18b794f8b393d219a6c97935253ea6fcfa4a20a8f35456f2b173065"
+    },
+    {
+      "path": "client/desktop/src/main.tsx",
+      "bytes": 255,
+      "sha256": "1564a42d6671881400c7413f895f1927a94bc347efc3981114c7611a60b13804"
+    },
+    {
+      "path": "client/desktop/src/styles.css",
+      "bytes": 8715,
+      "sha256": "e0776b201b1f2d574ff3a35a201d94b3bafaa24af06a46acd60e43b867bf7e99"
+    },
+    {
+      "path": "client/desktop/src/tokens.css",
+      "bytes": 365,
+      "sha256": "ef4e61dab96906f9967dfa22cebe7e3a905775619e28d5ff85ee5e5d27c318cd"
+    },
+    {
+      "path": "client/desktop/src/types.ts",
+      "bytes": 1227,
+      "sha256": "2731d8fded1bafebbcaa7b7db9bc2cf8fc5bacb9831c4279cb38d5a22e339fdb"
+    },
+    {
+      "path": "client/desktop/src/utils/LayoutIsland.tsx",
+      "bytes": 246,
+      "sha256": "5f29bf1bb32f57026de2c96c03863aac8cb1fc8548f9888aa3924c3c70cc2819"
+    },
+    {
+      "path": "client/desktop/src/utils/ResponsiveWrapper.tsx",
+      "bytes": 1005,
+      "sha256": "2d9032680c5a1ef9944c4d2ee94ddbe6e6adeed86ac4bb6eb4bc9ba0b054fa9d"
+    },
+    {
+      "path": "client/desktop/src/utils/useStripFramerStyles.ts",
+      "bytes": 864,
+      "sha256": "027dec0d53bb9e081f1f2b056eecd230d1be8eee3de7daf4d74cdd9e68e358b1"
+    },
+    {
+      "path": "client/desktop/src/vendor/Nh9unIpFh.d.ts",
+      "bytes": 1899,
+      "sha256": "7970f9acbf19d9b5c832c0fd31e2ab4436d75be7f398c76f98425b394b07093e"
+    },
+    {
+      "path": "client/desktop/test/bridge.test.cjs",
+      "bytes": 28663,
+      "sha256": "039b994d857b283f7ef5e80962c5778fae5afe84247e5a02bb5ee998066b1ad9"
+    },
+    {
+      "path": "client/desktop/test/icons.cjs",
+      "bytes": 1238,
+      "sha256": "11d149fffcd4ff4dbc3b86905e8a7a2563ef9cf43d989b155c84e08a48339231"
+    },
+    {
+      "path": "client/desktop/test/inspect.cjs",
+      "bytes": 1606,
+      "sha256": "b21ce8952f5a50537b9bb60038dac96be8f55bd2fd9a6c77a0dfd9a7d5461d96"
+    },
+    {
+      "path": "client/desktop/test/package.cjs",
+      "bytes": 6261,
+      "sha256": "82da99c3e6d2f3204c054b016972f456a8aa4cce7043ca9209d6c7cf3f208db9"
+    },
+    {
+      "path": "client/desktop/test/portable.cjs",
+      "bytes": 2517,
+      "sha256": "e0e69df8f595d036b319c7756f312b87caba6f8dcf4ef7964d86d4d58783fa91"
+    },
+    {
+      "path": "client/desktop/test/ui.cjs",
+      "bytes": 20723,
+      "sha256": "c724d1a81c12631172ebfcf3d7bbd3c6d5ab22d1402fcffca9a6794fc7964ced"
+    },
+    {
+      "path": "client/dev/harness/build.bat",
+      "bytes": 2773,
+      "sha256": "54facc61f01f9ee628b69003f77963c26993795d150209ddd3b816037a69d296"
+    },
+    {
+      "path": "client/dev/harness/t_build_gate.c",
+      "bytes": 6419,
+      "sha256": "28acb542277b741222c2a6a5d083bca04359ec84b5b26c2c2470a6f797e72652"
+    },
+    {
+      "path": "client/dev/harness/t_clip.c",
+      "bytes": 3659,
+      "sha256": "2a0b8e0ff40efd854fb21425357486dce7756789d47f5900f30d78a6d2feffcb"
+    },
+    {
+      "path": "client/dev/harness/t_clip_native.c",
+      "bytes": 8223,
+      "sha256": "92e1967189d7827047e6250380e02f421ce1c6bd1cd9688e3298495efd062c7a"
+    },
+    {
+      "path": "client/dev/harness/t_cloud.c",
+      "bytes": 3081,
+      "sha256": "00bc29e384364f16d3443435d85191417cebbda131fcca171106925a76d52ee0"
+    },
+    {
+      "path": "client/dev/harness/t_compat.c",
+      "bytes": 4296,
+      "sha256": "fdfc11be9f1f0bf694e99cf5c30d25ec4fbe951d06c4abe555bb64fc8f16dd77"
+    },
+    {
+      "path": "client/dev/harness/t_files.c",
+      "bytes": 9391,
+      "sha256": "8de56d652a58c68139ed63db877427e426de68abe05800abf901bb5fb87c19f3"
+    },
+    {
+      "path": "client/dev/harness/t_flp.c",
+      "bytes": 2899,
+      "sha256": "d2b4c3c2d5b6a21fd25815c62c7f9e0fa7d976b6b2093616b7334997431d5e97"
+    },
+    {
+      "path": "client/dev/harness/t_inbound.c",
+      "bytes": 17317,
+      "sha256": "c3d72cff38d526f93bdb36fbefbe79b4a590ef4eca7d63d8cfc75346f60f4dff"
+    },
+    {
+      "path": "client/dev/harness/t_injection.c",
+      "bytes": 9082,
+      "sha256": "06604b7814c4f057373a60b35cf8a9248aa079b583c405508032854576f35f87"
+    },
+    {
+      "path": "client/dev/harness/t_launcher.c",
+      "bytes": 2265,
+      "sha256": "9e739030983900d32cb9f98dc8e7b6ad1832577b38e099fec1ef87829c6c1b1a"
+    },
+    {
+      "path": "client/dev/harness/t_metadata.c",
+      "bytes": 4455,
+      "sha256": "776c8d1213863de34205053b7ffaa5daf486ac6fbbb25ae720adc80cdb8159a2"
+    },
+    {
+      "path": "client/dev/harness/t_notes.c",
+      "bytes": 7116,
+      "sha256": "b8d78f9851fba40b9a78117182957eb608d9a232ade0e6ca5f2a1aa43e55b5a3"
+    },
+    {
+      "path": "client/dev/harness/t_patops.c",
+      "bytes": 2448,
+      "sha256": "cbe3892f18be88cae3debb6ec38d4323bef0baccb602920ab3f7d928d467a294"
+    },
+    {
+      "path": "client/dev/harness/t_plugin_apply.c",
+      "bytes": 7332,
+      "sha256": "000545159042fe98f018ee9e6bef9127565330ec7175dae88447db23a36dad3c"
+    },
+    {
+      "path": "client/dev/harness/t_profile_loader.c",
+      "bytes": 4260,
+      "sha256": "f80737076cd12681fbd0711ea65191ccec6238fa441416baf8d5c289a8c8b7da"
+    },
+    {
+      "path": "client/dev/harness/t_profiles.c",
+      "bytes": 2381,
+      "sha256": "b0edc9944a72d1859df74d28cdb21af48034f007308eb35768d3d30db3ab0390"
+    },
+    {
+      "path": "client/dev/harness/t_project_load.c",
+      "bytes": 4706,
+      "sha256": "4c5d6d49ad3ce8e84173b352b93d7b3a869399623fc40d270d93daa8618242ae"
+    },
+    {
+      "path": "client/dev/harness/t_queues.c",
+      "bytes": 16796,
+      "sha256": "810d2bebdf049b8eaec2031241a70e0704e028aa5471a8b31e3c4c300b837097"
+    },
+    {
+      "path": "client/dev/harness/t_rooms.c",
+      "bytes": 3013,
+      "sha256": "719656b38eeffe65b7be349836adbc9610f88b600fbc75138f6da0692976407a"
+    },
+    {
+      "path": "client/dev/harness/t_samples.c",
+      "bytes": 18381,
+      "sha256": "447cadcc2c81a8ea2b2d7eec451f4e4693c8f667452cc9498278ffbfa73d282a"
+    },
+    {
+      "path": "client/dev/harness/t_transfer.c",
+      "bytes": 2833,
+      "sha256": "2baf409660bff1287fdd460bf35d244cf609f06953b48562ed7f44f92fd71f67"
+    },
+    {
+      "path": "client/dev/harness/t_ws_buffer.c",
+      "bytes": 1297,
+      "sha256": "fcc710d45771a2e76dab59721981c8aa8575f4414759c7b0e41b64e3f5e379e0"
+    },
+    {
+      "path": "client/engine/flim_engine.c",
+      "bytes": 385989,
+      "sha256": "1a67cf702e5686310ff8402348fc4a4fde9852977b19b77128b097ff4316a69f"
+    },
+    {
+      "path": "client/launcher/flim.c",
+      "bytes": 20419,
+      "sha256": "da708d66d2d144801aa6b617832360c3f6a5dae260ee3ded55be926c1400c4d8"
+    },
+    {
+      "path": "client/profiles/25.2.5.5319.profile",
+      "bytes": 1646,
+      "sha256": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e"
+    },
+    {
+      "path": "client/profiles/26.1.7.5654.profile",
+      "bytes": 1658,
+      "sha256": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+    },
+    {
+      "path": "server/cloudflare/src/policy.ts",
+      "bytes": 2679,
+      "sha256": "ee3256d2591e700143086256e8e3369eb9f81d9f5f2cf4533a9d5f5618af498a"
+    },
+    {
+      "path": "server/cloudflare/src/r2-budget.ts",
+      "bytes": 1033,
+      "sha256": "d0433731f5754a095b5f9a6ffadd5478e3a65909a71a65dae6a26d55d2586364"
+    },
+    {
+      "path": "server/cloudflare/src/request-body.ts",
+      "bytes": 1489,
+      "sha256": "da1c518ad5a429d19905d3b466963d3d2312f42a8785aea3c3f075a7d1be720e"
+    },
+    {
+      "path": "server/cloudflare/src/worker.ts",
+      "bytes": 38982,
+      "sha256": "c4db82e37600509a729c87539f61b72587ec2a8c9dbe3c7c9ff5023243a080a8"
+    },
+    {
+      "path": "server/cloudflare/test/cleanup-fixture.mjs",
+      "bytes": 1332,
+      "sha256": "bd8eb19603b0b663c43539f2b494a147706a601945152aa32062132dc03d38c1"
+    },
+    {
+      "path": "server/cloudflare/test/cleanup.test.mjs",
+      "bytes": 3352,
+      "sha256": "4554be9398fb7c6f9041aee21db1080a9a8033a04ac4c4c2f7802d818dc0ad9a"
+    },
+    {
+      "path": "server/cloudflare/test/fixture.mjs",
+      "bytes": 3433,
+      "sha256": "48d8f21999c4b5c5134e3f0526a3695815eec202bebf03e9752cbe600e5c1c8b"
+    },
+    {
+      "path": "server/cloudflare/test/live-project.mjs",
+      "bytes": 2073,
+      "sha256": "67f6070abad5c076276a27696fa0c54bb87535f05dc343517cf57e641ff3b1d6"
+    },
+    {
+      "path": "server/cloudflare/test/local-server.mjs",
+      "bytes": 795,
+      "sha256": "e96ee08de329270ffd1d00143e6a8b4017224655e0c47f58ca33b63ac8f99df1"
+    },
+    {
+      "path": "server/cloudflare/test/relay.test.mjs",
+      "bytes": 22713,
+      "sha256": "337f059eeb0a62fd4b3ef49f4631d2c96a46e7d53ec9deca7fe6d576bee27487"
+    },
+    {
+      "path": "server/cloudflare/test/remote-smoke.mjs",
+      "bytes": 6944,
+      "sha256": "3fef04d90a8276bfc8f24b4919a94197d277cd5b7a8d34b697bb4c596dc8eacb"
+    },
+    {
+      "path": "server/cloudflare/test/request-body.test.mjs",
+      "bytes": 1964,
+      "sha256": "a2f4de6fb5bc9a14fa19f536699cc85bbcb33a1bed39e4e6651375d44db9d138"
+    },
+    {
+      "path": "server/cloudflare/test/rooms-smoke.mjs",
+      "bytes": 6255,
+      "sha256": "477910002e59e267f9384482dfdcfe925640f0b0617b64fcdae9ad772e9862aa"
+    },
+    {
+      "path": "server/cloudflare/test/rooms.test.mjs",
+      "bytes": 16111,
+      "sha256": "f9e88d1a34c036caeade86601cfb1042870aaee9d4040f2b1d2b6a2b4f2d6b81"
+    }
+  ],
+  "source_inventory_sha256": "4c506259bb08b8b81c6ffbafc9597c335dd65b1bca692857abae1ab7efd47d8d",
+  "built_native": [
+    {
+      "path": "client/out/flim.exe",
+      "bytes": 310784,
+      "sha256": "85d6b397559a7f0ddd813f85aebd6125df4fa7d9b87b1294d685b1f871f72b6f"
+    },
+    {
+      "path": "client/out/flim_engine.dll",
+      "bytes": 586240,
+      "sha256": "e54af8e16ed9bbc15364ca387d759b80e5952b826295d2f4ca17aa4f33c710ee"
+    },
+    {
+      "path": "client/out-experimental/flim.exe",
+      "bytes": 311808,
+      "sha256": "b760eb0d411b37344959676a8093cc003d2f7111c9d80123ab7c179c03d2387e"
+    },
+    {
+      "path": "client/out-experimental/flim_engine.dll",
+      "bytes": 589312,
+      "sha256": "826ffcec6b9c6f10120e52733616c31ac33eebe323c6f490920cdb58d7e291d8"
+    }
+  ],
+  "packaged_artifacts": [
+    {
+      "path": "client/desktop/release/flim-rooms-0.2.5-win64.exe",
+      "bytes": 103590503,
+      "sha256": "05c168e9789aae050c91e8d2b01bf1857ddfd250c2b98e78ebb64321ed6c22db"
+    },
+    {
+      "path": "client/desktop/release/win-unpacked/resources/app.asar",
+      "bytes": 10149586,
+      "sha256": "5b00773793d777ca866f35531628bee5fd9d7a5f2a796da5230ffdf0791c5f59"
+    }
+  ],
+  "checks": {
+    "native_programs": {
+      "passed": 23,
+      "names": [
+        "t_samples.exe",
+        "t_ws_buffer.exe",
+        "t_launcher.exe",
+        "t_injection.exe",
+        "t_injection_experimental.exe",
+        "t_build_gate.exe",
+        "t_build_gate_experimental.exe",
+        "t_patops.exe",
+        "t_compat.exe",
+        "t_clip.exe",
+        "t_clip_native.exe",
+        "t_cloud.exe",
+        "t_profiles.exe",
+        "t_profile_loader.exe",
+        "t_flp.exe",
+        "t_plugin_apply.exe",
+        "t_metadata.exe",
+        "t_notes.exe",
+        "t_rooms.exe",
+        "t_project_load.exe",
+        "t_files.exe",
+        "t_queues.exe",
+        "t_inbound.exe"
+      ]
+    },
+    "real_winhttp_transfer": {
+      "passed": 4
+    },
+    "python": {
+      "passed": 72
+    },
+    "cloudflare_emulator": {
+      "passed": 43
+    },
+    "legacy_relay": {
+      "passed": 56,
+      "session_checks_passed": 58
+    },
+    "desktop_bridge": {
+      "passed": 36
+    },
+    "desktop_ui": {
+      "passed": 28,
+      "results": [
+        "Framer variants, font and width 375",
+        "Escape and focus return 375",
+        "Framer variants, font and width 810",
+        "Escape and focus return 810",
+        "Framer variants, font and width 1200",
+        "Escape and focus return 1200",
+        "Empty required name prevents room allocation",
+        "Folder picker route and unsupported-build gate",
+        "Canceled folder selection retains the selected FL version",
+        "Create automatically launches and shows real-state participant rows",
+        "Copy, refresh and return to start",
+        "Join accepts spaced room code and launches once",
+        "Delayed status cannot restore a room after returning to start",
+        "Room-number editing preserves the caret and accepts pasted hyphens",
+        "Copy feedback and status requests belong to the current room visit",
+        "Small windows keep every control scrollable with usable target sizes",
+        "network state stays actionable",
+        "launch state stays actionable",
+        "status state stays actionable",
+        "waiting state stays actionable",
+        "ended state stays actionable",
+        "missing state stays actionable",
+        "Settings-storage notice remains readable and does not block a session",
+        "Temporary status failures recover automatically without another click",
+        "Hidden and offline windows pause status traffic and refresh when available again",
+        "Browser preview is explicit and cannot fake an FL connection",
+        "Actual desktop discovers both installed supported builds without launching FL",
+        "Production CSP disables renderer networking"
+      ],
+      "errors": []
+    },
+    "packaged_app": {
+      "passed": true,
+      "checks": [
+        "Native payload matches tested binaries",
+        "No private keys, test fixtures, preferences or logs in ASAR",
+        "Bundled launcher verifies installed FL25",
+        "Packaged app ignores inherited dev flag",
+        "Local renderer and General Sans load under production CSP",
+        "Actual FL25/26 discovery succeeds",
+        "Renderer has no Node access",
+        "No room allocated or FL launched by packaging check",
+        "Header logo and favicon load locally",
+        "All nine icon sizes embedded in the app and portable executable",
+        "Running Windows small and large icons match the new logo"
+      ],
+      "hashes": {
+        "flim.exe": "b760eb0d411b37344959676a8093cc003d2f7111c9d80123ab7c179c03d2387e",
+        "flim_engine.dll": "826ffcec6b9c6f10120e52733616c31ac33eebe323c6f490920cdb58d7e291d8",
+        "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+        "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+      },
+      "icons": [
+        {
+          "executable": "flim.exe",
+          "sizes": [
+            16,
+            20,
+            24,
+            32,
+            40,
+            48,
+            64,
+            128,
+            256
+          ]
+        },
+        {
+          "executable": "flim-rooms-0.2.5-win64.exe",
+          "sizes": [
+            16,
+            20,
+            24,
+            32,
+            40,
+            48,
+            64,
+            128,
+            256
+          ]
+        }
+      ],
+      "windowIcons": [
+        {
+          "name": "window-small",
+          "width": 16,
+          "height": 16,
+          "meanDifference": 0
+        },
+        {
+          "name": "window-large",
+          "width": 32,
+          "height": 32,
+          "meanDifference": 0
+        }
+      ],
+      "errors": []
+    },
+    "portable_app": {
+      "passed": true,
+      "checks": [
+        "Portable executable self-extracts and opens the actual app",
+        "Bundled native discovery finds both supported installations",
+        "No real room allocated and no FL instance launched"
+      ]
+    },
+    "normal_and_experimental_native_builds": "passed_without_compiler_warnings",
+    "ui_test_repair": "The first combined run measured a 44px control during its translateY animation as 43.9999847px. Eight targeted diagnostic runs confirmed rounding. The test now waits for the real animation to complete, retains the >=44 assertion, and the full 28-check suite passes."
+  },
+  "prior_live_evidence": {
+    "record": "client/dev/compatibility/sweep-2026-10-25.json",
+    "version": "0.2.4",
+    "basic_checks_passed": 0,
+    "basic_checks_total": 6,
+    "observations": "License/update prompts and member trial mode; normal initial sync did not complete. These observations do not establish the sole cause.",
+    "retested_here": false
+  },
+  "compatibility": {
+    "all_fl24_to_26_builds_supported": false,
+    "reviewed_engine_bound_profiles": [
+      "25.2.5.5319",
+      "26.1.7.5654"
+    ],
+    "retained_older_tables": [
+      "25.1.6.4997",
+      "25.2.3.5171",
+      "26.1.6.5639"
+    ],
+    "fl24": {
+      "build": "24.2.2.4597",
+      "status": "static_and_adapter_candidate_runtime_unverified",
+      "desktop_builtin_launch_enabled": false,
+      "reviewed_profile_exported": false,
+      "prior_project_and_edit_tests": "failed",
+      "mixed24_to26_validated": false
+    },
+    "unknown_patch_build_policy": "Refuse until a complete engine-bound profile and compatible runtime layout/wire behavior are reviewed and tested.",
+    "mixed_sessions": "Oldest supported build hosts. Supported logical edits are bidirectional. Whole presets and channel creation require the host exact build; project replacement is host-only.",
+    "historical_success_records": [
+      "mixed-profile-runtime.json",
+      "reliability-runtime.json",
+      "desktop-rooms-runtime.json"
+    ],
+    "historical_limit": "Earlier live passes belong to their recorded binary hashes and do not validate final 0.2.4 binaries."
+  },
+  "limits_added_or_checked": {
+    "project_preset_read_bytes": 67108864,
+    "complete_plugin_message_bytes": 67108864,
+    "sample_rewrite_bytes": 134217728,
+    "declined_samples": 4096,
+    "relay_peer_pending_frames": 2000,
+    "relay_peer_pending_bytes": 2097152,
+    "relay_shared_pending_frames": 8000,
+    "relay_shared_pending_bytes": 8388608,
+    "request_body_deadline_seconds": 10,
+    "abandoned_file_delete_batch": 64,
+    "r2_budget_policy": "Existing global storage and operation cutoffs retained. Local Worker changes undeployed."
+  },
+  "remaining_validation": [
+    "Fresh successful end-to-end FL25/26 collaboration on these exact final binaries.",
+    "FL24 project loading/editing and FL24/25/26 mixed sessions remain unverified.",
+    "Physical MIDI recording/playback and unrecorded live audition are not validated here.",
+    "Unknown patch builds need reviewed engine-bound profiles and runtime testing.",
+    "Internet latency, long-session CPU/memory and full third-party plugin coverage are unbenchmarked.",
+    "Relay code remains local until a separately authorized deployment."
+  ],
+  "local_evidence": [
+    {
+      "path": "../pass2-native-build.log",
+      "bytes": 331,
+      "sha256": "10ae65b0cf4decc6785e55ce4af9faa0b82e309b3b9e69ffa24c4aa63a7ce5ad"
+    },
+    {
+      "path": "../pass2-native-tests.log",
+      "bytes": 5272,
+      "sha256": "19b10ef8aea79c184c36766e0a309f8626f748618aac2774687c9ce9209012c7"
+    },
+    {
+      "path": "../pass2-transfer.log",
+      "bytes": 204,
+      "sha256": "e6e5001cb78f702888f5030e90e8d7cbd4eb240d3f0c1a748ab015af3d5d6e44"
+    },
+    {
+      "path": "../pass2-python.log",
+      "bytes": 176,
+      "sha256": "9d1e92aa95baf76e5963f8c80e56c4478c890ebe0f9418a6e9254c3539fb480d"
+    },
+    {
+      "path": "../pass2-legacy.log",
+      "bytes": 8544,
+      "sha256": "07b5da60cbe59a58f48feda13d94924a5fe748aa0206d912063dbc4e629489e8"
+    },
+    {
+      "path": "../pass2-desktop.log",
+      "bytes": 3370,
+      "sha256": "4d9e526691c90e84ee020fe582f721306da8e1cfec15748cfec00df55a7ad693"
+    },
+    {
+      "path": "../cloudflare-pass2.log",
+      "bytes": 4508,
+      "sha256": "0b5982e132ad6d5b8c2d9cc3bbc466259fa3d3016545993019316bb6011e2eed"
+    },
+    {
+      "path": "../pass2-ui.log",
+      "bytes": 2499,
+      "sha256": "09373111d56301227696a8951798bebf854c95d693f7252bfb28f0db56b791c6"
+    },
+    {
+      "path": "../pass2-ui-stable.log",
+      "bytes": 2373,
+      "sha256": "baadbe5eb5145ac44bf856daf0799cd8dd8dc2dca920754d659f9520e1224556"
+    },
+    {
+      "path": "../pass2-normal-build.log",
+      "bytes": 330,
+      "sha256": "46b7bd370b62663d194bd6642824f856cb40e13235c11ef1a45ed61be1407048"
+    },
+    {
+      "path": "../pass2-experimental-build.log",
+      "bytes": 346,
+      "sha256": "a46b69345ed269f7ca553afa324172442cb6eca00efa188bb91b69669528d186"
+    },
+    {
+      "path": "../pass2-package-build.log",
+      "bytes": 2378,
+      "sha256": "cac2e78b93bf1a519173e90597780ec9b01e82fd8ddd964170df32dc64f724ff"
+    },
+    {
+      "path": "../pass2-package-check.log",
+      "bytes": 1742,
+      "sha256": "af17b1f48ace1fc45300d5ce55d4d2bdcc24c1e9ea2cedbce7ac9d8e10c2341b"
+    },
+    {
+      "path": "../pass2-portable-check.log",
+      "bytes": 90,
+      "sha256": "7b2b7499605ab66f86787b44b3a3f58ecf5057152342ba713902c7f3f8d4942b"
+    },
+    {
+      "path": "client/desktop/test/evidence/ui-results.json",
+      "bytes": 1594,
+      "sha256": "e8afdbce707ceb9c4990b8c52e1e90a3b4911e053fc4a595c8a72c4ae80ebe58"
+    },
+    {
+      "path": "client/desktop/test/evidence/package-results.json",
+      "bytes": 1674,
+      "sha256": "b392f4857fb0ba819761cca3b5585c88de1243eb75f2f987383203d3205e550d"
+    },
+    {
+      "path": "client/desktop/test/evidence/portable-results.json",
+      "bytes": 229,
+      "sha256": "4b2f8a876850d0c6888e07a13b3c9f1b0d352704067a3df0a27fa235c6ecb88b"
+    }
+  ],
+  "visual_evidence": [
+    {
+      "path": "client/desktop/test/evidence/create-375.png",
+      "bytes": 90656,
+      "sha256": "06d32e1852f8d398a6d991748d3c078ad263ec1ad180abd405a674d27c245e0a"
+    },
+    {
+      "path": "client/desktop/test/evidence/settings-notice-375.png",
+      "bytes": 99105,
+      "sha256": "96fd8f8b692386375489dbed66477ba08bde4ba397f4a4849d41a84e4e505198"
+    },
+    {
+      "path": "client/desktop/test/evidence/short-window.png",
+      "bytes": 78952,
+      "sha256": "8913ff4fa164992387ca5ca5480d2d700316a9a6bbefd6bedc783355974fe519"
+    },
+    {
+      "path": "client/desktop/test/evidence/packaged-open.png",
+      "bytes": 118122,
+      "sha256": "320805beed27d433d865d561b3fe15459efbc52326b476c8787bb00b020fd14e"
+    },
+    {
+      "path": "client/desktop/test/evidence/packaged-closed.png",
+      "bytes": 157507,
+      "sha256": "3d51af5bf72fa4fa12c28b247ccbe8584534fe6f17f60b6e21b07c0aafa9705b"
+    }
+  ],
+  "documentation": [
+    {
+      "path": "CHANGES.md",
+      "bytes": 35041,
+      "sha256": "43d1e4798fea973abc54e4b663852e0bcf85dde0a7cf0e345f3e1db7df81b614"
+    },
+    {
+      "path": "README.md",
+      "bytes": 25436,
+      "sha256": "645515333d5f667722e566781366ba53d1af6963dea3ee218bd9ad3d143a36d0"
+    },
+    {
+      "path": "BUILD-COMPATIBILITY.md",
+      "bytes": 10598,
+      "sha256": "74631153e5c7de95bf07b2c66b509496fa3346d28a1fde41c069036dbff43046"
+    },
+    {
+      "path": "client/desktop/README.md",
+      "bytes": 8402,
+      "sha256": "49f389da89aeea52f64b4a999a4c1e1312392118d0d4893598873731cb461e80"
+    },
+    {
+      "path": "client/desktop/QA.md",
+      "bytes": 22533,
+      "sha256": "926cc56173ad354767131155f7e759885d68d1f6f35f899176711bb454b8439a"
+    },
+    {
+      "path": "client/dev/compatibility/README.md",
+      "bytes": 13737,
+      "sha256": "aebb5081db1eb8140bc2569cf213d7e5a75bd92959335bf350363f1c53d132bb"
+    },
+    {
+      "path": "server/cloudflare/README.md",
+      "bytes": 17513,
+      "sha256": "513ae7d69b71fc307017651ea2d631b6cc3f23a4820c824681c3f214751a0e67"
+    }
+  ],
+  "cleanup": {
+    "native_file_fixtures": "Owned temporary files/directories removed by passing harness assertions.",
+    "apps_and_local_servers": "Test runners close their owned app windows and loopback servers in cleanup; process inspection performed after package checks.",
+    "unowned_fl_process": "PID 71732 observed during packaging and preserved. No live FL process was launched by this second sweep."
+  }
+}

@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible Rooms, FL synchronization or file-sharing problem.
+title: '[Bug] '
+body:
+  - type: input
+    id: app
+    attributes:
+      label: flim app version
+      placeholder: '0.2.23'
+    validations:
+      required: true
+  - type: textarea
+    id: builds
+    attributes:
+      label: FL builds and host direction
+      description: Exact builds from Installation details or FL Help > About. Say which hosted and whether an older member used the notes/basic-controls workspace.
+      placeholder: 'Host: FL26.1.7.5654; member: FL24.2.2.4597'
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and expected/actual behavior
+      description: Include the plugin format/vendor version or file-transfer state if relevant. Do not include proprietary presets or personal projects.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Reviewed diagnostics or screenshots
+      description: Use Open test logs. Redact names, personal paths, invitations, licenses and credentials before attaching anything. Never upload FL binaries or Cloudflare keys.

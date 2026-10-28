@@ -1,124 +1,68 @@
-# FL 25/26 builds and mixed sessions
+# FL Studio 24, 25 and 26 compatibility
 
-This fork can load additional FL 25/26 compatibility profiles without recompiling flim. It also
-negotiates sessions between different supported builds. **This does not establish support for
-every FL 25/26 build.** Each engine still needs a reviewed profile, and mixed sessions have the
-restrictions below.
+**Any supported build can host.** Use the current complete Rooms app on every computer and a
+relay that negotiates `portable_sync:1`. The release picker shows the FL family; **Installation
+details** shows the exact build and folder. Short labels do not bypass native checks.
 
-## What a compatibility profile does
+## Reviewed installations
 
-flim calls private functions inside FL and reads FL's internal objects. An FL update can move
-those functions or change the objects, even in a small patch release. The wrong location can
-crash FL or change the wrong data.
+| FL family | Reviewed installed build | Current status |
+| --- | --- | --- |
+| FL Studio 24 | **24.2.2.4597** | Supported, with FL24 format adapters and an exact engine fingerprint check. No experimental opt-in. |
+| FL Studio 25 | **25.2.5.5319** | Supported, with the reviewed build profile. |
+| FL Studio 26 | **26.1.7.5654** | Supported in the complete Rooms package, with the reviewed build profile. |
 
-A profile lists all 62 addresses, 21 layout fields and the message-box calling mode for one
-engine. It also contains the engine's SHA-256 fingerprint. The launcher and engine both check
-the profile, fingerprint and basic address ranges before enabling flim. A complete, reviewed
-profile can support an additional build without changing flim's executable or DLL.
+These are the reviewed installations for release 0.2.23, not a promise of support for the latest
+version Image-Line may release later. Retained mappings for **25.1.6.4997**, **25.2.3.5171** and
+**26.1.6.5639** have earlier/static evidence; they were not rerun live in the latest sweep.
+Unknown patches need their own mapping, identity review and tests. Use **Check again** after an
+FL update; an unsupported result calls for a verified profile, not disabling checks.
 
-The fingerprint establishes which engine file the profile describes. It does not prove that
-the listed locations are correct. Profiles must come from a trusted maintainer who reviewed
-the functions, object layouts, calling conventions and shared data formats, then tested them
-in disposable FL instances. Do not turn a signature-scanner result into a runnable profile
-without that work.
+## Which version can host which?
 
-The two current engine-bound profiles are **25.2.5.5319** and **26.1.7.5654**. The existing built-in
-tables for 25.1.6.4997, 25.2.3.5171 and experimental 26.1.6.5639 remain available. Historical
-validation and current test results are recorded in [the compatibility directory](client/dev/compatibility/README.md).
-An unknown build without a verified profile stays disabled; flim never borrows the nearest build's addresses.
+| Host ↓ / Member → | FL24.2.2.4597 | FL25.2.5.5319 | FL26.1.7.5654 |
+| --- | --- | --- | --- |
+| **FL24.2.2.4597** | Project-sharing path | Project-sharing path | Project-sharing path |
+| **FL25.2.5.5319** | Notes/basic controls | Project-sharing path | Project-sharing path |
+| **FL26.1.7.5654** | Notes/basic controls | Notes/basic controls | Project-sharing path |
 
-## Installing the client
+**Project-sharing path** means flim can use its normal initial project-loading flow. It does not
+guarantee identical sound: the receiving FL and plugins must read the project and have the required
+content. **Notes/basic controls** means an older receiver joins without trying to load a newer
+host's project or opaque presets. These are protocol/format paths, not nine newly proven live sessions.
 
-Build the Windows x64 client with `FLIM_EXPERIMENTAL_FL26=1` to include FL 25 and experimental
-FL 26 support. `client/build.bat` writes the result to `client/out-experimental` and copies the
-profiles beside it. Keep these together:
+An older receiver's blank channels can receive notes, channel names, pattern metadata, supported
+controls and mixer names/colors/routing. Supported edits flow both ways. Unsupported sounds,
+newer mixer tracks and playlist features stay unavailable. Before preparing this workspace,
+flim saves a recovery copy and uses a separate session path. Preservation failure stops the operation.
 
-```text
-flim.exe
-flim_engine.dll
-profiles/
-    25.2.5.5319.profile
-    26.1.7.5654.profile
-```
+Only the host replaces the shared project. Older fallback members cannot publish playlist
+snapshots. Legacy rooms retain their negotiated policy; update everyone and create a fresh room.
 
-Install later reviewed profiles in that same `profiles` folder, named after their exact build.
-A present but invalid profile stops launch instead of silently falling back to a built-in table.
-Installed FL files are not patched. The normal build remains FL 25 only.
+## MIDI, concurrent edits and plugins
 
-## Collaborating across builds
+Recording a MIDI keyboard into the piano roll creates shared notes for hosts and members. Stable
+note identities and retained deletions (a CRDT) merge duplicate deliveries and concurrent edits.
+Pending local recording survives an arriving remote delta. This is recorded-note sharing, not
+unrecorded live MIDI monitoring or audio streaming. Structure, presets and projects use ordering/locks.
 
-Update the relay and everyone's flim client. **The person with the oldest FL build must host.**
-For example, FL 25.2.5.5319 can host a participant using FL 26.1.7.5654. A participant with an
-older build than the host is refused before receiving the project. Using matching builds
-continues to support the existing feature set.
+A missing/rejected plugin retains shared state while other supported editing continues. Automatic
+retry waits for matching installation evidence to change. Stable VST2 unique IDs and VST3 class IDs
+can identify the same plugin at another path or vendor version label. Different IDs, VST2-to-VST3
+substitution and name-only guessing are refused. The installed plugin must accept the saved state.
+Older FL does not load a retained preset marked as newer than its supported source format.
 
-The client announces its FL build and shared data-format revision. The server checks these
-before admission and includes the sender's admitted build on relayed edits. These versions
-are reported by the clients; this is compatibility negotiation, not remote verification of
-someone else's installed software. Old clients can still form separate legacy sessions on
-the updated relay. New clients require the updated relay.
+## Evidence and limits
 
-FL's own project writer creates the host snapshot, including when the host opens an older
-project. The receiver checks the complete project stream and its version against the
-negotiated host before loading it. The original version stamp is preserved. flim does not
-translate a newer project into an older format.
+The latest sweep passed 31 native harnesses, including **nine synthetic host/member pairings**,
+CRDT convergence cases, control validation and FL24 adapters. Earlier live initial-sync/editing
+observations are in [0.2.11 QA](client/desktop/QA-0.2.11.md), separate from current fixture results.
 
-## Mixed-session restrictions
+There was no fresh physical MIDI, two-computer, live VST-version or drag/drop test in 0.2.23.
+No arbitrary patch support, project downgrade or guarantee against every crash is claimed.
+The recovery-save stall observed during earlier FL24 testing remains a limit to investigate;
+synthetic tests do not resolve it. A native fault pauses sharing and leaves FL open.
 
-Supported parameter, note, playlist, naming, color and pattern-operation messages can travel
-both ways between builds sharing the reviewed wire format. Matching plugins and compatible
-plugin versions are still required on each computer.
-
-Channel creation, plugin replacement and whole plugin presets carry FL-specific saved data.
-Only people using the host's exact FL build can send those states in a mixed session. Project replacement remains host-only. People
-on newer builds should ask the oldest-build host to make those changes. If a newer member
-makes an edit requiring an incompatible saved state, flim stops that member's sharing and
-explains why; their local edit remains in their FL project. The server also rejects the edit
-before forwarding it. Ordinary knob changes do not automatically mean a preset replacement,
-but large plugin changes may be detected as a whole-state update.
-
-Different builds therefore do not have identical editing privileges. This restriction avoids
-the observed crash path where an older FL loader receives newer project or preset data.
-Unknown operation formats are refused in a mixed session.
-
-Pending inbox, outbox, held-project and main-thread tasks carry a session generation. Work
-that outlives a disconnect or reconnect is discarded before sending or applying it. Downloads
-already underway may finish into the content cache; that does not authorize their old operation
-to enter a new session.
-
-## Adding another build
-
-Developers can use [the profile tool](client/dev/profiles.py) to create a review draft:
-
-```powershell
-python client/dev/profiles.py draft "C:\path\FLEngine_x64.dll" --output review.json
-```
-
-A known build starts with its existing numeric field set. An unknown build starts empty.
-Map and review the new engine using the existing signature tools, focused REA/Ghidra analysis
-and runtime layout checks. Fill every field and review item, bind the review to the field
-fingerprint, and record successful runtime evidence. Export only after that review:
-
-```powershell
-python client/dev/profiles.py export "C:\path\FLEngine_x64.dll" --review reviewed.json --output 25.x.y.z.profile
-```
-
-The exporter refuses drafts, incomplete reviews, changed field fingerprints, engine mismatches,
-unknown fields and invalid ranges. Updating the SHA-256 alone does not port a profile. A build
-with a changed calling convention or shared record format may need client code changes as well.
-
-Keep original projects and test with copies. Current checks cover the installed builds and
-selected bundled plugins, not every third-party plugin, every historical build or future update.
-
-
-## What passed on the installed builds
-
-The final experimental client and updated relay passed 34 feature checks in each of three pairs:
-FL 25.2.5.5319 hosting FL 26.1.7.5654, two FL 25 instances, and two FL 26 instances. Both native
-refusal checks passed: incompatible newer-member presets cannot enter the older host, and an
-older member cannot receive a newer host's project. Each runtime loaded its engine-bound profile.
-
-The [runtime record](client/dev/compatibility/mixed-profile-runtime.json) preserves source and
-binary fingerprints, log hashes, exact test scope and failed earlier attempts. Testing covers
-these two installed builds and selected bundled plugins. It does not establish every historical
-or future build, every plugin, or the normal UI path for opening older projects end-to-end.
+[Current QA](client/desktop/QA-0.2.23.md) · [Testing](docs/TESTING.md)
+· [Historical evidence](client/dev/compatibility/README.md)
+· [Adding a reviewed build](client/dev/README.md#adding-an-fl-build)

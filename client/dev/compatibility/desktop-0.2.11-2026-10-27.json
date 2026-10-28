@@ -1,0 +1,533 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-27T11:29:46.400908+00:00",
+  "version": "0.2.11",
+  "status": "Packaged and deployed; six local cross-version pairs and two public native pairs passed; one earlier recovery-snapshot stall remains unexplained",
+  "github_writes": false,
+  "git_commit_created": false,
+  "artifacts": {
+    "client/desktop/release/flim-rooms-0.2.11-win64.exe": {
+      "sha256": "6b6df181877386a7406bf656ec84f3d4d37ce6803aa50cdaacd485183beb1187",
+      "bytes": 103622766
+    },
+    "client/out-experimental/flim.exe": {
+      "sha256": "1b4e74a3054a2bcf5886cfdcca0d017e5c5cf1c8e05db6be5f08cb4767b414d0",
+      "bytes": 311296
+    },
+    "client/out-experimental/flim_engine.dll": {
+      "sha256": "1c43dc652c41be330dbce21969f06648ef393c2291da0e1a6749def70910d255",
+      "bytes": 620544
+    },
+    "server/cloudflare/.wrangler/review-0.2.11/worker.js": {
+      "sha256": "b8f13e229004097ba38b54de1b143092186741ebeeb302355b9f893b44c20f7a",
+      "bytes": 46621
+    }
+  },
+  "source_sha256": {
+    "client/engine/flim_engine.c": "f9eb4cae4d6d2337297e9fef083edbc7506c89580696e3acd1d5ba3d719eba36",
+    "client/common/flim_compat.h": "35c78778f1d95cb38448b96f269257131f541d8515205b972c36caf8313aec4d",
+    "client/common/flim_cloud.h": "8621592d178c2f879d87a778204858f0a259e6e61899486c06495922a0b7b176",
+    "client/common/flim_notes_crdt.h": "13996d593f4622754f178d6418ed0ae678856a8828ece4863da9cd492a0b0ba3",
+    "client/common/flim_plugin.h": "bb960db1621d78cdecf38c06e16d44be59a04622585ccc5b74ff53b5bea50aec",
+    "client/desktop/electron/bridge-core.cjs": "26b09370dd99d4e318dd5b26a0b2bc295e352bc4426f6bb82c22b03a00125231",
+    "client/desktop/src/App.tsx": "78df601c81b3ef1f069a55a5748321e57e4a000df8cc6ba46bd3bf97b02b8b61",
+    "client/desktop/package.json": "15def8cc1e1f7d43f9d2d98d627807b6fdf5937a75a93c3b2fee06f338a0085c",
+    "client/desktop/package-lock.json": "05e9b2f43cc0eeef9f4d7998529aa5c41cd6c2e4219ef2a50e9849d9fa3c78a6",
+    "client/dev/portable_smoke.py": "c906a277befb46e1e5f7c40e1e1a0e4c08dc0663598419e29e32344e74370236",
+    "client/dev/recording_smoke.py": "d93edfdb88512c3e56dd87fc3c7a0a3369eddc32e857b21816bd1e7a77cfe066",
+    "client/dev/flbuild.py": "927f70486e08382e5e136b73749c89952d3ef3b31db3e2e48189b3cbe8eafbd4",
+    "client/dev/harness/t_portable.c": "31ef8ff9e19aa349afc5f336790f51c077e512134713eba56a3a38cd3b3509e9",
+    "client/dev/harness/t_plugins.c": "028e736d0ae1d19e97aba3836b2e12e53ad2a21f2d7c1090c10cc971e94b326f",
+    "client/dev/harness/t_plugin_apply.c": "f76b863a665a31767ba504e36aba40303c3c18bc0039a32733277193a6209943",
+    "client/dev/harness/t_notes.c": "71b3b58088a9e73f2a14308a8bd89f94b9a9cd94f7cd7e4e091f95d7fd702807",
+    "client/dev/harness/t_cloud.c": "97bfa1d22c0ac7e064829246c64b8f96a32ab7c7e2edc4479836715a6ea0ecae",
+    "client/dev/harness/t_startup.c": "6ee810a63ff25d6ca4bdfd898446e67d828f49ce2b9504523355b52a3bf12226",
+    "server/cloudflare/src/worker.ts": "9947b58b0dadb039b59346191d9022773bb973955bd25b127d295a649f899864",
+    "server/cloudflare/src/policy.ts": "47e7e0b3234d2dfc3f0075a3df7ae8f68691459e10980b6f63a70f41ebb10273",
+    "server/cloudflare/wrangler.jsonc": "0f47033fef6327312619fd9479203aeac81f3abc05545aab99ca59b29a0f025f"
+  },
+  "tests": {
+    "native_harness_executables": 28,
+    "desktop_unit": 76,
+    "worker": 71,
+    "python": 72,
+    "http_transfer": 4,
+    "ui_checks": 36,
+    "compact_native_window_and_zoom": true,
+    "package_and_portable": true,
+    "public_service_checks": 14
+  },
+  "local_native_runs": [
+    {
+      "host": "24",
+      "member": "25",
+      "pids": [
+        119604,
+        76420
+      ],
+      "relay": "http://127.0.0.1:49938",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": false,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-24-25-3npf47y5",
+      "notes_checks": [
+        8,
+        8
+      ],
+      "first_note_seconds": [
+        0.653,
+        0.377
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "b37bc34ceefb100efee7638b0031e355e02478fdec2b6e4b13549cee7c716758",
+          "bytes": 435
+        },
+        "native-119604.log": {
+          "sha256": "5af320f9d4cfc1fac1c3d7b7830bed590fc62dab364b1244121457cd8c49fcd5",
+          "bytes": 5367
+        },
+        "native-76420.log": {
+          "sha256": "b085b2734e295670f394e5c9072e75afc35a9791ea1504207fbc987a69a19909",
+          "bytes": 4724
+        },
+        "notes.txt": {
+          "sha256": "820790a241c13e1eb277d6188ca0204dc24d4b8c84757e0d72906b6600a97448",
+          "bytes": 577
+        },
+        "result.json": {
+          "sha256": "5003a8b62e2a0d006fe2f3d32c17761678b5894585b9f338201e5c0b4c8e7506",
+          "bytes": 410
+        }
+      }
+    },
+    {
+      "host": "24",
+      "member": "26",
+      "pids": [
+        90908,
+        118396
+      ],
+      "relay": "http://127.0.0.1:49938",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": false,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-24-26-1v9rr7gs",
+      "notes_checks": [
+        8,
+        8
+      ],
+      "first_note_seconds": [
+        0.738,
+        0.372
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "7cfcf1ad08a5b78dc61f5394ee42661fef940e6b421ceec8573d3e741083cb2c",
+          "bytes": 435
+        },
+        "native-118396.log": {
+          "sha256": "4a2654b4164317618fe87ccb64807613495e82ce4ccf7aafbd70dce27632d9ab",
+          "bytes": 4582
+        },
+        "native-90908.log": {
+          "sha256": "c1fef76f8d3e98257a059ee9e16f39a0fa47bc5f2c825936c5d7c6fea8230974",
+          "bytes": 5266
+        },
+        "notes.txt": {
+          "sha256": "ef832a06125275d2adf67dce8c3eaffa7f9680b3524986ddbf505455d3815a64",
+          "bytes": 577
+        },
+        "result.json": {
+          "sha256": "7eee63b330253d0a2f1005b350142a62169fd4c5facc00acb6d8a8b0cd2b03fb",
+          "bytes": 410
+        }
+      }
+    },
+    {
+      "host": "25",
+      "member": "24",
+      "pids": [
+        118000,
+        16964
+      ],
+      "relay": "http://127.0.0.1:49938",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": true,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-25-24-qlr9ogru",
+      "notes_checks": [
+        8,
+        8
+      ],
+      "first_note_seconds": [
+        0.37,
+        0.28
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "e4528c011b8edc6bc59f7e9e71cf2932028a77350041302d3af260d2851289e3",
+          "bytes": 435
+        },
+        "native-118000.log": {
+          "sha256": "16abd782b262ef9ef005006f3e48e0b4eb5977833d0c9bb5ad776476d6c8722a",
+          "bytes": 5024
+        },
+        "native-16964.log": {
+          "sha256": "24a065f16d173809eac36134629b4724fec4dfafbbaf5b0767ba9422289aa0d8",
+          "bytes": 14356
+        },
+        "notes.txt": {
+          "sha256": "da258411b033e30222c85f6cd8208ac7ee54991767ecf4b858eeb6cf77f5a463",
+          "bytes": 575
+        },
+        "result.json": {
+          "sha256": "8552c407c797036b75ad9328d93a2381a4724e41cf882a85b438c8070fb01821",
+          "bytes": 409
+        }
+      }
+    },
+    {
+      "host": "25",
+      "member": "26",
+      "pids": [
+        115248,
+        108908
+      ],
+      "relay": "http://127.0.0.1:49938",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": false,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-25-26-rp1_46k6",
+      "notes_checks": [
+        8,
+        8
+      ],
+      "first_note_seconds": [
+        1.007,
+        0.281
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "88c7e8698d051ba4d4013ab41c02ec891f11f7c6f31de8ac87a40b335300906e",
+          "bytes": 436
+        },
+        "native-108908.log": {
+          "sha256": "7bf7a47c8c97d051641b3071d104c63bc496b5b9870a61e7bcfeecf4baf6a149",
+          "bytes": 4374
+        },
+        "native-115248.log": {
+          "sha256": "5afc044be25f0fed116ff1c22ce999919a1478cea115beabc0f97fbe3f692333",
+          "bytes": 5052
+        },
+        "notes.txt": {
+          "sha256": "717b572c5e99990a6e53f908fb79e70c975cc83e7a8df272307ac59559456bc4",
+          "bytes": 577
+        },
+        "result.json": {
+          "sha256": "afe18a34c3373cca203e0ab885a907af6f6c7b472c1a15fad55c2c9be808f67f",
+          "bytes": 411
+        }
+      }
+    },
+    {
+      "host": "26",
+      "member": "24",
+      "pids": [
+        116996,
+        107648
+      ],
+      "relay": "http://127.0.0.1:49938",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": true,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-26-24-t9_utt7l",
+      "notes_checks": [
+        8,
+        8
+      ],
+      "first_note_seconds": [
+        0.393,
+        0.385
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "3ba5c4606098ee143bec3045f68872d627de25fca97dd4f56231e5eab429a87b",
+          "bytes": 436
+        },
+        "native-107648.log": {
+          "sha256": "119a3ddf948d655d7c7576602ce541e47fdc3c337b99848c342cfb91222c6bab",
+          "bytes": 14628
+        },
+        "native-116996.log": {
+          "sha256": "bd776edaf30436ca291fbcde88e4bdc1b6caa5bb99a166ff386cf291bc7f3d45",
+          "bytes": 5365
+        },
+        "notes.txt": {
+          "sha256": "7c3a461b29a2a97c32c886562328991c2e8235a3b50c068b06d506b2eeace03f",
+          "bytes": 577
+        },
+        "result.json": {
+          "sha256": "a0c3578d9a2450fa59cdb9c4f6aa69e4f92e977ee938069fd96bcbd8884826fd",
+          "bytes": 410
+        }
+      }
+    },
+    {
+      "host": "26",
+      "member": "25",
+      "pids": [
+        94352,
+        82640
+      ],
+      "relay": "http://127.0.0.1:49938",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": true,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-26-25-2qx33_6g",
+      "notes_checks": [
+        8,
+        8
+      ],
+      "first_note_seconds": [
+        0.284,
+        0.369
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "4c9609f26dafc23c5d9d2916e3ca00a0624e6c2f5970ab52f94c5b65cf43c1ad",
+          "bytes": 434
+        },
+        "native-82640.log": {
+          "sha256": "c5460d5f2c889f92b5547c59f77213e5289d82ba77b6725b7f3258a60a624ddf",
+          "bytes": 13943
+        },
+        "native-94352.log": {
+          "sha256": "0f8d8ed5e22b2a203022d8cde5c0899228c5b1899c39597f3c3409c56e5d5480",
+          "bytes": 5088
+        },
+        "notes.txt": {
+          "sha256": "73d9b68c2f7081f9d2966b05dc98ce1279208b60f4e540d31cdbc667e90af512",
+          "bytes": 577
+        },
+        "result.json": {
+          "sha256": "d38ea20dc54930d8f7b4957b604bfcb330677e568bbd2e8508ad0a4368bd9b5a",
+          "bytes": 408
+        }
+      }
+    }
+  ],
+  "public_native_runs": [
+    {
+      "host": "26",
+      "member": "24",
+      "pids": [
+        10592,
+        49204
+      ],
+      "relay": "https://flim-relay.cashflowbeatz.workers.dev",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": true,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-26-24-v9szvnwy",
+      "notes_checks": [
+        10,
+        10
+      ],
+      "first_note_seconds": [
+        0.474,
+        0.375
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "9f3068d76a71fdb53e6725c91476a4d0260223d9de366ace3fc10c2fdd632fea",
+          "bytes": 434
+        },
+        "native-10592.log": {
+          "sha256": "add8a6b252aa3339eb29a5b591f227e469e3afcbc763ef5e97d7d5971ae73c5b",
+          "bytes": 5342
+        },
+        "native-49204.log": {
+          "sha256": "740563f5c63c4d4e90aa22ee7fb6492359de3c13c2776982cdd2b4266b1bcc8a",
+          "bytes": 14452
+        },
+        "notes.txt": {
+          "sha256": "25dbe7674a9564d77318a13b78b1cc0989ae3fe213d0f581bc8c8e2f86f7a130",
+          "bytes": 675
+        },
+        "result.json": {
+          "sha256": "2703b36b45f7727493664da7906e237a54acbbe6e96bd2dde33c0c45d7349f6f",
+          "bytes": 430
+        }
+      }
+    },
+    {
+      "host": "25",
+      "member": "26",
+      "pids": [
+        113612,
+        59008
+      ],
+      "relay": "https://flim-relay.cashflowbeatz.workers.dev",
+      "bootstrap": [
+        "initial note",
+        "initial pattern name",
+        "initial channel volume",
+        "initial mixer name",
+        "initial mixer color",
+        "initial mixer routing"
+      ],
+      "notesPassed": true,
+      "controlsPassed": true,
+      "portable": false,
+      "roomStillActive": true,
+      "evidence_directory": "client/desktop/test/.tmp/portable-25-26-e1w7v2cl",
+      "notes_checks": [
+        10,
+        10
+      ],
+      "first_note_seconds": [
+        1.133,
+        0.465
+      ],
+      "crdt_negotiated": true,
+      "files": {
+        "controls.txt": {
+          "sha256": "188cf46a04f936286b776bd731b3c53d60af3f865ebbe261813427f2b9f88f9e",
+          "bytes": 435
+        },
+        "native-113612.log": {
+          "sha256": "e150ed639c4ba6c43643c70b0ae9826b298e181828bfb7a18e203b2df884e935",
+          "bytes": 5253
+        },
+        "native-59008.log": {
+          "sha256": "cf3aa7a6a7c177de7e51e9335fb932e30bff0e488b14639995aaa71c121d9078",
+          "bytes": 4420
+        },
+        "notes.txt": {
+          "sha256": "2e35d7fc626d9c58a38fa42d6c8f04b021ca3e745f5332ab78a58061a28a9d80",
+          "bytes": 675
+        },
+        "result.json": {
+          "sha256": "6420168150aaf7062bef38593aa2c1b368010c2f3a1579f524184ada2dff093f",
+          "bytes": 432
+        }
+      }
+    }
+  ],
+  "deployment": {
+    "worker": "flim-relay",
+    "url": "https://flim-relay.cashflowbeatz.workers.dev",
+    "previous_version": "c5647634-648d-450d-ad79-a61c60b8336b",
+    "version": "ca9554a7-76d6-40b1-9f48-995f6f0e2618",
+    "deployment_id": "f89bd0f0-af51-471e-96a3-23eece595bc6",
+    "traffic_percent": 100,
+    "created_on": "2026-10-27T11:19:47.706098Z",
+    "author_verified": "[account email omitted]",
+    "durable_object_namespace": "427044484c934a268a21546e208feef2",
+    "migration_tag": "v1",
+    "r2_bucket": "flim-private-files",
+    "host_key_binding_preserved": true,
+    "limits": {
+      "storage_bytes": 536870912,
+      "monthly_upload_attempts": 20000,
+      "monthly_download_attempts": 100000
+    },
+    "default_account_deploy_failed_without_publishing": true,
+    "dedicated_auth_profile": "cashflowbeatz-flim",
+    "auth_settings_process_local": true
+  },
+  "failed_public_attempt": {
+    "directory": "client/desktop/test/.tmp/portable-26-24-ald5awix",
+    "failure": "75-second timeout inside recovery snapshot; owned normal close caused snapshot failure; workspace was not cleared; cause remains unestablished",
+    "files": {
+      "native-108820.log": {
+        "sha256": "d6259ad0ce84b47e9a51f469b426db5fc960dcab5333d30cd5db7853b27e8ccc",
+        "bytes": 4096
+      },
+      "native-34084.log": {
+        "sha256": "f9671ee71a3e4f518bbb724357839894262b84b4d55133bd01bbf58eb9319d75",
+        "bytes": 4784
+      }
+    }
+  },
+  "limitations": [
+    "FL24 remains experimental",
+    "Only exact reviewed native engine builds may launch",
+    "Newer-host fallback shares notes and basic controls; newer sounds and playlist features remain unavailable",
+    "Tests use native note insertion, not hardware MIDI",
+    "CRDT scope is note identities/additions/deletions, not the entire project",
+    "No universal third-party preset-version conversion or audio streaming",
+    "An intermittent recovery snapshot stall remains unexplained"
+  ]
+}

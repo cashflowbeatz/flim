@@ -3,6 +3,10 @@
 `flim.exe` (launcher) + `flim_engine.dll` (engine loaded into FL Studio). See the
 [main README](../README.md) for what it does and how to use it.
 
+Use the [complete Rooms app](desktop/README.md) for normal room creation/joining. Native
+connections are supplied by the desktop launcher or explicit development environment settings;
+the FL toolbar no longer opens Host/Connect dialogs.
+
 ## Build
 Requires Visual Studio 2022 or newer with the C++ workload (Build Tools or Community).
 ```bat
@@ -10,7 +14,8 @@ build.bat
 ```
 Output: `out\flim.exe`, `out\flim_engine.dll`. Keep the two files in the same folder.
 
-For experimental **FL 26.1.7.5654 and 26.1.6.5639** support, use an ordinary Command Prompt:
+For the FL24/25/26 client, including supported **FL24.2.2.4597**, use an ordinary Command Prompt
+with the existing build flag:
 
 ```bat
 set FLIM_EXPERIMENTAL_FL26=1
@@ -18,7 +23,8 @@ build.bat
 ```
 
 Output: `out-experimental\flim.exe` and `out-experimental\flim_engine.dll`.
-Both participants should use the same FL build. See [validation and limits](dev/compatibility/README.md).
+Supported builds can collaborate using the current Rooms app and portable-sync relay. Older
+members use notes/basic controls when the host is newer. Exact profiles are still required. See [validation and limits](dev/compatibility/README.md).
 Setting the environment variable only at runtime does not enable FL 26 in a normal compiled client.
 The build finds the latest installed x64 C++ toolchain using `vswhere`, or uses an existing x64
 developer prompt. To select a specific install, set `VCVARS` to its `vcvars64.bat` path.
@@ -41,7 +47,7 @@ parameter reversion handling using mocked FL functions.
 | File | What |
 |---|---|
 | `launcher/flim.c`, `flim.rc`, `flim.ico` | the launcher: first-run setup window (FL folder + name, validated), starts FL suspended, loads the engine, resumes |
-| `engine/flim_engine.c`, `flim_engine.rc` | the engine: polls FL's state, sends and applies edits on FL's main thread, locks, sample transfer (WinHTTP, SHA-256 via BCrypt), WinHTTP WebSocket client, Connect / Host buttons and dialogs |
+| `engine/flim_engine.c`, `flim_engine.rc` | the engine: polls FL's state, sends and applies edits on FL's main thread, locks, sample transfer (WinHTTP, SHA-256 via BCrypt), WinHTTP WebSocket client and status-only FL toolbar; room actions live in the desktop app |
 | `common/flim_config.h` | `%APPDATA%\flim\flim.ini` read/write, name sanitizing, DPAPI-encrypted password |
 | `common/flim_res.h` | dialog resource IDs |
 | `restart_test.ps1` | dev loop: close only previously recorded test-process identities, rebuild, and start leader "A" and member "B". Requires `-Visible` or `-Minimized`; `-Experimental` uses `out-experimental`. Other FL instances and the shared log are preserved. |

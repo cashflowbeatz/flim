@@ -1,0 +1,121 @@
+{
+  "version": "0.2.15",
+  "verifiedAt": "2026-10-27",
+  "refinements": 16,
+  "scope": "Local supplied-reference UI adaptation and supported classification for tested FL24.2.2.4597; no new live FL or physical MIDI session",
+  "artifacts": [
+    {
+      "path": "client/desktop/release/flim-rooms-0.2.15-win64.exe",
+      "bytes": 103625845,
+      "sha256": "ace7dd32a4c5e6bf4cebb4ff8662fc48037fe37b51f5fb8471e2738e795d6256"
+    },
+    {
+      "path": "client/desktop/release/win-unpacked/resources/app.asar",
+      "bytes": 10209324,
+      "sha256": "6a7303eb7efc0ba6d12ff9d68ce372d744b3d9a5b483ad41923ea782564ad636"
+    },
+    {
+      "path": "client/out-experimental/flim.exe",
+      "bytes": 311296,
+      "sha256": "c797ca1689347d821c9a27ab5a85d49679e2314ebde7d3bfd71b29779c3bf4f9"
+    },
+    {
+      "path": "client/out-experimental/flim_engine.dll",
+      "bytes": 605184,
+      "sha256": "ca4874d82e7ff9a4cb38b9398d9b3c6968eaa47f88a1c909868de8c88608ef77"
+    },
+    {
+      "path": "client/out-experimental/profiles/25.2.5.5319.profile",
+      "bytes": 1646,
+      "sha256": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e"
+    },
+    {
+      "path": "client/out-experimental/profiles/26.1.7.5654.profile",
+      "bytes": 1658,
+      "sha256": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+    }
+  ],
+  "tests": {
+    "desktop": {
+      "passed": 100,
+      "failed": 0,
+      "log": "client/desktop/test/latest-tests-0215.log"
+    },
+    "roomUI": {
+      "passed": 94,
+      "errors": [],
+      "result": "client/desktop/test/evidence/0.2.15/ui-results.json"
+    },
+    "filesUI": {
+      "passed": 11,
+      "errors": [],
+      "result": "client/desktop/test/evidence/0.2.15/files/ui.json"
+    },
+    "nativeHarnesses": {
+      "passed": 29,
+      "failed": 0,
+      "result": "client/desktop/test/evidence/0.2.15/native-harness-results.json"
+    },
+    "nativeWinHTTP": {
+      "passed": 8,
+      "scope": "Real native WinHTTP against an ephemeral loopback fixture; no FL processes or Cloudflare writes",
+      "batches": [
+        512,
+        512,
+        1
+      ],
+      "output": "PASS 1025 sample references looked up in bounded batches\r\nPASS partial HTTP writes send the complete file\r\nPASS streamed download content and checksum\r\nPASS sample lookup retries one temporary service failure\r\nPASS failed later lookup batch clears every partial upload decision\r\nPASS unrequested sample hashes are rejected\r\nPASS failed sample lookup preserves the edit and does not stop sharing\r\nPASS a stale session stops writing downloaded data\r\n"
+    },
+    "rendererRecovery": {
+      "passed": true,
+      "result": "client/desktop/test/evidence/0.2.15/recovery-results.json"
+    },
+    "packaged": {
+      "passed": true,
+      "result": "client/desktop/test/evidence/0.2.15/package-results.json"
+    },
+    "portable": {
+      "passed": true,
+      "result": "client/desktop/test/evidence/0.2.15/portable-results.json"
+    },
+    "window": {
+      "passed": true,
+      "closed": [
+        472,
+        395
+      ],
+      "setup": [
+        472,
+        680
+      ],
+      "dropdown": [
+        472,
+        834
+      ],
+      "zoom200Cap": [
+        928,
+        1008
+      ],
+      "log": "client/desktop/test/latest-window-0215.log"
+    },
+    "designGate": {
+      "passed": true,
+      "report": "client/desktop/QA-0.2.15.md"
+    }
+  },
+  "fl24": {
+    "version": "24.2.2.4597",
+    "supported": true,
+    "experimental": false,
+    "exactEngineSha256": "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32",
+    "experimentalOptInRequired": false,
+    "hashAndUnknownBuildGuardsRetained": true
+  },
+  "existingUserSession": {
+    "pid": null,
+    "startedLocal": "2026-10-27T08:20:55.9275592-04:00",
+    "preserved": true
+  },
+  "githubWrite": false,
+  "cloudflareDeployment": false
+}

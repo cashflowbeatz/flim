@@ -1,0 +1,456 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-27T10:21:52.029032+00:00",
+  "version": "0.2.10",
+  "status": "Missing/rejected plugin isolation and stable-ID path resolution implemented; final package checked",
+  "artifacts": {
+    "client/desktop/release/flim-rooms-0.2.10-win64.exe": {
+      "sha256": "0e9dc61611202c0dab4b0befd963581dcd1b58e298ed024b69abccee5a4c8ac6",
+      "bytes": 103619027
+    },
+    "client/out-experimental/flim.exe": {
+      "sha256": "360814da3c0c350b5bb43b4a939d265641c95d6dc02efa01dd4ef51649f1b731",
+      "bytes": 311296
+    },
+    "client/out-experimental/flim_engine.dll": {
+      "sha256": "7658cbbef09ac1c024d6ac09d763416a71fba868920c70685cb2f3329bb58dae",
+      "bytes": 610816
+    }
+  },
+  "source_sha256": {
+    "client/engine/flim_engine.c": "4c42de52324a890e25231811617408bc1f50bcf19f902d705c48dc48c060f3fd",
+    "client/common/flim_plugin.h": "bb960db1621d78cdecf38c06e16d44be59a04622585ccc5b74ff53b5bea50aec",
+    "client/dev/harness/t_plugins.c": "d80d1e2da13701818c3806e1f3fc5512efdeebd966e5623c3e3b5e68f24bb9d9",
+    "client/dev/harness/t_plugin_apply.c": "249462730819cabee82539990bd73139ce8727ea858a38846e1e239880b82bfe",
+    "client/dev/harness/t_compat.c": "0f2f87d9b4ea805f5f1d00a00c601c16257b852454c4ad5d587a85ae47588486",
+    "client/desktop/test/native-room-startup.cjs": "9d843aa0beb9282a61e4ec71ec0027b98dedfc01ab3f1ce00f9c27adb7331620",
+    "client/desktop/electron/bridge-core.cjs": "0b22b083ad16aac6e3d993ee6bd2b43b3b9ac93def3eb78c4aa3d914231d09b5",
+    "client/desktop/src/App.tsx": "4354e2840efb00527023f7e7ccdcdee785ff7a1b57933f93f171960826067237",
+    "server/cloudflare/src/worker.ts": "59303bef395bbffdfed5d35d56f9b1a0dcf992cd8aa002ac172c669f5c2e23d8"
+  },
+  "validation": {
+    "native_harnesses": [
+      {
+        "test": "t_build_gate_experimental.exe",
+        "exit": 0,
+        "output": "Project build gate: OK (300 checks across 6 builds; whitelist/table agreement and both older FL25 rows retained)"
+      },
+      {
+        "test": "t_build_gate.exe",
+        "exit": 0,
+        "output": "Project build gate: OK (138 checks across 3 builds; whitelist/table agreement and both older FL25 rows retained)"
+      },
+      {
+        "test": "t_clip_native.exe",
+        "exit": 0,
+        "output": "Native clip integration: OK (60/80 strides, selection, refusal, mixer translation, readiness and failed snapshots)"
+      },
+      {
+        "test": "t_clip.exe",
+        "exit": 0,
+        "output": "Canonical clip conversion: OK (107 checks; 60/80-byte roundtrips, exact defaults, loss refusal and preflight)"
+      },
+      {
+        "test": "t_cloud.exe",
+        "exit": 0,
+        "output": "Cloudflare file envelopes: OK (metadata, schema, ambiguity, bounds, delivery)"
+      },
+      {
+        "test": "t_compat.exe",
+        "exit": 0,
+        "output": "Native build negotiation: OK (33 checks)"
+      },
+      {
+        "test": "t_files.exe",
+        "exit": 0,
+        "output": "File safety: OK (full reads, short writes, disk/flush/rename faults, locked targets, intact backups, bounded paths, project refusal)"
+      },
+      {
+        "test": "t_flp.exe",
+        "exit": 0,
+        "output": "FLP legacy/extended events, bounds, callback atomicity: OK"
+      },
+      {
+        "test": "t_inbound.exe",
+        "exit": 0,
+        "output": "PASS invalid playlist data never becomes an empty replacement; valid reordered fields and intentional clears work\nPASS complete plugin snapshots validate and stage before deletions; malformed, duplicate, missing and unavailable data preserve queued state\nPASS preset coalescing preserves structural/parameter order; channel presets load before later index changes and temp files are cleaned\nPASS marker/routing preflight preserves existing records on late malformed entries; spaced lists and intentional clears apply\nPASS malformed pattern operations never invoke FL; supported reordered fields apply; native faults retain baselines and close dialog guards\nInbound validation and edit ordering: OK"
+      },
+      {
+        "test": "t_injection_experimental.exe",
+        "exit": 0,
+        "output": "{\"error\":\"FL Studio 26.99.99.65535 has no verified compatibility profile. It was not launched.\"}\n{\"error\":\"FL 24.2.2.4597 is test only. Explicit experimental testing must be enabled before starting this room.\"}\n{\"error\":\"FL 24.2.2.4597 does not match the exact engine file mapped for this test build. It was not enabled.\"}\n{\"error\":\"FL Studio 24.2.2.4598 has no verified compatibility profile. It was not launched.\"}\nLauncher process handling: OK (6 known builds + 8 failure/fallback scenarios + external-profile status/launch checks, mocked Win32 APIs)"
+      },
+      {
+        "test": "t_injection.exe",
+        "exit": 0,
+        "output": "{\"error\":\"FL Studio 26.99.99.65535 has no verified compatibility profile. It was not launched.\"}\n{\"error\":\"FL 24.2.2.4597 requires the explicit experimental test build or a reviewed compatibility profile.\"}\n{\"error\":\"FL 24.2.2.4597 requires the explicit experimental test build or a reviewed compatibility profile.\"}\n{\"error\":\"FL 24.2.2.4597 requires the explicit experimental test build or a reviewed compatibility profile.\"}\n{\"error\":\"FL Studio 24.2.2.4598 has no verified compatibility profile. It was not launched.\"}\nLauncher process handling: OK (3 known builds + 8 failure/fallback scenarios + external-profile status/launch checks, mocked Win32 APIs)"
+      },
+      {
+        "test": "t_launcher.exe",
+        "exit": 0,
+        "output": "Discovered: C:\\Program Files\\Image-Line\\FL Studio 2025 (build 25.2.5.5319, verified support: yes)\nLauncher validation: OK"
+      },
+      {
+        "test": "t_logging.exe",
+        "exit": 0,
+        "output": "PASS Unicode per-run path, build/thread context, credential omission, line boundaries and preserved Win32 error state\nPASS concurrent writers produce 360 complete, distinct records without interleaving\nPASS repeated rotation retains only the active log and two bounded backups, with complete final records\nPASS unavailable destinations are nonfatal and recoverable; absent or relative overrides retain the legacy temp path\nNative logging: OK"
+      },
+      {
+        "test": "t_metadata.exe",
+        "exit": 0,
+        "output": "Metadata: OK (channel rebaseline and remote edits preserve unsent local renames)"
+      },
+      {
+        "test": "t_notes_crdt.exe",
+        "exit": 0,
+        "output": "CRDT: OK (convergence, reordered and repeated deltas, concurrent delete/move, duplicate notes, wire validation, RNG/allocation failure, bounded history, 200 three-replica rounds)"
+      },
+      {
+        "test": "t_notes.exe",
+        "exit": 0,
+        "output": "Notes: OK (200 ms recording batch, queue retry, failed snapshot/apply, incremental 6000-note selection, CRDT merge during pending MIDI recording, duplicate delivery, negotiation/fallback)"
+      },
+      {
+        "test": "t_patops.exe",
+        "exit": 0,
+        "output": "Pattern VMT hooks: OK (all builds, synthetic memory; wire IDs unchanged)"
+      },
+      {
+        "test": "t_plugin_apply.exe",
+        "exit": 0,
+        "output": "Plugin apply guards, rejection isolation/retry, blocked parameters, retained state through reorder/delete, and verified effect clearing: OK"
+      },
+      {
+        "test": "t_plugins.exe",
+        "exit": 0,
+        "output": "Stable VST IDs/paths, opaque state, malformed bounds, ambiguous installs, missing catalog, retained late-join state/control order, retry dialog and retained retry bytes: OK"
+      },
+      {
+        "test": "t_profile_loader.exe",
+        "exit": 0,
+        "output": "External profile selection: OK (uncompiled build admitted; absent, modified-engine and corrupted profiles refused; synthetic PE never executed)"
+      },
+      {
+        "test": "t_profiles.exe",
+        "exit": 0,
+        "output": "Compatibility profile parsing: OK (all fields required; duplicates, unknowns, corruption and partial records refused)\n94 parser checks"
+      },
+      {
+        "test": "t_project_load.exe",
+        "exit": 0,
+        "output": "Project load failures: OK (refusal, fault cleanup, memory, unchanged save target, queued edits blocked)"
+      },
+      {
+        "test": "t_queues.exe",
+        "exit": 0,
+        "output": "PASS outbound order, generation, count/byte bounds, allocation failures, ownership and cleanup\nPASS inbound order, stale generation, count/byte bounds and allocation failures\nPASS project-load backlog bounds, preserved allocation on realloc failure and reset\nPASS main-thread overflow stops sharing instead of silently losing edits\nPASS sample-path replacement is atomic on failure and hash caching remains optional and bounded\nPASS declined sample allocation, deduplication and bounded retention\nPASS disconnect clears room sample paths and choices; old workers cannot restore them\nPASS incomplete metadata, pattern, project, plugin and revert tasks never enter the FL queue\nPASS malformed full-note snapshots queue no changes; reordered fields, valid notes and intentional empty snapshots work\nPASS only complete channel permutations are queued, with failed allocation handled without dereferencing NULL\nPASS outgoing note/project allocation failures send no partial snapshots; plugin decoding and failed disk writes fail safely\nPASS sample-list bounds, failed decoding/allocation and malformed path metadata"
+      },
+      {
+        "test": "t_rooms.exe",
+        "exit": 0,
+        "output": "Desktop room URLs, welcome identity and legacy slots: OK"
+      },
+      {
+        "test": "t_samples.exe",
+        "exit": 0,
+        "output": "Sample path macro expansion: OK\ncollected 2 paths\n  D:\\Alex\\Sample Packs\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxx\\kick 01.wav\n  D:\\Alex\\Sample Packs\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxx\\snare 02.wav\nimage 457 -> 457 bytes\n  now C:\\Users\\Producer\\AppData\\Local\\Temp\\flim-samples-62488-bd44f8f-0\\Documents\\flim\\samples\\c1ce4f1ec490a858______________________\\kick.wav (exists 1)\n  now C:\\Users\\Producer\\AppData\\Local\\Temp\\flim-samples-62488-bd44f8f-0\\Documents\\flim\\samples\\c1ce4f1ec490a858______________________________\\kick.wav (exists 1)\nPASS sample rewrite nested round trip, trailer preservation, 5 allocation failures and overflow\nPASS sample alias identity, equal copy, same-size collision stops before load, and invalid cache root\nowned temporary profile and aliases removed\nOK"
+      },
+      {
+        "test": "t_startup.exe",
+        "exit": 0,
+        "output": "Main-form discovery, same-process hooks, failure cleanup and bounded startup: OK"
+      },
+      {
+        "test": "t_ws_buffer.exe",
+        "exit": 0,
+        "output": "WebSocket buffer: OK"
+      }
+    ],
+    "desktop_tests_passed": 67,
+    "ui": {
+      "passed": 36,
+      "results": [
+        "Framer variants, font and width 375",
+        "Escape and focus return 375",
+        "Framer variants, font and width 810",
+        "Escape and focus return 810",
+        "Framer variants, font and width 1200",
+        "Escape and focus return 1200",
+        "Empty required name prevents room allocation",
+        "One dropdown entry per FL family keeps build numbers in details",
+        "Folder picker route and unsupported-build gate",
+        "Canceled folder selection retains the selected FL version",
+        "FL24 is a selectable experimental test with an honest compatibility notice",
+        "Test logs open through the local desktop action",
+        "Create automatically launches and shows real-state participant rows",
+        "Copy, refresh and return to start",
+        "Join accepts spaced room code and launches once",
+        "Delayed status cannot restore a room after returning to start",
+        "Incompatible host guidance leaves a retryable room and a working return action",
+        "Room-number editing preserves the caret and accepts pasted hyphens",
+        "Copy feedback and status requests belong to the current room visit",
+        "Small windows keep every control scrollable with usable target sizes",
+        "Failed log-folder opening leaves an actionable error",
+        "Unavailable diagnostics are explained without blocking room creation",
+        "network state stays actionable",
+        "launch state stays actionable",
+        "status state stays actionable",
+        "waiting state stays actionable",
+        "ended state stays actionable",
+        "missing state stays actionable",
+        "Settings-storage notice remains readable and does not block a session",
+        "Temporary status failures recover automatically without another click",
+        "Hidden and offline windows pause status traffic and refresh when available again",
+        "Browser preview is explicit and cannot fake an FL connection",
+        "Actual desktop discovers installed FL24/25/26 without launching FL",
+        "Actual desktop at 200 percent zoom keeps installation details and submit reachable",
+        "Native window grows with the menu, shrinks on collapse and stays inside the work area",
+        "Production CSP disables renderer networking"
+      ],
+      "errors": []
+    },
+    "http_transfer_checks_passed": 4,
+    "package": {
+      "passed": true,
+      "checks": [
+        "Native payload matches tested binaries",
+        "No private keys, test fixtures, preferences or logs in ASAR",
+        "Bundled launcher verifies installed FL25 and exact test-only FL24",
+        "Packaged app ignores inherited dev flag",
+        "Local renderer and General Sans load under production CSP",
+        "Installed FL24 is discovered and selectable alongside reviewed FL25/26 without changing the user profile",
+        "Real local diagnostics include app version, inspected builds and matching native file hashes",
+        "Renderer has no Node access",
+        "No room allocated or FL launched by packaging check",
+        "Header logo and favicon load locally",
+        "All nine icon sizes embedded in the app and portable executable",
+        "Running Windows small and large icons match the new logo"
+      ],
+      "hashes": {
+        "flim.exe": "360814da3c0c350b5bb43b4a939d265641c95d6dc02efa01dd4ef51649f1b731",
+        "flim_engine.dll": "7658cbbef09ac1c024d6ac09d763416a71fba868920c70685cb2f3329bb58dae",
+        "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+        "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+      },
+      "icons": [
+        {
+          "executable": "flim.exe",
+          "sizes": [
+            16,
+            20,
+            24,
+            32,
+            40,
+            48,
+            64,
+            128,
+            256
+          ]
+        },
+        {
+          "executable": "flim-rooms-0.2.10-win64.exe",
+          "sizes": [
+            16,
+            20,
+            24,
+            32,
+            40,
+            48,
+            64,
+            128,
+            256
+          ]
+        }
+      ],
+      "windowIcons": [
+        {
+          "name": "window-small",
+          "width": 16,
+          "height": 16,
+          "meanDifference": 0
+        },
+        {
+          "name": "window-large",
+          "width": 32,
+          "height": 32,
+          "meanDifference": 0
+        }
+      ],
+      "diagnostics": {
+        "format": "flim-diagnostics-v1",
+        "appVersion": "0.2.10",
+        "nativePids": [],
+        "eventCount": 5,
+        "nativeHashes": {
+          "launcher": "360814da3c0c350b5bb43b4a939d265641c95d6dc02efa01dd4ef51649f1b731",
+          "engine": "7658cbbef09ac1c024d6ac09d763416a71fba868920c70685cb2f3329bb58dae"
+        }
+      },
+      "errors": []
+    },
+    "portable": {
+      "passed": true,
+      "checks": [
+        "Portable executable self-extracts and opens the actual app",
+        "Installed FL24 is discovered and selectable alongside reviewed FL25/26 without changing the user profile",
+        "Real local diagnostics include app version, inspected builds and matching native file hashes",
+        "No real room allocated and no FL instance launched"
+      ],
+      "diagnostics": {
+        "format": "flim-diagnostics-v1",
+        "appVersion": "0.2.10",
+        "nativePids": [],
+        "eventCount": 5,
+        "nativeHashes": {
+          "launcher": "360814da3c0c350b5bb43b4a939d265641c95d6dc02efa01dd4ef51649f1b731",
+          "engine": "7658cbbef09ac1c024d6ac09d763416a71fba868920c70685cb2f3329bb58dae"
+        }
+      }
+    },
+    "diff_check_passed": true
+  },
+  "live_runs": [
+    {
+      "flVersion": "26.1.7.5654",
+      "pid": 20188,
+      "role": "member",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 8714,
+      "fixtureBuild": "26.1.7.5654",
+      "pluginProbe": true,
+      "nativeDirectory": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\desktop\\test\\.tmp\\native-room-26-dIeuLH\\logs\\2026-10-27T10-06-26-022Z_ed6ba2ef-7668-4b6f-a163-12e9faeb67a6",
+      "result_path": "client/desktop/test/.tmp/native-room-26-dIeuLH/result.json",
+      "engine_sha256_at_run": "af1f770298f8c230811445a401421b8019cb468b739c299e57b14aa1fb74d42f",
+      "host_kind": "protocol fixture; no project snapshot",
+      "checks": [
+        "native welcome",
+        "missing VST preflight",
+        "identical-state suppression",
+        "plugin parameter withheld",
+        "mixer pan applied",
+        "active room membership",
+        "unavailable empty slot cleared"
+      ]
+    },
+    {
+      "flVersion": "25.2.5.5319",
+      "pid": 115928,
+      "role": "member",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 9319,
+      "fixtureBuild": "24.2.2.4597",
+      "pluginProbe": true,
+      "nativeDirectory": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\desktop\\test\\.tmp\\native-room-25-xowc98\\logs\\2026-10-27T10-07-02-948Z_8c288338-61c2-464c-b733-d4e360e90e74",
+      "result_path": "client/desktop/test/.tmp/native-room-25-xowc98/result.json",
+      "engine_sha256_at_run": "af1f770298f8c230811445a401421b8019cb468b739c299e57b14aa1fb74d42f",
+      "host_kind": "protocol fixture; no project snapshot",
+      "checks": [
+        "native welcome",
+        "missing VST preflight",
+        "identical-state suppression",
+        "plugin parameter withheld",
+        "mixer pan applied",
+        "active room membership",
+        "unavailable empty slot cleared"
+      ]
+    },
+    {
+      "flVersion": "24.2.2.4597",
+      "pid": 114012,
+      "role": "member",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 10192,
+      "fixtureBuild": "24.2.2.4597",
+      "pluginProbe": true,
+      "nativeDirectory": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\desktop\\test\\.tmp\\native-room-24-EK7DD4\\logs\\2026-10-27T10-08-11-143Z_7df36b88-9bbb-40f2-9a76-974cece95c17",
+      "result_path": "client/desktop/test/.tmp/native-room-24-EK7DD4/result.json",
+      "engine_sha256_at_run": "af1f770298f8c230811445a401421b8019cb468b739c299e57b14aa1fb74d42f",
+      "host_kind": "protocol fixture; no project snapshot",
+      "checks": [
+        "native welcome",
+        "missing VST preflight",
+        "identical-state suppression",
+        "plugin parameter withheld",
+        "mixer pan applied",
+        "active room membership",
+        "unavailable empty slot cleared"
+      ]
+    },
+    {
+      "flVersion": "26.1.7.5654",
+      "pid": 116772,
+      "role": "member",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 8098,
+      "fixtureBuild": "24.2.2.4597",
+      "pluginProbe": true,
+      "installedVstProbe": true,
+      "nativeDirectory": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\desktop\\test\\.tmp\\native-room-26-tucAMD\\logs\\2026-10-27T10-13-49-428Z_25da78ff-ff12-456d-b745-d1047393f0a1",
+      "result_path": "client/desktop/test/.tmp/native-room-26-tucAMD/result.json",
+      "engine_sha256_at_run": "af1f770298f8c230811445a401421b8019cb468b739c299e57b14aa1fb74d42f",
+      "host_kind": "protocol fixture; no project snapshot",
+      "checks": [
+        "native welcome",
+        "missing VST preflight",
+        "identical-state suppression",
+        "plugin parameter withheld",
+        "mixer pan applied",
+        "active room membership",
+        "unavailable empty slot cleared",
+        "installed Valhalla Supermassive VST3 path redirected by stable ID",
+        "real load returned 0",
+        "verified clear returned 0"
+      ],
+      "cleanup": "No selected on observed save-changes prompt for owned untitled fixture; closed normally"
+    },
+    {
+      "flVersion": "26.1.7.5654",
+      "pid": 94336,
+      "role": "member",
+      "connected": true,
+      "messageHooksReady": true,
+      "welcomeAccepted": true,
+      "startupMs": 8895,
+      "fixtureBuild": "26.1.7.5654",
+      "pluginProbe": true,
+      "installedVstProbe": false,
+      "nativeDirectory": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\desktop\\test\\.tmp\\native-room-26-LQ4xQX\\logs\\2026-10-27T10-16-48-063Z_6a0d8ee9-9de0-4f8d-8fc5-401f518dbd41",
+      "result_path": "client/desktop/test/.tmp/native-room-26-LQ4xQX/result.json",
+      "engine_sha256_at_run": "7658cbbef09ac1c024d6ac09d763416a71fba868920c70685cb2f3329bb58dae",
+      "host_kind": "protocol fixture; no project snapshot",
+      "checks": [
+        "native welcome",
+        "missing VST preflight",
+        "identical-state suppression",
+        "plugin parameter withheld",
+        "mixer pan applied",
+        "active room membership",
+        "unavailable empty slot cleared"
+      ]
+    }
+  ],
+  "limits": [
+    "Mapped exact engines only; no universal patch compatibility claim",
+    "FL24 remains experimental",
+    "Oldest exact FL build must host mixed sessions",
+    "Initial project opening with every missing plugin remains unverified",
+    "No actual vendor-release pair tested; VST state compatibility remains the vendor plugin's responsibility",
+    "VST2/VST3 and different IDs are not automatically substituted",
+    "Native access violations and structural divergence still stop sharing",
+    "Hardware MIDI/full shared-feature matrix still needs real two-computer tests",
+    "Worker/CRDT changes remain local and undeployed"
+  ],
+  "preserved_native_payload": "client/dev/compatibility/payload-0.2.9-preserved",
+  "testing_note": "First real-VST probe loaded/cleared correctly but exposed a fixture cleanup hang on FL save prompt. Owned fixture was discarded without saving; cleanup now always releases sockets/room. Successful repeat is listed above.",
+  "github_changed": false,
+  "worker_deployed": false,
+  "owned_fl_processes_remaining": 0
+}

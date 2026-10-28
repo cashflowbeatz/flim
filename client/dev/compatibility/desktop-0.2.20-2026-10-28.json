@@ -1,0 +1,60 @@
+{
+  "version": "0.2.20",
+  "date": "2026-10-28T10:13:39.9347051-04:00",
+  "localOnly": true,
+  "changes": 40,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.20-win64.exe",
+    "bytes": 103551573,
+    "unpackedBytes": 384896335.0,
+    "sha256": "36ede094f5a4cae8e28c254ad799e84920aaedaa6f3b1cf0c3f403d43439af91"
+  },
+  "native": {
+    "changed": false,
+    "priorValidation": "desktop-0.2.19-2026-10-28.json",
+    "launcher": "4157b725f0b51a9d5b506177ca1708016fc27c3bc53937c73ab0913d22ba85e2",
+    "engine": "94de8224c448bf3e3dddf4a897d6a1ffd5a652aa90b8f3e7fa3e016d4c67209a"
+  },
+  "desktopTests": 140,
+  "newRegressionTests": 32,
+  "roomUiChecks": 124,
+  "filesUiChecks": 39,
+  "browserErrors": [],
+  "fileStatusCacheTest": {
+    "additionalUnchangedPolls": 8,
+    "polls": 9,
+    "bodyOpens": 1,
+    "additionalBodyOpens": 0
+  },
+  "nativeWindowChecks": [
+    "Ten Create/Join switches preserve geometry",
+    "Immediate input",
+    "Lateral Files geometry and focus restoration",
+    "200% zoom",
+    "Two automatic renderer recoveries followed by bounded manual recovery"
+  ],
+  "packagedStartup": true,
+  "portableStartup": true,
+  "portableExtraction": {
+    "minimumRecommendedTempBytes": 600000000,
+    "processOnlyTempOverride": true,
+    "testedTempDrive": "D:"
+  },
+  "reviewedBuilds": [
+    "24.2.2.4597",
+    "25.2.5.5319",
+    "26.1.7.5654"
+  ],
+  "mixedBuildPreflightCombinations": 9,
+  "noFreshTwoComputerOrMidiTest": true,
+  "userFL": {
+    "pid": null,
+    "start": "2026-10-27T08:20:55.9275592-04:00"
+  },
+  "githubPush": false,
+  "githubCommit": false,
+  "cloudflareDeployment": false,
+  "evidence": "client/desktop/test/evidence/0.2.20",
+  "report": "client/desktop/QA-0.2.20.md",
+  "antislop": "PASS"
+}

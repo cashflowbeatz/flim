@@ -1,0 +1,39 @@
+{
+  "version": "0.2.17",
+  "date": "2026-10-27T12:30:39.1634472-04:00",
+  "localOnly": true,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.17-win64.exe",
+    "sha256": "797b78da2e30f61ce5beefd902333d724a2a9b9663c29e1d71c2446ed26dca27",
+    "bytes": 103547286
+  },
+  "native": {
+    "changed": false,
+    "engine": "94de8224c448bf3e3dddf4a897d6a1ffd5a652aa90b8f3e7fa3e016d4c67209a",
+    "launcher": "4157b725f0b51a9d5b506177ca1708016fc27c3bc53937c73ab0913d22ba85e2",
+    "priorValidation": "desktop-0.2.16-2026-10-27.json"
+  },
+  "desktopTests": 101,
+  "roomUiChecks": 97,
+  "filesUiChecks": 15,
+  "nativeWindowChecks": [
+    "setup/picker keep initial upper edge",
+    "ten Create/Join switches keep exact size and position",
+    "immediate keyboard input retained",
+    "sidebar expands without transient collapse",
+    "sidebar focus and width restored",
+    "200% zoom",
+    "bounded renderer crash recovery"
+  ],
+  "packagedStartup": true,
+  "portableStartup": true,
+  "noFreshTwoComputerOrMidiTest": true,
+  "userFL": {
+    "pid": null,
+    "start": "2026-10-27T08:20:55.9275592-04:00"
+  },
+  "githubPush": false,
+  "cloudflareDeployment": false,
+  "evidence": "client/desktop/test/evidence/0.2.17",
+  "report": "client/desktop/QA-0.2.17.md"
+}

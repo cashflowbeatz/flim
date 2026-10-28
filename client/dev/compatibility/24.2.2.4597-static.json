@@ -1,0 +1,998 @@
+{
+  "schema_version": 1,
+  "status": "static_review_complete_runtime_pending",
+  "runtime_validated": false,
+  "method": "Exact signed PE files inspected with repository Capstone/pefile tools; Ghidra requests timed out",
+  "target": {
+    "file_version": "24.2.2.4597",
+    "sha256": "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32",
+    "size_bytes": 56784616,
+    "image_base": "0x400000",
+    "machine": "AMD64"
+  },
+  "reference": {
+    "file_version": "25.2.5.5319",
+    "sha256": "1b7e2381f2853ee590bff74429fb8aa5540d33a5b33c0c5e41ec01c03fe0c7ac",
+    "size_bytes": 51142960,
+    "image_base": "0x400000",
+    "machine": "AMD64"
+  },
+  "fields": {
+    "msgbox": 2,
+    "REC": 15261408,
+    "MUTE": 18043520,
+    "MIXARR": 21213512,
+    "MIXCNT": 0,
+    "MAINFORM": 21216608,
+    "SAVEPRESET": 14127072,
+    "LOADPRESET": 14127568,
+    "HASPLUGIN": 18733968,
+    "GETPLUGIN": 18740960,
+    "INTFCLEAR": 4302672,
+    "ADDCHAN": 15081472,
+    "DELCHAN": 15083536,
+    "RESOLVER": 15086848,
+    "CHANLIST": 21220104,
+    "MOVECHAN": 15246720,
+    "MOVEOBJ": 21216864,
+    "MOVEARG": 21225936,
+    "CHANFILT": 21212168,
+    "PATARR": 21222072,
+    "NOTEARR": 18398800,
+    "NOTEDEL": 15349200,
+    "NOTELOCK": 21219584,
+    "GRIDREFRESH": 18410864,
+    "FLPROJ": 21229144,
+    "MAINOBJ": 21215672,
+    "SETPROJ": 17230368,
+    "SAVEPROJ": 17278128,
+    "BUSYBEGIN": 17192864,
+    "BUSYEND": 17192944,
+    "PROJNAME": 22097520,
+    "ARRS": 22527456,
+    "ARRCUR": 21175568,
+    "PLFORM": 21224800,
+    "PLREFRESH": 13830208,
+    "HINT": 17391248,
+    "MIXNAME": 18323728,
+    "MIXCOLOR": 18335984,
+    "UIUPDATE": 12406560,
+    "MIXOBJ": 21220296,
+    "SETROUTE": 18225808,
+    "ROUTEUPD": 18223952,
+    "PATNAME": 18396992,
+    "PATCOLOR": 18398256,
+    "PATREFRESH": 13894864,
+    "PLTRACK": 18464448,
+    "MARKADD": 15361984,
+    "MARKTYPE": 15316040,
+    "DYNSETLEN": 4292528,
+    "MARKREFRESH": 13551136,
+    "MARKSORT": 15360544,
+    "PATLENUPD": 18398976,
+    "PATMARKS": 18395936,
+    "SONGLOCK": 21226664,
+    "MODIFIED": 17215104,
+    "TSNUM": 21225792,
+    "TSDEN": 21218712,
+    "TSSET": 18961904,
+    "TSCTLS": 18962272,
+    "MSGBOX": 11008288,
+    "MSGBOX_CORE": 0,
+    "PRFORM": 21220672,
+    "CURPAT": 21227312,
+    "CH_SELECTED": 836,
+    "CH_GRID": 1864,
+    "FORM_BUSY": 12052,
+    "PAT_STRIDE": 144,
+    "PLFORM_PATS": 3264,
+    "PL_MARKSEL": 3352,
+    "ED_TICKSPERPX": 2772,
+    "ED_HSCROLL": 2788,
+    "PR_GRID": 3072,
+    "PL_GRID": 3256,
+    "GRID_VSCROLL": 1016,
+    "MIX_STRIDE": 2220,
+    "MIX_SLOTS_OFF": 1884,
+    "MIX_ROUTE": 740,
+    "FLPROJ_LOAD_SLOT": 40,
+    "PATOP_CLONE_SLOT": 200,
+    "PATOP_DELETE_SLOT": 208,
+    "PATOP_REARRANGE_SLOT": 216,
+    "PATOP_EDIT_SLOT": 224,
+    "PATOP_INSERT_SLOT": 232,
+    "PATOP_SPLIT_SLOT": 240
+  },
+  "layout_reviews": [
+    {
+      "names": [
+        "CH_SELECTED"
+      ],
+      "sites": [
+        {
+          "address": "0xe8a3c4"
+        },
+        {
+          "address": "0xe8a41e"
+        },
+        {
+          "address": "0xe8a4e6"
+        },
+        {
+          "address": "0xe8a518"
+        }
+      ],
+      "observation": "MOVECHAN move-up and move-down helpers test the selected byte on channels resolved from the rack-filter list. These are selection-dependent reorder operations, not unrelated aggregate-offset votes."
+    },
+    {
+      "names": [
+        "CH_GRID"
+      ],
+      "sites": [
+        {
+          "address": "0xe8aee9"
+        },
+        {
+          "address": "0xe8b969"
+        },
+        {
+          "address": "0xe8ba41"
+        }
+      ],
+      "observation": "The MOVECHAN refresh helper walks channels, reads their grid pointer and updates its UI state. These three sites correspond to the reviewed reference sites 0xf507a1, 0xf5140c and 0xf514e4 using 0x7bc."
+    },
+    {
+      "names": [
+        "FORM_BUSY"
+      ],
+      "sites": [
+        {
+          "address": "0x10657a8"
+        },
+        {
+          "address": "0x10657e3"
+        }
+      ],
+      "observation": "BUSYBEGIN receives the main form in RCX, tests its busy object and stores the newly created object at 0x2f14."
+    },
+    {
+      "names": [
+        "PAT_STRIDE",
+        "PAT_NOTES"
+      ],
+      "sites": [
+        {
+          "address": "0x118be66"
+        },
+        {
+          "address": "0x118be69"
+        },
+        {
+          "address": "0x118be6d"
+        },
+        {
+          "address": "0x118be71"
+        },
+        {
+          "address": "0x118be86"
+        }
+      ],
+      "observation": "NOTEARR indexes by 2*9*8=0x90 and accesses the note-array object at +0x28. Its direct table base 0x1558af8 equals the qword stored in mapped PATARR global 0x143d2b8."
+    },
+    {
+      "names": [
+        "PLFORM_PATS"
+      ],
+      "sites": [
+        {
+          "address": "0xe8a8ec"
+        },
+        {
+          "address": "0xe8a8f3"
+        },
+        {
+          "address": "0xe8a8f6"
+        },
+        {
+          "address": "0xe8a913"
+        }
+      ],
+      "observation": "MOVECHAN dereferences mapped playlist form global then loads +0xcc0 and calls mapped PATREFRESH on that object."
+    },
+    {
+      "names": [
+        "PL_MARKSEL",
+        "PL_MARKERS"
+      ],
+      "sites": [
+        {
+          "address": "0xcec657"
+        },
+        {
+          "address": "0xcec754"
+        },
+        {
+          "address": "0xcec765"
+        },
+        {
+          "address": "0xcec77a"
+        },
+        {
+          "address": "0xced251"
+        },
+        {
+          "address": "0xced2f8"
+        },
+        {
+          "address": "0xced307"
+        }
+      ],
+      "observation": "MARKREFRESH remaps selected-marker indices at +0xd18 after record swaps. FORMADDMARK receives the marker-list address at +0xd10, selects a new index and later clears selection to -1."
+    },
+    {
+      "names": [
+        "ED_HSCROLL",
+        "ED_TICKSPERPX"
+      ],
+      "sites": [
+        {
+          "address": "0xcefa9d"
+        },
+        {
+          "address": "0xcefaab"
+        },
+        {
+          "address": "0xcefab3"
+        },
+        {
+          "address": "0xcefad7"
+        }
+      ],
+      "observation": "Published TimePanelMouseDown reads a signed scroll dword at +0xae4, adds mouse x and multiplies by the double ticks-per-pixel at +0xad4."
+    },
+    {
+      "names": [
+        "PR_GRID",
+        "PL_GRID",
+        "GRID_VSCROLL"
+      ],
+      "sites": [
+        {
+          "address": "0xce3fc1"
+        },
+        {
+          "address": "0xce3fe0"
+        },
+        {
+          "address": "0xd221c1"
+        },
+        {
+          "address": "0xd22210"
+        },
+        {
+          "address": "0xd222a1"
+        },
+        {
+          "address": "0xd222ff"
+        },
+        {
+          "address": "0xd2239c"
+        },
+        {
+          "address": "0xd223b3"
+        }
+      ],
+      "observation": "Published TimeScrollerPaintKnob chooses playlist/piano grids at +0xcb8/+0xc00. VZoomSelectChange independently identifies the playlist grid and uses grid vertical scroll +0x3f8 in both branches."
+    },
+    {
+      "names": [
+        "MIX_STRIDE",
+        "MIX_ENABLED"
+      ],
+      "sites": [
+        {
+          "address": "0x1135298"
+        },
+        {
+          "address": "0x113529c"
+        },
+        {
+          "address": "0x113529f"
+        },
+        {
+          "address": "0x11352a3"
+        },
+        {
+          "address": "0x11352a7"
+        },
+        {
+          "address": "0x11352ab"
+        },
+        {
+          "address": "0x11352b3"
+        },
+        {
+          "address": "0x1135306"
+        }
+      ],
+      "observation": "MUTE forms track*555*4=track*0x8ac; a separate full-track loop increments by 0x8ac. Enabled remains the byte at +0x18."
+    },
+    {
+      "names": [
+        "MIX_SLOTS_OFF"
+      ],
+      "sites": [
+        {
+          "address": "0x1179964"
+        },
+        {
+          "address": "0x117997c"
+        },
+        {
+          "address": "0x1161b90"
+        },
+        {
+          "address": "0x1161bb8"
+        }
+      ],
+      "observation": "MIXNAME iterates ten effect pointers at track+0x75c+slot*8; SETROUTE independently reads the same slot base."
+    },
+    {
+      "names": [
+        "MIX_ROUTE"
+      ],
+      "sites": [
+        {
+          "address": "0x1161b09"
+        },
+        {
+          "address": "0x1161b17"
+        },
+        {
+          "address": "0x1161b1b"
+        },
+        {
+          "address": "0x1161b3f"
+        }
+      ],
+      "observation": "SETROUTE forms source-track record+0x2e4, advances by destination*8 and reads/writes enabled at route+4."
+    },
+    {
+      "names": [
+        "MAINFORM_READY"
+      ],
+      "sites": [
+        {
+          "address": "0xe8e243"
+        },
+        {
+          "address": "0xe8e24a"
+        },
+        {
+          "address": "0xe8e24d"
+        },
+        {
+          "address": "0xe8e254"
+        }
+      ],
+      "observation": "REC dereferences mapped MAINFORM and immediately dereferences its +0xf38 object before reading +0x47e. fl_ready must check +0xf38 on this build; existing +0xf30 is not the object consumed by REC."
+    },
+    {
+      "names": [
+        "PR_TOPKEY",
+        "PR_KEYH",
+        "GRID_VSCROLL"
+      ],
+      "sites": [
+        {
+          "address": "0xd2c140"
+        },
+        {
+          "address": "0xd2c146"
+        },
+        {
+          "address": "0xd2c148"
+        },
+        {
+          "address": "0xd2c14f"
+        }
+      ],
+      "observation": "Unique match of entire 22-byte reference key-to-y routine 0xd8c3b0 after masking only the three known field displacements: (topkey-key)*keyheight-vscroll. FL24 fields are +0x3d4,+0x510,+0x3f8; there is no uniform field shift."
+    },
+    {
+      "names": [
+        "ED_HWND"
+      ],
+      "sites": [
+        {
+          "address": "0xd7dd44"
+        },
+        {
+          "address": "0xd8ba44"
+        }
+      ],
+      "observation": "Published PrevPresetBtnClick and KeyboardFocusBtnClick pass form+0x45c as the handle to the same Win32-style message wrapper, using message IDs 0x54d and 0x54f. The existing HWND field remains unchanged."
+    },
+    {
+      "names": [
+        "PAT_NAME",
+        "PAT_COLOR",
+        "PAT_MARKERS"
+      ],
+      "sites": [
+        {
+          "address": "0x118b759"
+        },
+        {
+          "address": "0x118b75d"
+        },
+        {
+          "address": "0x118bc49"
+        },
+        {
+          "address": "0x118b35c"
+        }
+      ],
+      "observation": "Pattern name remains +0, color +8, marker-list address +0x30."
+    },
+    {
+      "names": [
+        "PL_TRK_STRIDE",
+        "PL_TRK_NAME",
+        "PL_TRK_COLOR"
+      ],
+      "sites": [
+        {
+          "address": "0x119bf5e"
+        },
+        {
+          "address": "0x119bf62"
+        },
+        {
+          "address": "0x119bf65"
+        },
+        {
+          "address": "0x119bf6d"
+        },
+        {
+          "address": "0x119bf89"
+        }
+      ],
+      "observation": "PLTRACK indexes tracks by (16+1)*4+1=69 then times4, giving stride0x114; name is +0x24 and color is name-pointer-base+8=track+0x2c."
+    }
+  ],
+  "abi_reviews": [
+    {
+      "name": "MOVECHAN",
+      "address": "0xe8a580",
+      "status": "statically_reviewed",
+      "sites": [
+        "0xe8a58f",
+        "0xe8a593",
+        "0xe8a596",
+        "0xe8a59a",
+        "0xe8a669",
+        "0xe8a6fc",
+        "0xe8a706",
+        "0xe8a8e7"
+      ],
+      "observations": [
+        "Captures object RCX, mode EDX, argument R8D and flags R9B before nested calls.",
+        "Dispatches low16 mode values1..5 to sort/move helpers; modes4/5 call the independently reviewed channel-selection move-up/down helpers.",
+        "Rebuilds the channel list, refreshes channels and playlist pattern controls, matching existing reorder semantics. Existing code passes modes4/5 and byte flags1; full EDX use does not alter these values."
+      ]
+    },
+    {
+      "name": "SAVEPROJ",
+      "address": "0x107a4b0",
+      "status": "statically_reviewed_with_protected_body_limitation",
+      "sites": [
+        "0x107a4bc",
+        "0x107a50b",
+        "0x107a5c0",
+        "0x107a5c4",
+        "0x107a5c6",
+        "0x107a5c9",
+        "0x107a5d1",
+        "0x107a76d",
+        "0x108bafc"
+      ],
+      "observations": [
+        "Captures path RCX and flag DL; later passes that path to mapped SAVEPRESET with mask0, object0 and saved flag as the fourth argument.",
+        "Returns a byte result from [rbp+0x2f] at0x107a76d. Published SaveMenuClick at0x108b5e0 calls this function at0x108bafc.",
+        "The protected region after0x107a519 is not established by linear decoding; the ABI and project-save use sites support the mapping, not complete deobfuscation."
+      ]
+    },
+    {
+      "name": "PLTRACK",
+      "address": "0x119bec0",
+      "status": "statically_reviewed",
+      "sites": [
+        "0x119beca",
+        "0x119bece",
+        "0x119bed1",
+        "0x119bedd",
+        "0x119bf6d",
+        "0x119bf79",
+        "0x119bf89"
+      ],
+      "observations": [
+        "Captures arrangement RCX, track EDX, color R9D and UnicodeString name R8.",
+        "Writes the name at arrangement+track*0x114+0x24 and color at+0x2c; also updates linked channel or mixer metadata. Existing four-argument ABI is supported."
+      ]
+    },
+    {
+      "name": "MARKADD",
+      "address": "0xea67c0",
+      "status": "statically_reviewed",
+      "sites": [
+        "0xea67c9",
+        "0xea67cd",
+        "0xea67d0",
+        "0xea67d4",
+        "0xea6807",
+        "0xea6839",
+        "0xea683e",
+        "0xea6841",
+        "0xea6852",
+        "0xea6857"
+      ],
+      "observations": [
+        "Captures marker-list address RCX, position EDX, action R9D, UnicodeString name R8. Reads fifth and sixth stack-byte arguments at RBP+0x70/+0x78 (entry RSP+0x28/+0x30).",
+        "Extends the array via mapped DYNSETLEN; record arithmetic gives0x34, then position/action/name at0/4/8 and time-signature data at0x10. FORMADDMARK independently forwards all six arguments."
+      ]
+    },
+    {
+      "name": "MSGBOX",
+      "address": "0xa7f920",
+      "mode": 2,
+      "core_address": "0x0",
+      "status": "statically_reviewed",
+      "sites": [
+        "0xa7f929",
+        "0xa7f92c",
+        "0xa7f92e",
+        "0xa7f95f",
+        "0xa7f962",
+        "0xa7f965",
+        "0xa7f97a",
+        "0xa7f982"
+      ],
+      "observations": [
+        "Preserves text RCX, flags EDX and callback R8, then passes them to the dialog initializer and returns the dialog result.",
+        "The first12 bytes exactly match existing mode2 guard: push r13/rdi/rsi/rbx; sub rsp,0x38; mov rbx,rcx. None are position-dependent; byte12 resumes at mov esi,edx (0xa7f92c).",
+        "Existing mode2 trampoline copies only whole instructions and can resume at+12 without operand relocation. No runtime hook or dialog behavior was tested here."
+      ]
+    },
+    {
+      "name": "SETPROJ",
+      "address": "0x106ea20",
+      "status": "statically_reviewed",
+      "sites": [
+        "0x106ebd9",
+        "0x106ebe0",
+        "0x106ebe7",
+        "0x106ebee",
+        "0x106ebf6",
+        "0x106ec04",
+        "0x106ec09",
+        "0x106ec17",
+        "0x106ec39",
+        "0x106ec57",
+        "0x120b2da",
+        "0x1215008"
+      ],
+      "observations": [
+        "Captures form RCX, first path RDX, second path R8 and addRecent R9B after the large stack-probe setup.",
+        "Assigns UnicodeString globals0x1512e68 and mapped PROJNAME0x1512e70 through the standard string assignment helper.",
+        "Calls published UpdatePathLabels0x1213970 and gates recent-project logic on the captured addRecent flag.",
+        "Independent published callers RenameProjectBtnClick0x120aab0 and ProjDataPathBtnClick0x1214cf0 invoke this function at0x120b2da and0x1215008. This rejects the possibility that the mapping is merely a shared stack-probe prefix."
+      ]
+    }
+  ],
+  "project_vmt": {
+    "class_name": "TFLProject",
+    "rtti": "0xf3fc60",
+    "class_pointer_location": "0xf3fc6c",
+    "vmt": "0xf3fb48",
+    "entries": [
+      {
+        "name": "FLPROJ_LOAD_SLOT",
+        "slot": "0x28",
+        "function": "0xf43b30",
+        "reference_slot": "0x38"
+      },
+      {
+        "name": "PATOP_CLONE_SLOT",
+        "slot": "0xc8",
+        "function": "0xf40c60",
+        "reference_slot": "0xd8"
+      },
+      {
+        "name": "PATOP_DELETE_SLOT",
+        "slot": "0xd0",
+        "function": "0xf41030",
+        "reference_slot": "0xe0"
+      },
+      {
+        "name": "PATOP_REARRANGE_SLOT",
+        "slot": "0xd8",
+        "function": "0xf417b0",
+        "reference_slot": "0xe8"
+      },
+      {
+        "name": "PATOP_EDIT_SLOT",
+        "slot": "0xe0",
+        "function": "0xf42080",
+        "reference_slot": "0xf0"
+      },
+      {
+        "name": "PATOP_INSERT_SLOT",
+        "slot": "0xe8",
+        "function": "0xf415a0",
+        "reference_slot": "0xf8"
+      },
+      {
+        "name": "PATOP_SPLIT_SLOT",
+        "slot": "0xf0",
+        "function": "0xf42be0",
+        "reference_slot": "0x100"
+      }
+    ],
+    "signatures": [
+      {
+        "name": "FLPROJ_LOAD_SLOT",
+        "reference": "0xdc2e30",
+        "signature_level": 1,
+        "signature_length": 25,
+        "hits": [],
+        "vmt_matches": []
+      },
+      {
+        "name": "PATOP_CLONE_SLOT",
+        "reference": "0xdbfcb0",
+        "signature_level": 1,
+        "signature_length": 31,
+        "hits": [
+          "0xf40c60"
+        ],
+        "vmt_matches": [
+          {
+            "slot": "0xc8",
+            "function": "0xf40c60"
+          }
+        ]
+      },
+      {
+        "name": "PATOP_DELETE_SLOT",
+        "reference": "0xdc00c0",
+        "signature_level": 1,
+        "signature_length": 29,
+        "hits": [
+          "0xf41030"
+        ],
+        "vmt_matches": [
+          {
+            "slot": "0xd0",
+            "function": "0xf41030"
+          }
+        ]
+      },
+      {
+        "name": "PATOP_REARRANGE_SLOT",
+        "reference": "0xdc0850",
+        "signature_level": 1,
+        "signature_length": 27,
+        "hits": [
+          "0xf417b0"
+        ],
+        "vmt_matches": [
+          {
+            "slot": "0xd8",
+            "function": "0xf417b0"
+          }
+        ]
+      },
+      {
+        "name": "PATOP_EDIT_SLOT",
+        "reference": "0xdc1150",
+        "signature_level": 1,
+        "signature_length": 26,
+        "hits": [
+          "0xf42080"
+        ],
+        "vmt_matches": [
+          {
+            "slot": "0xe0",
+            "function": "0xf42080"
+          }
+        ]
+      },
+      {
+        "name": "PATOP_INSERT_SLOT",
+        "reference": "0xdc0640",
+        "signature_level": 1,
+        "signature_length": 26,
+        "hits": [
+          "0xf415a0"
+        ],
+        "vmt_matches": [
+          {
+            "slot": "0xe8",
+            "function": "0xf415a0"
+          }
+        ]
+      },
+      {
+        "name": "PATOP_SPLIT_SLOT",
+        "reference": "0xdc1da0",
+        "signature_level": 1,
+        "signature_length": 66,
+        "hits": [],
+        "vmt_matches": []
+      }
+    ],
+    "abi_reviews": [
+      {
+        "name": "FLPROJ_LOAD_SLOT",
+        "observations": [
+          "0xf43b6f/0xf43b76/0xf43b7d capture self RCX, path RDX, flags R8B.",
+          "0xf43ba6..0xf43bb3 classifies against eight filename extensions; 0xf43bd2 tests flag bit0 before the save-changes virtual call.",
+          "Initial reference signature does not match because register saves and local-string bookkeeping differ. The incoming arguments, extension classifier and save-prompt logic agree."
+        ]
+      },
+      {
+        "name": "PATOP_SPLIT_SLOT",
+        "observations": [
+          "0xf42bef/0xf42bf3 capture RDX open-array pointer and R8 bound; self RCX is unused.",
+          "0xf42c57..0xf42cb5 iterates the pattern numbers backward, invoking per-pattern split helper 0x1192550 at 0xf42c9f, then refreshes patterns and playlist.",
+          "Reference 0xdc1da0 has the same argument roles and per-pattern split loop but differs in prompt helper and helper-result handling. Return values and cancel behavior require runtime coverage."
+        ]
+      },
+      {
+        "name": "other_pattern_slots",
+        "observations": [
+          "Clone, delete, rearrange, edit and insert have unique level-one reference prefix matches within the TFLProject VMT.",
+          "Clone and delete capture RDX array and R8 bound; rearrange captures RDX/R8/R9D at 0xf417bf..0xf417c7.",
+          "Edit captures RCX/RDX/R8/R9D at 0xf42092..0xf4209e. Insert captures a single EDX pattern index at0xf415a9."
+        ]
+      }
+    ]
+  },
+  "playlist_refresh_adapter": {
+    "status": "inlined_reference_behavior_identified",
+    "reference_form_wrapper": "0xd45d90",
+    "reference_signature": "void refresh(void *form)",
+    "reference_wrapper_behavior": [
+      "If form+0xc40 is nonnull, call grid helper0xd90e60 with that pointer, then no-argument helper0x11d2a90.",
+      "If form+0xd04 is nonnull, call grid helper0xd90e60 with that pointer."
+    ],
+    "target_grid_helper": "0xd30840",
+    "target_note_refresh_helper": "0x118a8c0",
+    "target_grid_helper_instructions": [
+      "d30840: mov byte ptr [rcx + 0x534], 1",
+      "d30847: ret "
+    ],
+    "helper_signatures": [
+      {
+        "reference": "0xd90e60",
+        "target": "0xd30840",
+        "level": 2,
+        "bytes": 29,
+        "unique": true
+      },
+      {
+        "reference": "0x11d2a90",
+        "target": "0x118a8c0",
+        "level": 1,
+        "bytes": 31,
+        "unique": true
+      }
+    ],
+    "independent_caller_matches": [
+      {
+        "reference": "0x11fc880",
+        "target": "0x11b14a0",
+        "signature_level": 1,
+        "signature_bytes": 29,
+        "sites": [
+          "0x11b1661",
+          "0x11b1668",
+          "0x11b1670",
+          "0x11b1675",
+          "0x11b1684",
+          "0x11b168b",
+          "0x11b1693"
+        ]
+      },
+      {
+        "reference": "0x11e3810",
+        "target": "0x1197f20",
+        "signature_level": 1,
+        "signature_bytes": 26,
+        "sites": [
+          "0x1197f3d",
+          "0x1197f44",
+          "0x1197f4c",
+          "0x1197f51",
+          "0x1197f60",
+          "0x1197f67",
+          "0x1197f6f"
+        ]
+      }
+    ],
+    "observations": [
+      "Both unique reference caller matches contain the same reference form-wrapper behavior inline, using target PR_GRID0xc00 and PL_GRID0xcb8.",
+      "Neighboring reference functions0xd45d50 and0xd45dd0 map to adjacent target functions0xce0c80 and0xce0cc0, with no intervening standalone wrapper.",
+      "Calling target_grid_helper with a form is incorrect: its RCX argument must be a grid."
+    ],
+    "integration_recommendation": "Set exact24 PLREFRESH=0xd30840. In the exact24 local form adapter, use profile PR_GRID and PL_GRID offsets. If the piano grid is nonnull, call PLREFRESH(grid), then exact24 no-argument helper0x118a8c0; if the playlist grid is nonnull, call PLREFRESH(grid). Preserve existing function dispatch for other builds.",
+    "runtime_validated": false,
+    "candidate_profile_PLREFRESH": "0xd30840",
+    "candidate_profile_semantics": "On exact24.2.2.4597 only, PLREFRESH stores the grid invalidator address. The engine local adapter retains the form-taking external contract; other builds keep the original form wrapper semantic.",
+    "note_refresh_abi_evidence": {
+      "address": "0x118a8c0",
+      "signature": "void(void)",
+      "observations": [
+        "Prologue only saves callee-preserved registers and initializes locals; it does not capture RCX,RDX,R8 or R9.",
+        "At0x118a8e0 it overwrites ECX with the current-pattern global before its first call0x118a8e6.",
+        "At0x118a8ed..0x118a8f7 it loads mapped CHANLIST itself and gets count; the subsequent loop resolves each channel at0x118a92c and refreshes its UI objects.",
+        "The independent inline caller sequences invoke it immediately after the one-argument grid invalidator, with no argument setup."
+      ]
+    }
+  },
+  "wire_observations": {
+    "notes": {
+      "native_size": 24,
+      "array_data": 8,
+      "array_element_size": 16,
+      "array_count": 20,
+      "pattern_stride_fl24": 144,
+      "pattern_note_pointer": 40,
+      "coverage": "Element width, array addressing and insertion reviewed. Complete bit-level semantic identity, selection handling and persisted-note behavior still need runtime tests."
+    },
+    "clips": {
+      "native_size_fl24": 60,
+      "canonical_size": 80,
+      "common_prefix": {
+        "offset": 0,
+        "size": 60,
+        "proof": "Same base note-array copy/add and clip defaults; array holders+0x14/+0x1c unchanged. ID+0x20 regenerated natively.",
+        "ownership": "FL24 RTTI TPLEvent at0xe9aa70: size60 and0 managed fields. TPLFades at0xe9aa48: size24 and0 managed fields. TNoteEvent at0xe9a780: size24 and0 managed fields. Common prefix contains no Delphi managed references. Native purge removes external association by scalar ID+0x20; add replaces thatID.",
+        "common_fades": {
+          "offset": 36,
+          "size": 24,
+          "default_dwords": [
+            "0",
+            "0",
+            "0",
+            "0",
+            "0x3f800000",
+            "0"
+          ],
+          "scalar_flags_offset": 56,
+          "scalar_float_offset": 52
+        }
+      },
+      "fl25_extension": [
+        {
+          "offset": 60,
+          "size": 4,
+          "type": "float",
+          "default_bits": "00000000"
+        },
+        {
+          "offset": 64,
+          "size": 8,
+          "type": "double",
+          "default_bits": "000000000000f03f"
+        },
+        {
+          "offset": 72,
+          "size": 4,
+          "type": "dword",
+          "default_bits": "00000000"
+        },
+        {
+          "offset": 76,
+          "size": 4,
+          "type": "dword",
+          "default_bits": "00000000"
+        }
+      ],
+      "upconvert": "Copy60 common bytes; append native FL25 defaults exactly.",
+      "downconvert": "Refuse the entire operation before any FL mutation if any appended20 bytes differ from defaults; otherwise copy the common60 bytes.",
+      "caution": "Defaults/dataflow support this candidate conversion, but whole common-prefix semantic identity and all new-field meanings are not exhaustively established. FL25 field+0x4c participates in additional processing lookup; default-only downconversion avoids importing that association intoFL24. Do not claim full mixed-runtime support before testing."
+    },
+    "markers": {
+      "native_size": 52,
+      "name_pointer": 8,
+      "scalar_tail_offset": 16,
+      "scalar_tail_size": 36,
+      "numerator": 16,
+      "denominator": 17,
+      "rtti": {
+        "address": "0xe9b3f0",
+        "kind": "tkRecord",
+        "record_size": 52,
+        "managed_fields": 1,
+        "managed_field_offset": 8,
+        "managed_field_type": "UnicodeString"
+      },
+      "coverage": "RTTI proves only the name is managed. Marker add and published time-signature editor corroborate common fixed fields; every scalar-tail subtype not yet exercised."
+    },
+    "arrangement": {
+      "clip_arrays": [
+        20,
+        28
+      ],
+      "track_stride": 276,
+      "track_name": 36,
+      "track_color": 44,
+      "coverage": "Constructor and track setter agree for these fields. Other arrangement/editor offsets are outside this focused report."
+    },
+    "rec": {
+      "canonical_mixer_base": "0x70000000",
+      "fl24_mixer_base": "0x20000000",
+      "fl24_native_mixer_range": [
+        "0x20000000",
+        "0x40000000"
+      ],
+      "upper_exclusive": true,
+      "encoded_tracks": 128,
+      "track_shift": 22,
+      "slot_shift": 16,
+      "slot_mask": 63,
+      "channel_range": [
+        "0x00000000",
+        "0x10000000"
+      ],
+      "channel_shift": 16,
+      "channel_subids": [
+        0,
+        1,
+        7,
+        8
+      ],
+      "plugin_parameter_first": "0x8000",
+      "mixer_subids": [
+        "0x1fc0",
+        "0x1fc1",
+        "0x1fc2"
+      ],
+      "mapping": "For valid canonical mixer/effect IDs in[0x70000000,0x90000000), local_id=canonical_id-0x50000000. Keep channel IDs and values unchanged.",
+      "exclusions": [
+        "Pseudo mute IDs0xf0000000 are client-only; handle them before translation.",
+        "REC_NONE0xffffffff is a return sentinel, never a target parameter.",
+        "Do not translate FL24 global controls0x40000000/01/02/05 or unknown namespaces.",
+        "Use unsigned arithmetic; reject unsupported canonical tracks instead of wrapping."
+      ],
+      "integration": "Apply mapping only at the two g_rec calls in engine read_value/write_value. All caches, hashes and wire IDs remain canonical; there is currently no g_rec hook or physical-ID input requiring reverse conversion.",
+      "unavailable_result": {
+        "fl24": "0x7fffffff",
+        "fl25_reference": "0xffffffff",
+        "fl24_initialization_va": "0xe8e229",
+        "fl24_return_va": "0xe941ed",
+        "fl24_missing_channel_bound_va": "0xe8e914",
+        "fl24_missing_channel_cleanup_va": "0xe941a5",
+        "fl24_successful_result_copy_va": "0xe94198",
+        "fl25_initialization_va": "0xf54329",
+        "integration": "Normalize both getter and setter results to canonical REC_NONE only for exact 24.2.2.4597",
+        "local_static_evidence_sha256": "78f683d4e45064ef1566a34ab1c0f5efb034ece4ff63f4721081be0031e41d31",
+        "method": "Offline Capstone instructions from each exact SHA-256-bound PE; not Ghidra decompilation"
+      },
+      "bounds": {
+        "fl24_tracks": 126,
+        "effect_slots": 10,
+        "native_effect_slot_indexing_va": "0xe9378d",
+        "observation": "Native effect lookup indexes the decoded slot without a local slot bound in the reviewed branch",
+        "integration": "Reject canonical tracks outside mix_count and slots 10..63 before native getter/setter, inbound routing or retry"
+      }
+    }
+  },
+  "limitations": [
+    "Static findings do not attest runtime compatibility.",
+    "Proprietary binaries and raw decompiler output remain outside the repository.",
+    "Exact24.2.2.4597 only; adjacent builds remain refused."
+  ]
+}

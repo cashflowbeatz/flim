@@ -1,0 +1,60 @@
+{
+  "version": "0.2.23",
+  "date": "2026-10-28T12:30:21.054406-04:00",
+  "localOnly": true,
+  "changes": 39,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.23-win64.exe",
+    "bytes": 103553593,
+    "unpackedBytes": 384905109,
+    "sha256": "1170908f419fe86433d5b11c6751a22922e27fb9c1d6aff1d4f869daa8d9485c"
+  },
+  "native": {
+    "changed": true,
+    "launcher": "9a5cfd77f7e30f8218255d8c42e7f9cba319deb1b9b99bf71600fd3f34fc6449",
+    "engine": "3ba993ffde97c8de3478aaef066454ee71df8db4c40fb8f076f135a777685e67",
+    "profilesChanged": false
+  },
+  "desktopTests": 177,
+  "roomUiChecks": 127,
+  "filesUiChecks": 68,
+  "nativeHarnessExecutables": 31,
+  "localCloudflareTests": 73,
+  "newNativeHarness": "t_edit_compat",
+  "newNativeRegressionsIn": [
+    "t_edit_compat",
+    "t_metadata",
+    "t_notes",
+    "t_notes_crdt",
+    "t_clip_native",
+    "t_plugins",
+    "t_queues"
+  ],
+  "loopbackFileStore": {
+    "uploads": 1,
+    "downloads": 13,
+    "sourceUntouched": true
+  },
+  "packagedStartup": true,
+  "portableStartup": true,
+  "browserErrors": [],
+  "reviewedBuilds": [
+    "24.2.2.4597",
+    "25.2.5.5319",
+    "26.1.7.5654"
+  ],
+  "syntheticNativeHostMemberCombinations": 9,
+  "noFreshTwoComputerOrMidiTest": true,
+  "sampleLocation": {
+    "scope": "received shared files per computer",
+    "changedThisRound": false,
+    "appliesTo": "next launched FL process"
+  },
+  "githubPush": false,
+  "githubCommit": false,
+  "cloudflareDeployment": false,
+  "evidence": "client/desktop/test/evidence/0.2.23",
+  "report": "client/desktop/QA-0.2.23.md",
+  "antislop": "Existing visual design retained; functional/UI regressions passed; sidebar image inspected",
+  "userFLObservedAtEnd": "[private workstation process observation omitted]"
+}

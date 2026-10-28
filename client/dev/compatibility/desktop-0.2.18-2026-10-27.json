@@ -1,0 +1,54 @@
+{
+  "version": "0.2.18",
+  "date": "2026-10-27T13:37:02.0138049-04:00",
+  "localOnly": true,
+  "changes": 43,
+  "artifact": {
+    "file": "client/desktop/release/flim-rooms-0.2.18-win64.exe",
+    "bytes": 103548596,
+    "unpackedBytes": 384884699,
+    "sha256": "bade73564bb5c5faa9b4b44ab05eea0c4a0e38fd820faf8043b3ef494a8f2873"
+  },
+  "native": {
+    "engine": "94de8224c448bf3e3dddf4a897d6a1ffd5a652aa90b8f3e7fa3e016d4c67209a",
+    "priorValidation": "desktop-0.2.16-2026-10-27.json",
+    "changed": false,
+    "launcher": "4157b725f0b51a9d5b506177ca1708016fc27c3bc53937c73ab0913d22ba85e2"
+  },
+  "desktopTests": 107,
+  "roomUiChecks": 106,
+  "filesUiChecks": 29,
+  "browserErrors": [],
+  "nativeWindowChecks": [
+    "ten Create/Join switches preserve native geometry",
+    "immediate keyboard input",
+    "400/680px sidebar placement without transient collapse",
+    "sidebar focus restoration",
+    "200% zoom",
+    "bounded renderer crash recovery"
+  ],
+  "packagedStartup": true,
+  "portableStartup": true,
+  "portableExtraction": {
+    "initialCDriveFailure": "Insufficient disk space, about 75 MiB free",
+    "testedTempDrive": "D:",
+    "processOnlyTempOverride": true,
+    "archiveIntegrityPassed": true,
+    "minimumRecommendedTempBytes": 600000000
+  },
+  "reviewedBuilds": [
+    "24.2.2.4597",
+    "25.2.5.5319",
+    "26.1.7.5654"
+  ],
+  "noFreshTwoComputerOrMidiTest": true,
+  "userFL": {
+    "pid": null,
+    "start": "2026-10-27T08:20:55.9275592-04:00"
+  },
+  "githubPush": false,
+  "cloudflareDeployment": false,
+  "evidence": "client/desktop/test/evidence/0.2.18",
+  "report": "client/desktop/QA-0.2.18.md",
+  "antislop": "PASS"
+}

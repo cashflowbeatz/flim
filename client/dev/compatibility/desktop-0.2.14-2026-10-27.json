@@ -1,0 +1,119 @@
+{
+  "version": "0.2.14",
+  "verifiedAt": "2026-10-27",
+  "newRefinements": 37,
+  "packagedAsarSha256": "e9bec37e8bde0f1f60b6f60ba0de731ee0e6dc6d3f5177d18d48bf45e57be9d6",
+  "scope": "Local UI/bridge/native sample-lookup refinement; no new live cross-machine FL or physical MIDI run",
+  "artifacts": [
+    {
+      "path": "release/flim-rooms-0.2.14-win64.exe",
+      "bytes": 103617231,
+      "sha256": "4413437fbb88392df7c081cdcc55bc7c34696eb59ea751dc8b33097d99b988c5"
+    },
+    {
+      "path": "../out-experimental/flim.exe",
+      "bytes": 311296,
+      "sha256": "32f5707b2d98d1c796f401ff1ba52f97de4a001e8929a347569476c2923e23a0"
+    },
+    {
+      "path": "../out-experimental/flim_engine.dll",
+      "bytes": 592896,
+      "sha256": "9b8460d6d8ec9d8bfa45729c3b1737ac325deb05cfa3360cba73475b65a552ac"
+    },
+    {
+      "path": "../out-experimental/profiles/25.2.5.5319.profile",
+      "bytes": 1646,
+      "sha256": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e"
+    },
+    {
+      "path": "../out-experimental/profiles/26.1.7.5654.profile",
+      "bytes": 1658,
+      "sha256": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+    }
+  ],
+  "checks": {
+    "desktopTests": {
+      "passed": 91,
+      "log": "client/desktop/test/latest-unit-0214.log"
+    },
+    "ui": {
+      "passed": 81,
+      "unexpectedErrors": 0,
+      "result": "client/desktop/test/evidence/0.2.14/ui-results.json"
+    },
+    "nativeHarnesses": {
+      "passed": 29,
+      "log": "client/desktop/test/latest-harness-0214.log"
+    },
+    "nativeWinHttp": {
+      "passed": 8,
+      "result": "client/desktop/test/evidence/0.2.14/native-transfer-results.json"
+    },
+    "rendererRecovery": {
+      "passed": true,
+      "realCrashes": 3,
+      "automaticRetries": 2,
+      "mainPidAndBridgeStatePreserved": true,
+      "result": "client/desktop/test/evidence/0.2.14/recovery-results.json"
+    },
+    "packagedStartup": {
+      "passed": true,
+      "result": "client/desktop/test/evidence/0.2.14/package-results.json"
+    },
+    "portableStartup": {
+      "passed": true,
+      "result": "client/desktop/test/evidence/0.2.14/portable-results.json"
+    },
+    "build": {
+      "typescript": true,
+      "vite": true,
+      "nativeExperimental": true,
+      "portablePublish": "never"
+    },
+    "window": {
+      "closed": [
+        472,
+        395
+      ],
+      "setup": [
+        472,
+        666
+      ],
+      "zoom200Capped": [
+        928,
+        1008
+      ]
+    },
+    "designGate": {
+      "passed": true,
+      "report": "client/desktop/QA-0.2.14.md"
+    }
+  },
+  "compatibility": {
+    "installed": [
+      "24.2.2.4597",
+      "25.2.5.5319",
+      "26.1.7.5654"
+    ],
+    "experimental": [
+      "24.2.2.4597"
+    ],
+    "exactProfilesUnchanged": true,
+    "unknownPatchesAutomaticallySupported": false,
+    "anySupportedHostWithPortableFallback": true,
+    "liveSessionEvidence": "Prior six-direction native/relay evidence remains in 0.2.11; not rerun here",
+    "physicalMidiRetested": false,
+    "knownIssue": "Intermittent FL24 recovery-save stall remains unresolved"
+  },
+  "userSession": {
+    "fl24Pid": null,
+    "startLocal": "2026-10-27T08:20:55.9275592-04:00",
+    "leftOpen": true,
+    "launchedOrStoppedFl": false
+  },
+  "externalChanges": {
+    "githubWrite": false,
+    "cloudflareDeployment": false
+  },
+  "report": "client/desktop/QA-0.2.14.md"
+}

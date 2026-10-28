@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "recorded_utc_date": "2026-10-24",
+  "requested_build": "24.2.2.4597",
+  "status": "experimental_candidate_runtime_incomplete",
+  "runtime_validated": false,
+  "reviewed_fl24_profile_exported": false,
+  "desktop_package_rebuilt": false,
+  "target_sha256": "5e5d083bd0f0fcbc8d948570cf4c27c7e9349e6851478c7a9c05a11509ab8f32",
+  "official_archive": "24.2.2.4597-investigation.json",
+  "static_mapping": "24.2.2.4597-static.json",
+  "observed_runtime": {
+    "isolation": "Extracted signed FL24 files; setup not executed. Disposable per-process settings/profile, stock empty project, loopback relay.",
+    "startup_failures": "Early isolated launches failed while FL created nonvolatile children beneath volatile registry clones. Nonvolatile clones fixed this; DLL-context isolation probe passed.",
+    "boot_and_room_admission": true,
+    "selected_exact_address_table": true,
+    "readiness_and_pattern_vmt_hook": "Observed in logs; this is partial evidence only",
+    "before_missing_value_fix": "Scanner filled MAX_SLOTS=65536 with nonexistent values",
+    "after_missing_value_fix": "Scanner settled at 508 parameters with 126 mixer tracks",
+    "project_snapshot_transfer": "FL24 host wrote and sent snapshots; FL24 member accepted file version and called its native loader",
+    "native_project_loader_return": 0,
+    "license_observation": "Owned FL24 welcome window reported trial mode; Update your license dialogs also appeared",
+    "feature_attempts": [
+      {
+        "tag": "f24h",
+        "passed": 0,
+        "total": 6,
+        "missing_value_fix": false
+      },
+      {
+        "tag": "f24i",
+        "passed": 0,
+        "total": 6,
+        "missing_value_fix": true
+      }
+    ],
+    "feature_scope": [
+      "channel volume",
+      "mixer volume",
+      "mixer mute",
+      "mixer name",
+      "mixer color",
+      "mixer routing"
+    ],
+    "conclusion": "No successful project sync or bidirectional edit attestation. Trial mode and failed loading were observed; further native incompatibilities remain possible.",
+    "recorded_notes": "Not validated in FL24",
+    "mixed_fl24_host_fl25_member": "Not run; successful same-build project loading required first",
+    "mixed_fl24_host_fl26_member": "Not run; successful same-build project loading required first",
+    "runtime_client_binary": {
+      "artifact": "Local isolated-build/flim_engine.dll",
+      "sha256": "0fbdda63f3c9524f3f15fd74df0cf8a2bbce6968e9efe1bba9b64fcc3d92b699",
+      "revision_scope": "Contains the missing-value and slot-bound fixes; predates the final project-load failure handling. Final failure handling verified by native harness only."
+    }
+  },
+  "fixes_verified_offline": [
+    "Exact FL24-only unavailable-result normalization; FL25 sentinel behavior retained",
+    "Track/effect-slot bounds before native REC access, plus effect-object bounds",
+    "60-to-80-byte clips and refusal of unrepresentable newer extension fields before local replacement",
+    "Project loader refusal/fault/missing objects/path/allocation failure stops sharing and blocks queued edits",
+    "Busy-state cleanup attempted after loader exception; received save name assigned only after loader success",
+    "Unready startup timeout leaves sharing disabled",
+    "Hermetic sample-cache test fixture"
+  ],
+  "checks": {
+    "native_executables": {
+      "passed": 20,
+      "failed": 0,
+      "results": [
+        {
+          "test": "t_samples",
+          "exit": 0
+        },
+        {
+          "test": "t_ws_buffer",
+          "exit": 0
+        },
+        {
+          "test": "t_launcher",
+          "exit": 0
+        },
+        {
+          "test": "t_injection",
+          "exit": 0
+        },
+        {
+          "test": "t_injection_experimental",
+          "exit": 0
+        },
+        {
+          "test": "t_build_gate",
+          "exit": 0
+        },
+        {
+          "test": "t_build_gate_experimental",
+          "exit": 0
+        },
+        {
+          "test": "t_patops",
+          "exit": 0
+        },
+        {
+          "test": "t_compat",
+          "exit": 0
+        },
+        {
+          "test": "t_clip",
+          "exit": 0
+        },
+        {
+          "test": "t_clip_native",
+          "exit": 0
+        },
+        {
+          "test": "t_cloud",
+          "exit": 0
+        },
+        {
+          "test": "t_profiles",
+          "exit": 0
+        },
+        {
+          "test": "t_profile_loader",
+          "exit": 0
+        },
+        {
+          "test": "t_flp",
+          "exit": 0
+        },
+        {
+          "test": "t_plugin_apply",
+          "exit": 0
+        },
+        {
+          "test": "t_metadata",
+          "exit": 0
+        },
+        {
+          "test": "t_notes",
+          "exit": 0
+        },
+        {
+          "test": "t_rooms",
+          "exit": 0
+        },
+        {
+          "test": "t_project_load",
+          "exit": 0
+        }
+      ]
+    },
+    "native_transfer": {
+      "passed": 4,
+      "scope": "1025 references in 512/512/1 batches, partial upload writes, download checksum, stale-session cancellation"
+    },
+    "python": {
+      "passed": 72,
+      "failed": 0
+    },
+    "cloudflare_local_emulator": {
+      "passed": 33,
+      "failed": 0,
+      "scope": "Includes exact FL24 relay admission/logical edits, adjacent-build and incompatible newer-state refusals; this does not run FL"
+    },
+    "node_relay": "Full npm test passed, including compatibility and session suites",
+    "native_default_build": "Passed",
+    "native_experimental_build": "Passed",
+    "fl25_fl26_native_runtime_regression_after_these_changes": "Not rerun; previous records remain historical evidence",
+    "git_diff_check": "Passed"
+  },
+  "existing_window_forwarding_incident": {
+    "observation": "An early scratch launch supplied Empty.flp as a command-line argument. FL24 forwards nonempty arguments to an existing FL window across build/settings boundaries.",
+    "impact": "The pre-existing FL26 window showed Empty.flp afterward; its prior title is unknown. Its in-memory project may have changed. No original file was deliberately overwritten.",
+    "mitigation": "Project argument removed; later launches use disposable registry startup settings and no file argument. Pre-existing process not stopped or manipulated afterward.",
+    "static_launch_evidence_sha256": "6dc76ddd06bb77a4da3ccbb78cca790c8bb567fb3c4b8c27ac039c2ae1e8917c"
+  },
+  "cleanup": {
+    "owned_fl24_pairs_stopped_by_creation_time_and_executable": true,
+    "loopback_test_relay_stopped_by_identity": true,
+    "disposable_registry_copies_removed": true,
+    "disposable_registry_parent_empty_on_final_check": true,
+    "preexisting_fl26_process": "PID54208, creation ticks639283988865426402, original executable identity still present; no lifecycle actions against it",
+    "installer_never_executed": true
+  },
+  "resume": {
+    "requirement": "Legitimately unlocked exact FL24 runtime; user deferred activation",
+    "remaining": [
+      "Successful same-build project loading and feature suite",
+      "Recorded-note and playlist behavior both directions",
+      "FL24 host with FL25 member",
+      "FL24 host with FL26 member",
+      "Current FL25/26 runtime regression",
+      "Export reviewed profile only after all runtime requirements pass"
+    ],
+    "unknown_adjacent_builds": "Remain refused"
+  },
+  "publication": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  },
+  "current_source_sha256": {
+    "client/engine/flim_engine.c": "1a3ec6e977e1973b69ae6b175a5370154cd75c0955ad02bf31e10dc7d9979ccc",
+    "client/common/flim_clip.h": "28310902fb38c5ff473e476f8b9a369540384c52f5ac8df34883b084dffccb7c",
+    "client/common/flim_compat.h": "f68b73914add5625f59d35a6a3ce0635b65e226f5ffd04e373d0b0f921441dde",
+    "client/common/flim_profile.h": "b561879fb59754a18317e57469abfb6ac3d58069e5d61930a6b9465d6679f0b4",
+    "client/common/flim_config.h": "3caa680ccf5cf6534fc6d25ebc81c45b4b07e4a21d1c1a5f19a03f113335566d",
+    "client/build.bat": "240b84292822e2dbe9d88d824117c7713b4c3ffad622ee3fb63764090854aba6",
+    "client/dev/harness/t_clip_native.c": "92e1967189d7827047e6250380e02f421ce1c6bd1cd9688e3298495efd062c7a",
+    "client/dev/harness/t_project_load.c": "f58a28ce18bd3876f7a2b767dfc084fcc9116bb99607a6e40559e39efa405d12",
+    "client/dev/harness/t_samples.c": "5c55fed1e6c380489d16bc6be5eb8ec329499efa74e9b4f15855b9511683abcd",
+    "client/dev/harness/build.bat": "8d74f314e8085ca9e3ac5d97542a288431076dcd2b86bd1b234a16b7c04961bf",
+    "server/src/compatibility.ts": "11ed06b62981a9c553b527b44598d0f5c30cc9f943c7657dbff8b1b629b0c6f1",
+    "server/cloudflare/test/relay.test.mjs": "68ee63095fdca2189058c14c07dc1a88e25ee529a0eb992118a5043fc5d708b4"
+  },
+  "final_build_sha256": {
+    "client/out/flim.exe": "1aa1b3ed85e402e41ac01e18551ef7d8843974c70fba436b54bac5c991c4de78",
+    "client/out/flim_engine.dll": "b31e344d5795379825f88e7043232e49d103a7ef2a541922c871c4f43a51ccca",
+    "client/out-experimental/flim.exe": "9681a55d876a177d2c54bb1341d5d19bd7ac9b73551aa0f26a4148eab9cb9b34",
+    "client/out-experimental/flim_engine.dll": "1aae855db5d1bb725debdf3ea6918a79d72d941df4dc3291f87782a608373cbb"
+  },
+  "local_evidence_sha256": {
+    "f24h-basic.log": "d31cfa0e0a35b75b31f2d423e7f6b1c500ad460f9dab9353f1b26207ba40fab5",
+    "f24i-basic.log": "48a470283d5d869d9b3397a8af67b1dcbc54e4e376d97ad6879753ebed7ae5ef",
+    "fl24-native-tests.log": "38f6d0e9ed682a260757a558aa973f8251573c28cd2bc9838e9fcd4f5c19026d",
+    "fl24-native-test-results.json": "0b8e052f4992f9aa6c17a8ab74ef56229730c1adfb93b2c9a91046b21d3e53a9",
+    "fl24-native-transfer.log": "e6e5001cb78f702888f5030e90e8d7cbd4eb240d3f0c1a748ab015af3d5d6e44",
+    "fl24-python-tests.log": "e5b6aa1ab15d115c7a389a3186c5f37502a289678ecff7d8b55d62c34a31d4f4",
+    "fl24-cloudflare-tests.log": "b26fdd3ae32e0fccfe2ed6e4953dc0e019bc9e2bc3d628049c0b1617d26eb3b8",
+    "fl24-relay-tests.log": "cbf36f4ff4ce31850287e0b381f9a26cb5df918cc443fd5f6e72a48265bdd610",
+    "fl24-harness-build.log": "c00ed5c16b4015203df4d3442f6b5560e3ed03eb175be578833860faafda384d",
+    "fl24-default-build.log": "46b7bd370b62663d194bd6642824f856cb40e13235c11ef1a45ed61be1407048",
+    "fl24-native-build.log": "a46b69345ed269f7ca553afa324172442cb6eca00efa188bb91b69669528d186",
+    "i/f24h-A/Temp/flim_engine.log": "06feb1009cbad9b76fa47b7bd8308fa5a8879a45596e010b98b58b6cbdbfc872",
+    "i/f24h-B/Temp/flim_engine.log": "34469dfaf791803abb0e194dc02009963c96b3ce6e6c56d3a880c7c0ac7ee3d8",
+    "i/f24i-A/Temp/flim_engine.log": "746849094ef0301da67612254ca3bbe41f9bf4bf783542eb38ba1d349c37a4b1",
+    "i/f24i-B/Temp/flim_engine.log": "8f34ca82d49d017bd03b6d2da12fc949280bae75beaf988898b4fb912353f7c8",
+    "isolated_test_probe_dll_nonvolatile_evidence.json": "956b112bf48d1cbccef76932c2d0736394139c247c6b4624b24173931a422a7e",
+    "fl24-startup-static.json": "6dc76ddd06bb77a4da3ccbb78cca790c8bb567fb3c4b8c27ac039c2ae1e8917c",
+    "fl24-rec-static.json": "78f683d4e45064ef1566a34ab1c0f5efb034ece4ff63f4721081be0031e41d31"
+  }
+}

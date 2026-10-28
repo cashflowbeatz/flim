@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-27T09:15:17.533893+00:00",
+  "version": "0.2.8",
+  "status": "Local source, synthetic merge behavior, UI and package verified; native FL end-to-end and production CRDT unverified",
+  "artifacts": {
+    "client/desktop/release/flim-rooms-0.2.8-win64.exe": {
+      "sha256": "e0dfe1a92c07c5b61501b36296531422827ade161bfd7b45ad024004e427db1c",
+      "bytes": 103600084
+    },
+    "client/out-experimental/flim.exe": {
+      "sha256": "9e49add7e76119b72017f90dcd1ac1bbf46e44c6b9ea922c48ec0fb22fd95760",
+      "bytes": 311296
+    },
+    "client/out-experimental/flim_engine.dll": {
+      "sha256": "a8c35fab2e134e0b7200d4ecaaaf8357aa28aed2e6cd1638a742f66deb5d62a2",
+      "bytes": 594432
+    }
+  },
+  "source_sha256": {
+    "client/common/flim_notes_crdt.h": "13996d593f4622754f178d6418ed0ae678856a8828ece4863da9cd492a0b0ba3",
+    "client/engine/flim_engine.c": "4cf32d931e015d361c6372bfc2bc73e62b758cd62bc1d9b0690181106920103e",
+    "client/desktop/electron/main.cjs": "291398a16429b6d9d4cf67c7bf2a4739858e3d5b1f7b693062d3c886b1d541b2",
+    "client/desktop/electron/preload.cjs": "c231b6f9e0fa8e88c6f5014d3292f9c015c439979c874206b640e4d625645b0a",
+    "client/desktop/electron/window-fit.cjs": "ae9ba5425a406f51f8dfeaf01ebb217e70f9ee7a06bfbeeee75cb86dc9130725",
+    "client/desktop/src/App.tsx": "4354e2840efb00527023f7e7ccdcdee785ff7a1b57933f93f171960826067237",
+    "server/cloudflare/src/worker.ts": "59303bef395bbffdfed5d35d56f9b1a0dcf992cd8aa002ac172c669f5c2e23d8"
+  },
+  "installation_reference": "desktop-0.2.7-2026-10-27.json; exact installed engine inspection repeated by final package/portable checks",
+  "verification": {
+    "desktop": {
+      "passed": 67,
+      "failed": 0
+    },
+    "local_worker": {
+      "passed": 60,
+      "failed": 0,
+      "typecheck": "passed",
+      "build": "passed",
+      "deployed": false
+    },
+    "ui": {
+      "passed": 36,
+      "results": [
+        "Framer variants, font and width 375",
+        "Escape and focus return 375",
+        "Framer variants, font and width 810",
+        "Escape and focus return 810",
+        "Framer variants, font and width 1200",
+        "Escape and focus return 1200",
+        "Empty required name prevents room allocation",
+        "One dropdown entry per FL family keeps build numbers in details",
+        "Folder picker route and unsupported-build gate",
+        "Canceled folder selection retains the selected FL version",
+        "FL24 is a selectable experimental test with an honest compatibility notice",
+        "Test logs open through the local desktop action",
+        "Create automatically launches and shows real-state participant rows",
+        "Copy, refresh and return to start",
+        "Join accepts spaced room code and launches once",
+        "Delayed status cannot restore a room after returning to start",
+        "Incompatible host guidance leaves a retryable room and a working return action",
+        "Room-number editing preserves the caret and accepts pasted hyphens",
+        "Copy feedback and status requests belong to the current room visit",
+        "Small windows keep every control scrollable with usable target sizes",
+        "Failed log-folder opening leaves an actionable error",
+        "Unavailable diagnostics are explained without blocking room creation",
+        "network state stays actionable",
+        "launch state stays actionable",
+        "status state stays actionable",
+        "waiting state stays actionable",
+        "ended state stays actionable",
+        "missing state stays actionable",
+        "Settings-storage notice remains readable and does not block a session",
+        "Temporary status failures recover automatically without another click",
+        "Hidden and offline windows pause status traffic and refresh when available again",
+        "Browser preview is explicit and cannot fake an FL connection",
+        "Actual desktop discovers installed FL24/25/26 without launching FL",
+        "Actual desktop at 200 percent zoom keeps installation details and submit reachable",
+        "Native window grows with the menu, shrinks on collapse and stays inside the work area",
+        "Production CSP disables renderer networking"
+      ],
+      "errors": []
+    },
+    "native_synthetic": {
+      "programs_passed": 25,
+      "programs": [
+        "t_build_gate.exe",
+        "t_build_gate_experimental.exe",
+        "t_clip.exe",
+        "t_clip_native.exe",
+        "t_cloud.exe",
+        "t_compat.exe",
+        "t_files.exe",
+        "t_flp.exe",
+        "t_inbound.exe",
+        "t_injection.exe",
+        "t_injection_experimental.exe",
+        "t_launcher.exe",
+        "t_logging.exe",
+        "t_metadata.exe",
+        "t_notes.exe",
+        "t_notes_crdt.exe",
+        "t_patops.exe",
+        "t_plugin_apply.exe",
+        "t_profile_loader.exe",
+        "t_profiles.exe",
+        "t_project_load.exe",
+        "t_queues.exe",
+        "t_rooms.exe",
+        "t_samples.exe",
+        "t_ws_buffer.exe"
+      ],
+      "physical_midi": false,
+      "fl_launched": false
+    },
+    "crdt_scenarios": [
+      "200 three-replica rounds",
+      "reordered/duplicate delivery",
+      "remove before add",
+      "duplicate musical notes",
+      "concurrent moves and deletions",
+      "canonical wire validation",
+      "allocation and random-ID failure",
+      "per-pattern history and aggregate budget limits",
+      "pending local MIDI edit before remote merge",
+      "full new-scope adoption and wrong delta scope rejection",
+      "unchanged structural refresh preserves tombstones",
+      "changed scopes do not return to retired identities",
+      "full snapshots deliver scopes for every empty pattern"
+    ],
+    "native_apply": {
+      "existing_notes": 6000,
+      "one_note_addition": {
+        "add_calls": 1,
+        "delete_calls": 0
+      },
+      "selection_and_stacked_duplicates": "passed",
+      "duplicate_delivery": "no additional add/delete calls"
+    },
+    "http_transfer": {
+      "passed": true,
+      "cases": [
+        "1025 references in 512/512/1 batches",
+        "partial upload writes",
+        "download checksum",
+        "stale-session write cancellation"
+      ]
+    },
+    "window_geometry": {
+      "passed": true,
+      "cases": [
+        "closed fit",
+        "open growth",
+        "collapse shrink",
+        "closed card at 200% zoom",
+        "open details at 200% zoom",
+        "monitor bounds and scrolling"
+      ],
+      "default_closed_outer_bounds": {
+        "width": 536,
+        "height": 616
+      },
+      "default_open_observed_outer_bounds": {
+        "width": 536,
+        "height": 962
+      }
+    },
+    "package": {
+      "passed": true,
+      "checks": [
+        "Native payload matches tested binaries",
+        "No private keys, test fixtures, preferences or logs in ASAR",
+        "Bundled launcher verifies installed FL25 and exact test-only FL24",
+        "Packaged app ignores inherited dev flag",
+        "Local renderer and General Sans load under production CSP",
+        "Installed FL24 is discovered and selectable alongside reviewed FL25/26 without changing the user profile",
+        "Real local diagnostics include app version, inspected builds and matching native file hashes",
+        "Renderer has no Node access",
+        "No room allocated or FL launched by packaging check",
+        "Header logo and favicon load locally",
+        "All nine icon sizes embedded in the app and portable executable",
+        "Running Windows small and large icons match the new logo"
+      ],
+      "hashes": {
+        "flim.exe": "9e49add7e76119b72017f90dcd1ac1bbf46e44c6b9ea922c48ec0fb22fd95760",
+        "flim_engine.dll": "a8c35fab2e134e0b7200d4ecaaaf8357aa28aed2e6cd1638a742f66deb5d62a2",
+        "profiles/25.2.5.5319.profile": "d53a58645e3bc0671a0b5c4922403a4958d74742728fe3d3273b95d5be268e2e",
+        "profiles/26.1.7.5654.profile": "129219eea1c32fc4c5ac8c3c937afd5a9d389624f726870ad658846b892759a4"
+      },
+      "icons": [
+        {
+          "executable": "flim.exe",
+          "sizes": [
+            16,
+            20,
+            24,
+            32,
+            40,
+            48,
+            64,
+            128,
+            256
+          ]
+        },
+        {
+          "executable": "flim-rooms-0.2.8-win64.exe",
+          "sizes": [
+            16,
+            20,
+            24,
+            32,
+            40,
+            48,
+            64,
+            128,
+            256
+          ]
+        }
+      ],
+      "windowIcons": [
+        {
+          "name": "window-small",
+          "width": 16,
+          "height": 16,
+          "meanDifference": 0
+        },
+        {
+          "name": "window-large",
+          "width": 32,
+          "height": 32,
+          "meanDifference": 0
+        }
+      ],
+      "diagnostics": {
+        "format": "flim-diagnostics-v1",
+        "appVersion": "0.2.8",
+        "nativePids": [],
+        "eventCount": 6,
+        "nativeHashes": {
+          "launcher": "9e49add7e76119b72017f90dcd1ac1bbf46e44c6b9ea922c48ec0fb22fd95760",
+          "engine": "a8c35fab2e134e0b7200d4ecaaaf8357aa28aed2e6cd1638a742f66deb5d62a2"
+        }
+      },
+      "errors": []
+    },
+    "package_install_paths": [
+      "C:/Program Files/Image-Line/FL Studio 2024",
+      "D:/Codex-flim-compat/24.2.2.4597/app"
+    ],
+    "portable": {
+      "passed": true,
+      "checks": [
+        "Portable executable self-extracts and opens the actual app",
+        "Installed FL24 is discovered and selectable alongside reviewed FL25/26 without changing the user profile",
+        "Real local diagnostics include app version, inspected builds and matching native file hashes",
+        "No real room allocated and no FL instance launched"
+      ],
+      "diagnostics": {
+        "format": "flim-diagnostics-v1",
+        "appVersion": "0.2.8",
+        "nativePids": [],
+        "eventCount": 5,
+        "nativeHashes": {
+          "launcher": "9e49add7e76119b72017f90dcd1ac1bbf46e44c6b9ea922c48ec0fb22fd95760",
+          "engine": "a8c35fab2e134e0b7200d4ecaaaf8357aa28aed2e6cd1638a742f66deb5d62a2"
+        }
+      }
+    },
+    "design_gate": {
+      "status": "PASS",
+      "report": "client/desktop/QA-0.2.8.md"
+    }
+  },
+  "limits": {
+    "production_note_mode": "locked snapshots; updated Worker not deployed",
+    "crdt_scope": "piano-roll note multiset only; not whole-project CRDT or offline editing",
+    "concurrent_moves": "remove/add merge can retain both fresh versions",
+    "history": "16384 entries per pattern and 262144 aggregate; tombstones retained within a baseline; explicit stop/resync on bounds",
+    "recording_batch": "100 ms scan/100 ms quiet/200 ms continuous batching; does not include network/main-thread delay or notes not committed by FL",
+    "unrecorded_live_midi": "not implemented",
+    "audio_streaming": "not implemented",
+    "mixed_builds": "oldest full build must host; exact installation gates retained; opaque states remain restricted",
+    "fl24": "24.2.2.4597 experimental exact-fingerprint candidate; no new live sharing validation",
+    "native_runtime": "Not tested in FL for this payload. Automatic approval review previously rejected the isolated-launch action with only blocked by policy; not retried. Earlier FL25/26 sweep failures remain unresolved and historical passes do not certify this payload."
+  },
+  "github_written": false,
+  "cloudflare_deployed": false
+}

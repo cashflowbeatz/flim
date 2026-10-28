@@ -1,0 +1,311 @@
+{
+  "desktop_version": "0.2.6",
+  "started_utc": "2026-10-25T09:01:18.7828926Z",
+  "scope": "Native synthetic harnesses, loopback HTTP transfer, Python unit tests and compilation only. No FL Studio processes launched. No deployment or publishing.",
+  "status": "failed",
+  "checks": [
+    {
+      "name": "harness-build",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim",
+      "executable": "cmd.exe",
+      "arguments": [
+        "/d",
+        "/c",
+        "client\\dev\\harness\\build.bat"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 12.406,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-harness-build.log",
+      "output_tail": "t_notes.c\nt_rooms.c\nt_project_load.c\nt_files.c\nt_queues.c\nt_inbound.c\nt_logging.c\nt_transfer.c"
+    },
+    {
+      "name": "t_build_gate",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_build_gate.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.141,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_build_gate.log",
+      "output_tail": "Project build gate: OK (138 checks across 3 builds; whitelist/table agreement and both older FL25 rows retained)"
+    },
+    {
+      "name": "t_build_gate_experimental",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_build_gate_experimental.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.137,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_build_gate_experimental.log",
+      "output_tail": "Project build gate: OK (300 checks across 6 builds; whitelist/table agreement and both older FL25 rows retained)"
+    },
+    {
+      "name": "t_clip",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_clip.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.095,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_clip.log",
+      "output_tail": "Canonical clip conversion: OK (107 checks; 60/80-byte roundtrips, exact defaults, loss refusal and preflight)"
+    },
+    {
+      "name": "t_clip_native",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_clip_native.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.145,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_clip_native.log",
+      "output_tail": "Native clip integration: OK (60/80 strides, selection, refusal, mixer translation, readiness and failed snapshots)"
+    },
+    {
+      "name": "t_cloud",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_cloud.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.119,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_cloud.log",
+      "output_tail": "Cloudflare file envelopes: OK (metadata, schema, ambiguity, bounds, delivery)"
+    },
+    {
+      "name": "t_compat",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_compat.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.189,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_compat.log",
+      "output_tail": "Native build negotiation: OK (31 checks)"
+    },
+    {
+      "name": "t_files",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_files.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.183,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_files.log",
+      "output_tail": "File safety: OK (full reads, short writes, disk/flush/rename faults, locked targets, intact backups, bounded paths, project refusal)"
+    },
+    {
+      "name": "t_flp",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_flp.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.088,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_flp.log",
+      "output_tail": "FLP legacy/extended events, bounds, callback atomicity: OK"
+    },
+    {
+      "name": "t_inbound",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_inbound.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.418,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_inbound.log",
+      "output_tail": "PASS invalid playlist data never becomes an empty replacement; valid reordered fields and intentional clears work\nPASS complete plugin snapshots validate and stage before deletions; malformed, duplicate, missing and unavailable data preserve queued state\nPASS preset coalescing preserves structural/parameter order; channel presets load before later index changes and temp files are cleaned\nPASS marker/routing preflight preserves existing records on late malformed entries; spaced lists and intentional clears apply\nPASS malformed pattern operations never invoke FL; supported reordered fields apply; native faults retain baselines and close dialog guards\nInbound validation and edit ordering: OK"
+    },
+    {
+      "name": "t_injection",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_injection.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.12,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_injection.log",
+      "output_tail": "{\"error\":\"FL Studio 26.99.99.65535 has no verified compatibility profile. It was not launched.\"}\n{\"error\":\"FL 24.2.2.4597 requires the explicit experimental test build or a reviewed compatibility profile.\"}\n{\"error\":\"FL 24.2.2.4597 requires the explicit experimental test build or a reviewed compatibility profile.\"}\n{\"error\":\"FL 24.2.2.4597 requires the explicit experimental test build or a reviewed compatibility profile.\"}\n{\"error\":\"FL Studio 24.2.2.4598 has no verified compatibility profile. It was not launched.\"}\nLauncher process handling: OK (3 known builds + 8 failure/fallback scenarios + external-profile status/launch checks, mocked Win32 APIs)"
+    },
+    {
+      "name": "t_injection_experimental",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_injection_experimental.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.127,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_injection_experimental.log",
+      "output_tail": "{\"error\":\"FL Studio 26.99.99.65535 has no verified compatibility profile. It was not launched.\"}\n{\"error\":\"FL 24.2.2.4597 is test only. Explicit experimental testing must be enabled before starting this room.\"}\n{\"error\":\"FL 24.2.2.4597 does not match the exact engine file mapped for this test build. It was not enabled.\"}\n{\"error\":\"FL Studio 24.2.2.4598 has no verified compatibility profile. It was not launched.\"}\nLauncher process handling: OK (6 known builds + 8 failure/fallback scenarios + external-profile status/launch checks, mocked Win32 APIs)"
+    },
+    {
+      "name": "t_launcher",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_launcher.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.111,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_launcher.log",
+      "output_tail": "Discovered: C:\\Program Files\\Image-Line\\FL Studio 2025 (build 25.2.5.5319, verified support: yes)\nLauncher validation: OK"
+    },
+    {
+      "name": "t_logging",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_logging.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.219,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_logging.log",
+      "output_tail": "PASS Unicode per-run path, build/thread context, credential omission, line boundaries and preserved Win32 error state\nPASS concurrent writers produce 360 complete, distinct records without interleaving\nPASS repeated rotation retains only the active log and two bounded backups, with complete final records\nPASS unavailable destinations are nonfatal and recoverable; absent or relative overrides retain the legacy temp path\nNative logging: OK"
+    },
+    {
+      "name": "t_metadata",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_metadata.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.127,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_metadata.log",
+      "output_tail": "Metadata: OK (channel rebaseline and remote edits preserve unsent local renames)"
+    },
+    {
+      "name": "t_notes",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_notes.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.147,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_notes.log",
+      "output_tail": "Notes: OK (continuous recording, suppression, queue retry, failed snapshot, 6000 selected notes and relay rejection)"
+    },
+    {
+      "name": "t_patops",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_patops.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.146,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_patops.log",
+      "output_tail": "Pattern VMT hooks: OK (all builds, synthetic memory; wire IDs unchanged)"
+    },
+    {
+      "name": "t_plugin_apply",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_plugin_apply.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.175,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_plugin_apply.log",
+      "output_tail": "Plugin apply guard, stale queue rejection, cooldown wrap, failed-load baseline preservation, and verified effect clearing: OK"
+    },
+    {
+      "name": "t_profile_loader",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_profile_loader.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.148,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_profile_loader.log",
+      "output_tail": "External profile selection: OK (uncompiled build admitted; absent, modified-engine and corrupted profiles refused; synthetic PE never executed)"
+    },
+    {
+      "name": "t_profiles",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_profiles.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.2,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_profiles.log",
+      "output_tail": "Compatibility profile parsing: OK (all fields required; duplicates, unknowns, corruption and partial records refused)\n94 parser checks"
+    },
+    {
+      "name": "t_project_load",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_project_load.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.145,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_project_load.log",
+      "output_tail": "Project load failures: OK (refusal, fault cleanup, memory, unchanged save target, queued edits blocked)"
+    },
+    {
+      "name": "t_queues",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_queues.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.722,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_queues.log",
+      "output_tail": "PASS sample-path replacement is atomic on failure and hash caching remains optional and bounded\nPASS declined sample allocation, deduplication and bounded retention\nPASS disconnect clears room sample paths and choices; old workers cannot restore them\nPASS incomplete metadata, pattern, project, plugin and revert tasks never enter the FL queue\nPASS malformed full-note snapshots queue no changes; reordered fields, valid notes and intentional empty snapshots work\nPASS only complete channel permutations are queued, with failed allocation handled without dereferencing NULL\nPASS outgoing note/project allocation failures send no partial snapshots; plugin decoding and failed disk writes fail safely\nPASS sample-list bounds, failed decoding/allocation and malformed path metadata"
+    },
+    {
+      "name": "t_rooms",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_rooms.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.136,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_rooms.log",
+      "output_tail": "Desktop room URLs, welcome identity and legacy slots: OK"
+    },
+    {
+      "name": "t_samples",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_samples.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.229,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_samples.log",
+      "output_tail": "  D:\\Alex\\Sample Packs\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\\xxxxxxxxxxx\\snare 02.wav\nimage 457 -> 457 bytes\n  now C:\\Users\\Producer\\AppData\\Local\\Temp\\flim-samples-84408-141a56e-0\\Documents\\flim\\samples\\afe917f2e8fd009f______________________\\kick.wav (exists 1)\n  now C:\\Users\\Producer\\AppData\\Local\\Temp\\flim-samples-84408-141a56e-0\\Documents\\flim\\samples\\afe917f2e8fd009f______________________________\\kick.wav (exists 1)\nPASS sample rewrite nested round trip, trailer preservation, 5 allocation failures and overflow\nPASS sample alias identity, equal copy, same-size collision stops before load, and invalid cache root\nowned temporary profile and aliases removed\nOK"
+    },
+    {
+      "name": "t_ws_buffer",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness",
+      "executable": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim\\client\\dev\\harness\\t_ws_buffer.exe",
+      "arguments": [],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.495,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-t_ws_buffer.log",
+      "output_tail": "WebSocket buffer: OK"
+    },
+    {
+      "name": "native-http-transfer",
+      "cwd": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\flim",
+      "executable": "node.exe",
+      "arguments": [
+        "client/dev/transfer_test.cjs"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "elapsed_seconds": 0.257,
+      "log": "C:\\Users\\Producer\\Documents\\Codex\\2026-10-22\\https-github-com-cashflowbeatz-flim-https\\work\\diagnostics-026-native-20261025-050118-native-http-transfer.log",
+      "output_tail": "PASS 1025 sample references looked up in bounded batches\nPASS partial HTTP writes send the complete file\nPASS streamed download content and checksum\nPASS a stale session stops writing downloaded data"
+    }
+  ],
+  "source_sha256_before": {
+    "client/engine/flim_engine.c": "44e98486be8a12b7395ab0a55671e20fbf82578b856337a8eb03a956b8b3d08e",
+    "client/dev/harness/build.bat": "c4d659da7797ccf8e209db9549daeca9e90dcc2476815af4a7e4617dcf9843bf",
+    "client/launcher/flim.c": "529e953db5f7ed5eeb2c8bd2fd6bad2d8a70b8131d6b0a2ebf01a51379b00af4",
+    "client/common/flim_version.h": "ce7c339225dcec768134890ae3eac6f85486344d57b0aeb3a9f7f740835b070d",
+    "client/dev/harness/t_logging.c": "e7b77444c23d6f87fe406e5ed7e6659b360f7137c8f325dde247b242da7e39ad"
+  },
+  "source_sha256_after": {},
+  "artifact_sha256": {},
+  "failure": "........................................................................",
+  "finished_utc": "2026-10-25T09:01:37.9346500Z"
+}

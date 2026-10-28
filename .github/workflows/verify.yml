@@ -1,0 +1,56 @@
+name: Verify source
+on:
+  push:
+    branches: [main, fl26-compatibility-audit]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: client/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/desktop/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+  relays:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: [server, server/cloudflare]
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.directory }}/package-lock.json
+      - run: npm ci
+      - run: npm test
+  native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build deterministic native harnesses
+        shell: cmd
+        run: client\dev\harness\build.bat
+      - name: Run native harnesses without launching FL
+        shell: pwsh
+        working-directory: client/dev/harness
+        run: |
+          $names = 'samples','file_status','files','ws_buffer','launcher','injection','injection_experimental','build_gate','build_gate_experimental','patops','compat','clip','clip_native','cloud','profiles','profile_loader','flp','plugin_apply','plugins','portable','metadata','notes','notes_crdt','rooms','startup','toolbar','project_load','queues','inbound','logging','edit_compat'
+          foreach ($name in $names) {
+            & ".\t_$name.exe"
+            if ($LASTEXITCODE) { throw "Native harness failed: $name" }
+          }

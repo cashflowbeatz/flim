@@ -21,9 +21,19 @@ Python 3 with `python -m pip install --user capstone pefile numpy`.
 | `test_process_ownership.ps1`, `test_restart_ownership.ps1` | process-identity helpers for the restart script, and fixture/mock tests that never launch or stop real FL processes. |
 | `flbuild.py` | the engine's `k_flBuilds` table for the tools (plus the few addresses only the tools use); `build(pid)` = the row of an FL started by `restart_test.ps1`. |
 | `feature_test.py` | Two-FL feature test using explicit test PIDs: `params mixer channels patterns song patmarks notedel layout fx reorder clips sample`. Reordering creates distinct test channels. Effect comparison excludes only the documented local editor visibility bit. The sample step creates a small synthetic WAV from the installed Sampler template and verifies downloaded content by SHA-256; use `-NoLocalB` so B must download it. `FLIM_FT_FST` optionally selects your own single-sample channel preset. Failed checks produce a nonzero exit code. |
+| `harness/t_toolbar.c` | Status-only native toolbar: no connection dialogs on clicks, readable native window text, narrow-row layout and hide/restore. Uses owned hidden test windows, without starting or stopping FL. |
 | `harness/t_samples.c` | offline test of the plugin-data sample path code (includes the engine source). `harness\build.bat`, then `t_samples.exe` -> `OK`. |
 
+## Testing sample transport
+
+For sample-transport regression checks, build `harness\build.bat`, then run
+`node client/dev/transfer_test.cjs` from the repository root. It starts an ephemeral loopback server
+and exercises real native WinHTTP: 1,025 sample references in 512/512/1 batches, partial HTTP writes,
+download content/checksum, and session cancellation after a blocking read. The harness also checks
+Cloudflare and legacy file-size boundaries. It launches no FL instance and writes nothing to Cloudflare.
+
 ## Adding an FL build
+
 1. Use the exact reference DLL named by an existing `k_flBuilds` row. A different patch build is
    not interchangeable: `25.2.5.5319` cannot be used with the `25.2.3.5171` table. Run the commands
    below to collect static address candidates and layout evidence.
@@ -140,6 +150,12 @@ Notes on FL internals that took a while to find:
 
 ## Reviewed external compatibility profiles
 
+`harness/t_project_load.c` exercises the actual project-load path with synthetic FL objects.
+It checks successful loads, native refusal, loader and cleanup faults, missing objects/path,
+allocation failure, save-target preservation and suppression of queued edits after failure.
+`harness/t_clip_native.c` covers the exact FL 24 missing-value adapter and mixer bounds alongside
+60/80-byte clip conversion. These offline tests do not establish FL 24 runtime support.
+
 See [the profile workflow](../../BUILD-COMPATIBILITY.md#adding-another-build) for `profiles.py draft`
 and `profiles.py export`. A draft cannot run: every address, layout, calling convention, shared
 record format and runtime result needs review. Launcher and engine both require the exact engine
@@ -149,3 +165,44 @@ SHA-256 and a complete profile. Signature matches and nearby build numbers are i
 set `FLIM_TEST_A` and `FLIM_TEST_B` explicitly, with the oldest supported build as A. New clients need
 the updated relay. Mixed effect checks compare identity, wrapper and plugin payload; same-build
 checks retain all saved events except editor visibility.
+
+## Live room startup check
+
+From `client/desktop`, run `node test/native-room-startup.cjs 26` (or 25/24) to open that installed
+FL profile and briefly host a real Cloudflare room. Close other FL instances first. The test
+verifies message hooks, the native welcome and its own entry in the authenticated people list,
+then closes only its own FL process normally. It does not send a project or save one. Adding
+`member` tests native join admission against a protocol fixture host that sends no project data.
+Set `FLIM_TEST_NATIVE_DIR` to check another built native directory. This test is deliberately
+excluded from automatic local suites because it launches FL and contacts the live service.
+
+Add `member plugins` to exercise a missing VST through the real native client. The fixture
+uses a random VST3 ID, checks preflight isolation, duplicate suppression and continued mixer
+control sharing, then clears the unavailable slot. It sends no project. `FLIM_TEST_HOST_FL`
+selects another installed build identity for the protocol host; this is not a real older-FL
+project test. `FLIM_TEST_VST_PRESET` optionally names a small scanned effect `.fst`: the fixture
+changes its incoming path and verifies stable-ID local resolution and real loading/clearing.
+Use an available plugin on a disposable untitled profile. That optional test may need **No**
+on FL's save-changes prompt when closing; it never saves or force-kills FL. Cleanup always
+releases the fixture room/socket even if FL requires manual closing.
+
+`harness/t_plugins.c` covers bounded wrapper parsing, byte-preserving path adaptation,
+cross-format/different-ID refusal, ambiguous scanned installs, missing catalog fallback,
+malformed wrapper preflight, retained late-join preset/control ordering and Retry/Cancel.
+`harness/t_plugin_apply.c` covers ordinary rejection isolation, native fault refusal,
+duplicate suppression, recovery, pending control values and channel reorder/deletion.
+Neither harness establishes compatibility between arbitrary vendor preset versions.
+
+## Portable-sync runtime check
+
+`portable_smoke.py --host 26 --member 24` launches only owned, normal installed FL profiles
+against the local relay on port 49938. Close other FL processes first. It seeds existing notes
+and controls, verifies the join baseline, then exercises ongoing notes, simultaneous additions
+and controls in both directions. It saves scratch recovery projects through FL's own writer.
+It does not copy licenses/registry state or simulate physical MIDI input.
+
+Use `--relay https://flim-relay.cashflowbeatz.workers.dev` only for an intentional live service
+check. This reserves a real temporary room and may use its normal R2 allowances. Credentials
+stay in memory; evidence is written to the ignored desktop test folder. Normal cleanup closes
+only the owned PIDs and declines their scratch-save prompt. The six local version pairs and
+two public runs for 0.2.11 are recorded in `compatibility/desktop-0.2.11-2026-10-27.json`.

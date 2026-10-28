@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-27",
+  "change": "Remove daily room creation quotas; replace daily creation request caps with per-minute burst protection",
+  "relay": "https://flim-relay.cashflowbeatz.workers.dev",
+  "deployment": {
+    "version_id": "e8f907ea-69eb-4fcb-84aa-b303d3126c26",
+    "deployment_id": "92f96b2f-822f-44d2-9f37-e9ca479142f0",
+    "created_on": "2026-10-27T12:17:30.687373Z",
+    "traffic_percent_readback": 100,
+    "previous_version": "ca9554a7-76d6-40b1-9f48-995f6f0e2618"
+  },
+  "checks": {
+    "npm_test": {
+      "passed": 73,
+      "failed": 0,
+      "includes": [
+        "TypeScript check",
+        "Worker build",
+        "25 sequential room creations with capacity released",
+        "exhausted former daily counters after restart",
+        "legacy room ignores former daily host counter",
+        "per-minute throttling, restart persistence and expired-minute recovery",
+        "existing R2 cutoff and cleanup tests"
+      ]
+    },
+    "public_rooms_smoke": {
+      "passed": 11,
+      "room_reservations": 2,
+      "r2_writes": 0,
+      "includes": [
+        "health",
+        "room creation",
+        "scoped credentials",
+        "joining",
+        "isolated edits",
+        "participant status",
+        "host departure ends only its room"
+      ]
+    },
+    "r2_usage_readback": {
+      "storage_limit_bytes": 536870912,
+      "storage_files_limit": 2000,
+      "monthly_upload_limit": 20000,
+      "monthly_download_limit": 100000,
+      "observed_storage_bytes": 0,
+      "observed_upload_attempts": 7,
+      "observed_download_attempts": 5
+    }
+  },
+  "retained_protections": {
+    "simultaneous_rooms": 4,
+    "participants_per_room": 8,
+    "creation_requests_per_ip_per_utc_minute": 10,
+    "creation_requests_global_per_utc_minute": 60,
+    "other_daily_request_and_r2_budgets": "unchanged"
+  },
+  "client_reinstall_required": false,
+  "github_writes": false,
+  "native_fl_retested": false,
+  "scope": "Relay quota change only; existing FL compatibility evidence remains in the desktop QA records.",
+  "sha256": {
+    "server/cloudflare/src/worker.ts": "1f59c5c63fcd2918019669343493418e879c6db7d6c08254eb99592dbeb68f23",
+    "server/cloudflare/test/fixture.mjs": "426f6869c7d98337ac193b606fb6a35b7e41b75d126a5b066fe418e462386b13",
+    "server/cloudflare/test/rooms.test.mjs": "50a1577ab8368fbae5fbf69a2ba74838a443c6ca2db458e5911c5fb4723d5180",
+    "server/cloudflare/wrangler.jsonc": "0f47033fef6327312619fd9479203aeac81f3abc05545aab99ca59b29a0f025f"
+  }
+}

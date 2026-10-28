@@ -1,0 +1,91 @@
+{
+  "version": "0.2.12",
+  "date": "2026-10-27",
+  "changes": [
+    "status-only FL toolbar; connection/dialog click routes removed",
+    "narrow native toolbar layout and readable window text",
+    "duplicate retained newer-preset origin restriction",
+    "456 CSS px white component, compact header and top Back navigation",
+    "diagnostics under Menu with Escape, focus return and outside dismissal"
+  ],
+  "checks": {
+    "native_harnesses": 29,
+    "http_transfer_checks": 4,
+    "desktop_tests": 76,
+    "ui_checks": 39,
+    "ui_errors": [],
+    "native_window_geometry": "passed including 200% zoom, 472x380 closed and 472x676 expanded at 100% zoom",
+    "unpacked_package": true,
+    "portable_startup": true,
+    "packaged_native_hashes_match": true,
+    "icons_and_diagnostics": true,
+    "no_secret_test_or_log_files_in_asar": true
+  },
+  "build_support": {
+    "mappings_changed": false,
+    "installed_build_discovery": [
+      "24.2.2.4597",
+      "25.2.5.5319",
+      "26.1.7.5654"
+    ],
+    "desktop_preflight_matrix": "all nine ordered host/member combinations tested",
+    "new_native_collaboration_runs": 0,
+    "previous_live_record": "desktop-0.2.11-2026-10-27.json",
+    "experimental_fl24": true
+  },
+  "limits": [
+    "No new native collaboration or physical MIDI run; existing user FL24 PID [local PID omitted] left open and untouched",
+    "Unknown FL patches still require mappings and runtime tests",
+    "Older fallback members share notes/basic controls with unsupported sounds and playlist unavailable",
+    "Actual native faults and failed recovery still stop sharing to preserve the project",
+    "Existing loaded FL instances retain their old DLL until a later launch"
+  ],
+  "relay_deployed": false,
+  "github_writes": false,
+  "artifact": {
+    "path": "client/desktop/release/flim-rooms-0.2.12-win64.exe",
+    "bytes": 103614755,
+    "sha256": "3e4bf8c20ecd18b4dd1c9bd90a6ca2efc3bd5cb711d798465eff32a5bf019252"
+  },
+  "source_and_native_sha256": {
+    "client/out-experimental/flim.exe": "6f3d157bca95ae9c673522160118fd96ae1b0a4fcf2da1be21fcd427e9d67b20",
+    "client/out-experimental/flim_engine.dll": "3bc9fc3fc0eba13508a10511873477c8eb623e020bfe9e9d5255e31482b63abc",
+    "client/engine/flim_engine.c": "c27f78169641709683d65300fde024f1790923cdeb9305c1e2959cd0938ab7fa",
+    "client/dev/harness/t_plugin_apply.c": "34c9450c8b301c5eae31d80752f89d0b6184ea5c6b3a492fcea12b07158f184c",
+    "client/dev/harness/t_toolbar.c": "9df7720bbcd0014645c747447513e35dec581e9494fa69739023fd8f89ba7548",
+    "client/desktop/src/App.tsx": "700e0939afe6fdd8eaeb8051df6c15c1a4644e39b5066655de5600d002cbb009",
+    "client/desktop/src/styles.css": "a103466d5a4a526fa0db81e2f0d3b62a4a668a014df185f4988033925ebba8d6",
+    "client/desktop/electron/main.cjs": "7e2bc9e1df2df3d6f2cc9a041f327fa50bd95c3dc2174e4d85b461abffa4b7ae",
+    "client/desktop/electron/window-fit.cjs": "97730278c37c6657bfadc4fbb982bee3fb696dcfc7f7cd2ea7e544e034b5e395",
+    "client/desktop/package.json": "997b62d00adf1d4a657bdc40d78ccea0210d3ded8853e9eb4eea4ed8cef477ce",
+    "client/desktop/package-lock.json": "5a74ce07966d992ae3d50923e9aecff280217cb485e8c633ec8ef2691ffd44e0"
+  },
+  "test_log_sha256": {
+    "client/desktop/test/latest-native-0212.log": "a46b69345ed269f7ca553afa324172442cb6eca00efa188bb91b69669528d186",
+    "client/desktop/test/latest-harness-build-0212.log": "ea5200fc44eef6db96bb04feaf07e47cf25aa8f56e3968f011ce861088ad851d",
+    "client/desktop/test/latest-native-tests-0212.log": "bdb33bdbc0f2d46eb7436e03d957cb4f27bc9898c082904121fbb5a7abd66ab6",
+    "client/desktop/test/latest-unit-0212.log": "4d8ed564d36638902c179bf5715e23fea8eac96fbfe4c83d32ceead59f2c440e",
+    "client/desktop/test/latest-ui-0212.log": "27bc6dd5e1d8e6927a6dea358c8d2c74e198d0cdb7485b5e13819c84fc202cf3",
+    "client/desktop/test/latest-window-0212.log": "e9e334161f832cc6c77488cc731ca101c3e199efa99f0a32f798bc9baa3a67d4",
+    "client/desktop/test/latest-package-0212.log": "77e1a7de890691871d9cd1e698973ff1f4b2fbdb4c4d7a16f1e063a520b1daab",
+    "client/desktop/test/latest-package-check-0212.log": "f11bf6eef8a4417bd424d4c558d355e2308fc681fc601abc82e2c098eeb4ca27",
+    "client/desktop/test/latest-portable-check-0212.log": "ee7c99d31afc1a17d135feb7a20999c71a0cf9df4f88b8933efa159801db42dd"
+  },
+  "visuals_inspected": [
+    "native-closed.png",
+    "native-fitted-open.png",
+    "join-375.png",
+    "room-active.png",
+    "state-network.png"
+  ],
+  "design_gate": {
+    "result": "PASS",
+    "direction": "client/desktop/DESIGN.md",
+    "dials": {
+      "energy": 1,
+      "rhythm": 1,
+      "motion": 2
+    },
+    "report": "client/desktop/QA-0.2.12.md"
+  }
+}

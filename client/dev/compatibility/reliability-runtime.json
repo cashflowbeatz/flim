@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-10-23T22:20:09.286642+00:00",
+  "status": "deployed_r2_cutoff_and_recorded_note_path_validated",
+  "github_writes": false,
+  "deployment": {
+    "endpoint": "https://flim-relay.cashflowbeatz.workers.dev",
+    "version_id": "f18dbe74-18b5-4029-9ea8-8d412fc3ce24",
+    "worker": "flim-relay",
+    "r2_bucket": "flim-private-files",
+    "durable_object": "FlimRoom / private-room-01",
+    "dry_run_passed": true
+  },
+  "cutoff": {
+    "storage_bytes": 536870912,
+    "file_count": 2000,
+    "monthly_upload_attempts": 20000,
+    "monthly_download_attempts": 100000,
+    "reset": "First day of each UTC calendar month for operations; cleanup for storage",
+    "scope": "This relay ledger and R2 attempts since guard installation, not historical or account-wide billing",
+    "failed_attempts_count": true,
+    "persists_across_sessions_and_deployments": true,
+    "cleanup_remains_available": true
+  },
+  "checks": {
+    "miniflare_passed": 20,
+    "deployed_relay_passed": 14,
+    "native_harness_executables_passed": 16,
+    "python_tests_passed": 60,
+    "standard_client_build": "passed",
+    "experimental_client_build": "passed",
+    "recording_path": [
+      {
+        "tag": "recording-mixed-05",
+        "host_fl": "25.2.5.5319",
+        "member_fl": "26.1.7.5654",
+        "deployed_cloudflare": false,
+        "passed": 8,
+        "total": 8,
+        "first_observation_seconds": [
+          0.555,
+          0.652
+        ],
+        "runtime_log_sha256": "17dbb1f7c6b24d63d4b824144f610dc821ec88cf5c0e213907e21e8230fc9953",
+        "engine_log_sha256": "164ad3b37d089ae5b1930bbbd9976591439b63db25fc46739d0861167663518a"
+      },
+      {
+        "tag": "recording-same26-01",
+        "host_fl": "26.1.7.5654",
+        "member_fl": "26.1.7.5654",
+        "deployed_cloudflare": false,
+        "passed": 14,
+        "total": 14,
+        "first_observation_seconds": [
+          0.665,
+          0.767
+        ],
+        "runtime_log_sha256": "54387abc5c3b83bf123890dbc3ff29d7194ae12eafc0f00f0c8433c3a2bae6f0",
+        "engine_log_sha256": "758ccb6fa754baf11d699e32cee58e21dcb5a9b5118fec6d5d6b804e3fa730eb"
+      },
+      {
+        "tag": "recording-live-01",
+        "host_fl": "25.2.5.5319",
+        "member_fl": "26.1.7.5654",
+        "deployed_cloudflare": true,
+        "passed": 8,
+        "total": 8,
+        "first_observation_seconds": [
+          0.742,
+          0.563
+        ],
+        "runtime_log_sha256": "590ae4815c3abe74fbf534d18d03e7549fb8ab73c18dc0f32193bf6276d0a6c3",
+        "engine_log_sha256": "8afad74cd72a3541ce089bb4fce293ca588a5bf0320a1b09e97264ab19161538"
+      }
+    ]
+  },
+  "fixes": [
+    "Persistent preflight R2 reservations and private usage reporting",
+    "Active upload cleanup race, byte-length enforcement, failure cleanup and cancellation",
+    "Periodic note snapshots during ongoing edits, snapshot coalescing and retry",
+    "Sorted selected-note matching instead of quadratic comparisons",
+    "Failed note reads/applications and rejected transfers stop safely",
+    "Discard queued edits immediately after sharing fault",
+    "Zero/expired suppression deadlines on long-running Windows sessions",
+    "External-profile setup recognition, debounced scans, strict exclusive profile export"
+  ],
+  "earlier_attempts": [
+    {
+      "tag": "recording-mixed-04",
+      "passed": 6,
+      "total": 8,
+      "explanation": "Continuous insertion and deletion passed both directions. Two move checks compared an unsorted source array edited directly with the receiver array sorted by FL. Fixture now uses native delete/add to move notes.",
+      "runtime_log_sha256": "d59445cab1854916a3ef6a4b158c22b3e6080f6248365503e6c04c3f0ebfa6b2"
+    },
+    {
+      "explanation": "Early local launches were blocked by sandbox access; a leftover sandbox Miniflare process conflicted on the loopback port. Owned processes were identified and cleaned up before final runs."
+    }
+  ],
+  "limitations": [
+    "Physical MIDI keyboard input was not injected or tested; probes exercised persisted note creation through native FL functions.",
+    "Unrecorded live audition and audio streaming are not implemented.",
+    "Timing values are observations from short tests, not a latency or load benchmark.",
+    "Unknown FL builds still require reviewed engine-bound profiles and runtime validation.",
+    "Newer-member channel/preset creation remains restricted in mixed builds; project replacement is host-only.",
+    "Same-pattern concurrent edits retain edit locks; no CRDT merging.",
+    "No broad plugin matrix or long-session soak was run."
+  ],
+  "binaries_sha256": {
+    "client/out/flim.exe": "2689cafdbfd4f6b7141016a2b12c123f6a34ac966ad6f8ffc806ee563801ac71",
+    "client/out/flim_engine.dll": "dd870cac6640f6bb9ee0bd05d3c30b8ebdbb30ac7691051ca54a8c1e5dc7877f",
+    "client/out-experimental/flim.exe": "0930b7260f2eab5c6fed42a0ce1cf8a7cec06d8124b7c5fce578c67f12eb3200",
+    "client/out-experimental/flim_engine.dll": "a88c8b847e5c4bb9ed74703056d2f6be3ec12de6484f9012052e9297cdb3b7e1"
+  },
+  "source_sha256": {
+    "server/cloudflare/src/worker.ts": "f0fc8b7ce968a1d4d8c6b9ef8ec5c901e911e39277e7cae7a7da01ae39e0d3c8",
+    "server/cloudflare/src/r2-budget.ts": "d0433731f5754a095b5f9a6ffadd5478e3a65909a71a65dae6a26d55d2586364",
+    "server/cloudflare/src/policy.ts": "ee3256d2591e700143086256e8e3369eb9f81d9f5f2cf4533a9d5f5618af498a",
+    "server/cloudflare/wrangler.jsonc": "0f47033fef6327312619fd9479203aeac81f3abc05545aab99ca59b29a0f025f",
+    "server/cloudflare/test/relay.test.mjs": "d3be20938abb7c90b5956f633ff16f07cdba290af2cb9f9aa8921e30ef36aeca",
+    "server/cloudflare/test/fixture.mjs": "a2f86d55b4754569adff77d3048e38f56fcef4af2593c3a397e7b35f77ffb592",
+    "server/cloudflare/test/cleanup.test.mjs": "eae87238f740a9b2bd4d9515c23fbe8474639175c9c42a93e3b341decc935bc1",
+    "server/cloudflare/test/cleanup-fixture.mjs": "485f7b92712c607b2424d8d1ace1b4451cdabcafc35785e7f5a2e3a883d96a09",
+    "server/cloudflare/test/remote-smoke.mjs": "3fef04d90a8276bfc8f24b4919a94197d277cd5b7a8d34b697bb4c596dc8eacb",
+    "server/cloudflare/scripts/usage.mjs": "2ce58d4317324380f2c09415fb87715e99d2d08c262fb6908788370ed569fafa",
+    "client/engine/flim_engine.c": "f281d30bc23aac1207a0509331d8ae8754bf75b2487393e0cdd779039e9083e8",
+    "client/launcher/flim.c": "c0301d91623beffa2b34cd9e8e44782d00b39a1cff55105faf264f5156685570",
+    "client/dev/profiles.py": "efec4d9478fe57018f8b44bccb68d2a8ed5612cd2ed8e5ec1d86c1b962f36ac5",
+    "client/dev/test_profiles.py": "db29ff085edb6c030fc98eed83bbd4015da81ba63451af7b53bd524b97b124df",
+    "client/dev/harness/t_injection.c": "76732dc4fe35028703a8a96541f9449d1c6071074511f2852e656895c05aa208",
+    "client/dev/harness/t_notes.c": "b8d78f9851fba40b9a78117182957eb608d9a232ade0e6ca5f2a1aa43e55b5a3",
+    "client/dev/recording_smoke.py": "38ab3fd23d295a1ed012c7b5d0eb10364053eba8692ca1cf2f49ba0c11e099c0",
+    "client/common/flim_cloud.h": "becd7c7ed6469faa98d5b476992494a90ab34f99ce47134d02540491f6b5776b"
+  },
+  "logs_sha256": {
+    "r2-cutoff-deploy.log": "39780b328bb94a2bd523f5999fec90a514202943a91fcb21adac205750daf1f3",
+    "r2-cutoff-local-tests.log": "ac533a23a99dd173ffd8834b8939f8d3c8abe6873b4c7fde5b0b0f4dc4d3a9e8",
+    "r2-cutoff-live-smoke.log": "3cf65416d3b5777452119d8ebd3c67dd803b1ff71f19e52be2e527e2285de125",
+    "recording-final-harness.log": "49d0cee3ef8491e497bf2f80082f34618caf22e1e1834e267d96c50c3119818a"
+  },
+  "package": {
+    "path": "work/artifacts/flim-cloudflare-win64-experimental.zip",
+    "sha256": "3cc66fefd70919412feb29100dc53051ed74507e595244b35149722089e535a2",
+    "contains": [
+      "flim.exe",
+      "flim_engine.dll",
+      "profiles/25.2.5.5319.profile",
+      "profiles/26.1.7.5654.profile",
+      "START-HERE.txt"
+    ],
+    "hosting_key_included": false
+  }
+}
